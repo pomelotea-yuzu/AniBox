@@ -10,7 +10,7 @@ stages:
       - step: build@nodejs
         name: ""
         displayName: 类型检查 + 代码检查
-        nodeVersion: 22.14.0
+        nodeVersion: 20.18.0
         commands:
           - npm ci --ignore-scripts
           - npm run typecheck
@@ -27,7 +27,7 @@ stages:
       - step: build@nodejs
         name: ""
         displayName: 单元测试
-        nodeVersion: 22.14.0
+        nodeVersion: 20.18.0
         commands:
           - npm ci --ignore-scripts
           - npm test
