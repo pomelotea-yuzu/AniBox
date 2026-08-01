@@ -69,6 +69,8 @@
 | 翻译模型 | Helsinki-NLP/opus-mt-en-zh（ONNX Runtime, @xenova/transformers） |
 | 配色主题 | React Context + CSS 变量桥接，5 套莫兰迪色系 |
 | 打包 | electron-builder |
+| 测试 | Vitest 4.1 |
+| 代码规范 | ESLint 10 + Prettier 3 + Husky 9 + lint-staged |
 
 ---
 
@@ -112,6 +114,19 @@ npm run dev
 # 打包
 npm run package
 ```
+
+### 自动化检查
+
+| 命令 | 用途 |
+|------|------|
+| `npm run typecheck` | TypeScript 类型检查 |
+| `npm run lint` | ESLint 代码质量检查 |
+| `npm run format` | Prettier 自动格式化 |
+| `npm run format:check` | 检查代码格式 |
+| `npm test` | 运行 39 个单元测试 |
+| `npm run test:watch` | 监视模式运行测试 |
+
+提交代码时会自动触发 `lint-staged`（Prettier + ESLint），不通过则拦截。
 
 ---
 
