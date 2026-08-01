@@ -1,0 +1,158 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+/* CSS 变量定义 — 由 ThemeContext 动态注入，此处为默认回退 */
+:root {
+  --ab-bg: #F5F0E8;
+  --ab-surface: #EBE5D9;
+  --ab-accent: #9CAF88;
+  --ab-accent-hover: #859972;
+  --ab-secondary: #8EACBF;
+  --ab-secondary-hover: #7B9BB0;
+  --ab-text: #3D3A35;
+  --ab-text-muted: #8B8579;
+  --ab-border: #DDD6CB;
+  --ab-overlay: #1a1a1a;
+  --ab-scroll-thumb: #C5BFB3;
+  --ab-scroll-hover: #A8A093;
+}
+
+html, body {
+  width: 100%; height: 100%;
+  background-color: var(--ab-bg);
+  color: var(--ab-text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  transition: background-color 0.4s ease, color 0.4s ease;
+}
+
+#root {
+  width: 100%; height: 100%; overflow: hidden;
+}
+
+/* 滚动条 — 跟随主题 */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--ab-scroll-thumb);
+  border-radius: 3px;
+  transition: background 0.3s;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ab-scroll-hover);
+}
+
+/* ===== 页面过渡动画 ===== */
+
+/* 基础进入动画 — 缩放+淡入，适用于默认视图切换 */
+.view-enter {
+  animation: viewEnter 0.35s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+@keyframes viewEnter {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* 前进动画 — 从右滑入（进入更深层级: wall→episodes, episodes→player） */
+.view-forward {
+  animation: viewForward 0.32s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+@keyframes viewForward {
+  from {
+    opacity: 0;
+    transform: translateX(24px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+/* 后退动画 — 从左滑入（返回上层: player→episodes, episodes→wall） */
+.view-back {
+  animation: viewBack 0.32s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+@keyframes viewBack {
+  from {
+    opacity: 0;
+    transform: translateX(-20px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+/* 弹入动画 — 用于弹窗/模态面板 */
+.view-pop {
+  animation: viewPop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+@keyframes viewPop {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* 淡入动画 — 用于遮罩/背景 */
+.animate-fadeIn {
+  animation: fadeIn 0.25s ease-out both;
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* 卡片悬浮效果 */
+.card-hover {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 20px rgba(156, 175, 136, 0.25);
+}
+
+/* Range 滑块 — 跟随主题强调色 */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  background: var(--ab-border);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: var(--ab-accent);
+  border: none;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.25);
+}
+input[type="range"]::-moz-range-thumb {
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: var(--ab-accent);
+  border: none;
+  cursor: pointer;
+}

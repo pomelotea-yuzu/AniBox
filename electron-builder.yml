@@ -1,0 +1,23 @@
+appId: com.anibox.app
+productName: AniBox
+directories:
+  output: dist
+  buildResources: resources
+files:
+  - out/**/*
+  - package.json
+extraResources:
+  - from: resources
+    to: resources
+  - from: mpv.exe
+    to: .
+win:
+  target:
+    - nsis
+  icon: resources/icon.ico
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: AniBox
