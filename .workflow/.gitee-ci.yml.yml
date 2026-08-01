@@ -5,16 +5,20 @@ stages:
   - displayName: 安装与检查
     steps:
       - displayName: 安装依赖
+        step: shell@latest
         commands:
           - npm ci --ignore-scripts
       - displayName: 类型检查
+        step: shell@latest
         commands:
           - npm run typecheck
       - displayName: 代码检查
+        step: shell@latest
         commands:
           - npm run lint
   - displayName: 测试
     steps:
       - displayName: 单元测试
+        step: shell@latest
         commands:
           - npm test
