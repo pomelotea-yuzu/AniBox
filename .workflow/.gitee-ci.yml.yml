@@ -1,3 +1,4 @@
+displayName: AniBox CI
 image: node:22
 
 stages:
@@ -9,21 +10,25 @@ cache:
     - node_modules/
 
 install_job:
+  displayName: 安装依赖
   stage: check
   commands:
     - npm ci --ignore-scripts
 
 typecheck_job:
+  displayName: 类型检查
   stage: check
   commands:
     - npm run typecheck
 
 lint_job:
+  displayName: 代码检查
   stage: check
   commands:
     - npm run lint
 
 test_job:
+  displayName: 单元测试
   stage: test
   commands:
     - npm test
