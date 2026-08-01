@@ -1,7 +1,6 @@
 image: node:22
 
 stages:
-  - install
   - check
   - test
 
@@ -10,22 +9,21 @@ cache:
     - node_modules/
 
 install_job:
-  stage: install
-  script:
+  stage: check
+  commands:
     - npm ci --ignore-scripts
 
 typecheck_job:
   stage: check
-  script:
+  commands:
     - npm run typecheck
 
 lint_job:
   stage: check
-  script:
+  commands:
     - npm run lint
-  allow_failure: true
 
 test_job:
   stage: test
-  script:
+  commands:
     - npm test
