@@ -11,56 +11,106 @@
 // 按长度降序排列，长句优先匹配
 const SENTENCE_TEMPLATES: [RegExp, string][] = [
   // --- 主角设定 ---
-  [/(\w+(?:\s+\w+){0,4})\s+is\s+a\s+(high\s*school\s*student|teenager|young\s*(?:boy|girl|man|woman))\s+who\s+(has\s+(?:always\s+)?(?:been\s+)?|possesses?|dreams?\s+of)\b/gi,
-    '$1是一名$2，一直'],
-  [/(\w+(?:\s+\w+){0,4})\s+is\s+an?\s+(ordinary|average|normal|typical)\s+(high\s*school\s*student|boy|girl|teenager|person|young\s*man|young\s*woman)\b/gi,
-    '$1是一个普通的$3'],
-  [/(\w+(?:\s+\w+){0,4})\s+is\s+a\s+(genius|prodigy|gifted)\s+(student|child|boy|girl|teenager|young\s*(?:man|woman))\b/gi,
-    '$1是一个天才$3'],
-  [/(\w+(?:\s+\w+){0,4})\s+is\s+an?\s+(orphan|outcast|loner|introvert|shut-in|hikikomori|NEET)\b/gi,
-    '$1是一个$2'],
+  [
+    /(\w+(?:\s+\w+){0,4})\s+is\s+a\s+(high\s*school\s*student|teenager|young\s*(?:boy|girl|man|woman))\s+who\s+(has\s+(?:always\s+)?(?:been\s+)?|possesses?|dreams?\s+of)\b/gi,
+    '$1是一名$2，一直',
+  ],
+  [
+    /(\w+(?:\s+\w+){0,4})\s+is\s+an?\s+(ordinary|average|normal|typical)\s+(high\s*school\s*student|boy|girl|teenager|person|young\s*man|young\s*woman)\b/gi,
+    '$1是一个普通的$3',
+  ],
+  [
+    /(\w+(?:\s+\w+){0,4})\s+is\s+a\s+(genius|prodigy|gifted)\s+(student|child|boy|girl|teenager|young\s*(?:man|woman))\b/gi,
+    '$1是一个天才$3',
+  ],
+  [
+    /(\w+(?:\s+\w+){0,4})\s+is\s+an?\s+(orphan|outcast|loner|introvert|shut-in|hikikomori|NEET)\b/gi,
+    '$1是一个$2',
+  ],
 
   // --- 转学/入学/新生活 ---
-  [/transfers?\s+to\s+(?:a\s+)?(?:new\s+)?(?:school|academy|university|college)\b/gi, '转学到了新的学校'],
-  [/enrolls?\s+(?:in|at|into)\s+(?:the\s+)?[\w\s]+?(?:academy|school|university|college)\b/gi, '进入了学园'],
+  [
+    /transfers?\s+to\s+(?:a\s+)?(?:new\s+)?(?:school|academy|university|college)\b/gi,
+    '转学到了新的学校',
+  ],
+  [
+    /enrolls?\s+(?:in|at|into)\s+(?:the\s+)?[\w\s]+?(?:academy|school|university|college)\b/gi,
+    '进入了学园',
+  ],
   [/moves?\s+to\s+(?:a\s+)?(?:new\s+)?(?:town|city|village|place|apartment)\b/gi, '搬到了新的地方'],
   [/starts?\s+(?:his|her|their)\s+(?:new\s+)?life\s+(?:as|in|at)\b/gi, '开始了新的生活'],
   [/begins?\s+(?:his|her|their)\s+(?:first|new)\s+(?:year|semester|term)\b/gi, '开始了新学期'],
 
   // --- 能力觉醒/获得力量 ---
-  [/suddenly\s+(?:discovers?|finds?|realizes?|learns?)\s+that\s+(?:he|she|they)\s+(?:has|have|possess)\s+(?:a\s+)?(?:special|mysterious|hidden|unique|strange)\s+(?:power|ability|gift|talent)\b/gi,
-    '突然发现自己拥有特殊能力'],
-  [/awakens?\s+(?:to|his|her|their)\s+(?:true\s+)?(?:power|ability|potential|strength)\b/gi, '觉醒了真正的力量'],
+  [
+    /suddenly\s+(?:discovers?|finds?|realizes?|learns?)\s+that\s+(?:he|she|they)\s+(?:has|have|possess)\s+(?:a\s+)?(?:special|mysterious|hidden|unique|strange)\s+(?:power|ability|gift|talent)\b/gi,
+    '突然发现自己拥有特殊能力',
+  ],
+  [
+    /awakens?\s+(?:to|his|her|their)\s+(?:true\s+)?(?:power|ability|potential|strength)\b/gi,
+    '觉醒了真正的力量',
+  ],
   [/gains?\s+(?:the\s+)?(?:power|ability)\s+(?:to|of)\s+/gi, '获得了...的能力'],
-  [/is\s+(?:blessed|cursed)\s+with\s+(?:the\s+)?(?:power|ability)\s+(?:to|of)\s+/gi, '被赋予了...的能力'],
+  [
+    /is\s+(?:blessed|cursed)\s+with\s+(?:the\s+)?(?:power|ability)\s+(?:to|of)\s+/gi,
+    '被赋予了...的能力',
+  ],
 
   // --- 穿越/异世界 ---
-  [/is\s+(?:suddenly\s+)?transported\s+to\s+(?:a|an|another|a\s+different)\s+world\b/gi, '被传送到了异世界'],
-  [/wakes?\s+up\s+(?:to\s+find\s+(?:himself|herself|themselves)\s+)?in\s+(?:a|an|another)\s+world\b/gi, '醒来后发现自己身处异世界'],
-  [/is\s+(?:reincarnated|reborn)\s+(?:as|in|into)\s+(?:a|an|another)\s+world\b/gi, '转生到了异世界'],
-  [/gets?\s+transported\s+(?:to|into)\s+(?:a|an)\s+(?:fantasy|parallel|different)\s+world\b/gi, '被传送到了异世界'],
-  [/finds?\s+(?:himself|herself|themselves)\s+in\s+(?:a|an|another|a\s+different)\s+world\b/gi, '发现自己身处异世界'],
+  [
+    /is\s+(?:suddenly\s+)?transported\s+to\s+(?:a|an|another|a\s+different)\s+world\b/gi,
+    '被传送到了异世界',
+  ],
+  [
+    /wakes?\s+up\s+(?:to\s+find\s+(?:himself|herself|themselves)\s+)?in\s+(?:a|an|another)\s+world\b/gi,
+    '醒来后发现自己身处异世界',
+  ],
+  [
+    /is\s+(?:reincarnated|reborn)\s+(?:as|in|into)\s+(?:a|an|another)\s+world\b/gi,
+    '转生到了异世界',
+  ],
+  [
+    /gets?\s+transported\s+(?:to|into)\s+(?:a|an)\s+(?:fantasy|parallel|different)\s+world\b/gi,
+    '被传送到了异世界',
+  ],
+  [
+    /finds?\s+(?:himself|herself|themselves)\s+in\s+(?:a|an|another|a\s+different)\s+world\b/gi,
+    '发现自己身处异世界',
+  ],
   [/summoned\s+to\s+(?:a|an|another)\s+world\b/gi, '被召唤到了异世界'],
   [/trapped\s+in\s+(?:a|an)\s+(?:virtual|game|fantasy|MMO)\s+world\b/gi, '被困在了游戏世界'],
   [/can'?t\s+log\s+out\s+(?:of|from)\s+(?:the\s+)?(?:game|virtual\s+world)\b/gi, '无法退出游戏'],
 
   // --- 命运/使命 ---
   [/destined\s+to\s+(?:save|protect|destroy|become|rule)\b/gi, '注定要'],
-  [/must\s+(?:save|protect|defend|rescue)\s+(?:the\s+)?(?:world|kingdom|country|city|village|people)\b/gi, '必须拯救'],
+  [
+    /must\s+(?:save|protect|defend|rescue)\s+(?:the\s+)?(?:world|kingdom|country|city|village|people)\b/gi,
+    '必须拯救',
+  ],
   [/chosen\s+(?:as|to\s+be|by)\s+(?:the\s+)?[\w\s]+?\b/gi, '被选中'],
-  [/fate\s+(?:brings?|has\s+brought)\s+(?:him|her|them)\s+(?:to|together\s+with)\b/gi, '命运将ta带到了'],
+  [
+    /fate\s+(?:brings?|has\s+brought)\s+(?:him|her|them)\s+(?:to|together\s+with)\b/gi,
+    '命运将ta带到了',
+  ],
   [/prophecy\s+(?:foretold|predicted|speaks?\s+of)\b/gi, '预言提到'],
 
   // --- 相遇/邂逅 ---
-  [/meets?\s+(?:a|an|the)\s+(?:mysterious|strange|beautiful|handsome|enigmatic)\s+(?:girl|boy|woman|man|person|stranger)\b/gi,
-    '遇到了一位神秘的'],
-  [/encounters?\s+(?:a|an)\s+(?:mysterious|strange|unknown)\s+(?:girl|boy|woman|man|being|creature|entity)\b/gi,
-    '邂逅了一位神秘的'],
+  [
+    /meets?\s+(?:a|an|the)\s+(?:mysterious|strange|beautiful|handsome|enigmatic)\s+(?:girl|boy|woman|man|person|stranger)\b/gi,
+    '遇到了一位神秘的',
+  ],
+  [
+    /encounters?\s+(?:a|an)\s+(?:mysterious|strange|unknown)\s+(?:girl|boy|woman|man|being|creature|entity)\b/gi,
+    '邂逅了一位神秘的',
+  ],
   [/comes?\s+across\s+(?:a|an)\s+(?:mysterious|strange)\b/gi, '偶然遇到了'],
   [/runs?\s+into\s+(?:a|an)\s+(?:old\s+)?(?:friend|acquaintance|rival|enemy)\b/gi, '重逢了'],
 
   // --- 战斗/冒险 ---
-  [/embarks?\s+on\s+(?:a|an)\s+(?:journey|adventure|quest|mission)\s+to\b/gi, '踏上了前往...的旅程'],
+  [
+    /embarks?\s+on\s+(?:a|an)\s+(?:journey|adventure|quest|mission)\s+to\b/gi,
+    '踏上了前往...的旅程',
+  ],
   [/sets?\s+out\s+(?:on|to)\s+(?:a\s+)?(?:journey|quest|adventure|mission)\b/gi, '出发去'],
   [/joins?\s+(?:forces|hands)\s+with\b/gi, '联手'],
   [/team(?:s|ed)\s+up\s+with\b/gi, '合作'],
@@ -72,18 +122,32 @@ const SENTENCE_TEMPLATES: [RegExp, string][] = [
   [/develops?\s+feelings?\s+for\b/gi, '对...产生了感情'],
   [/confesses?\s+(?:his|her|their)\s+(?:love|feelings)\s+to\b/gi, '向...告白'],
   [/love\s+triangle\s+(?:between|among|involving)\b/gi, '三角恋'],
-  [/childhood\s+friend\s+who\s+(?:has\s+always\s+)?(?:been|loved|liked|had\s+a\s+crush)\b/gi, '青梅竹马一直'],
+  [
+    /childhood\s+friend\s+who\s+(?:has\s+always\s+)?(?:been|loved|liked|had\s+a\s+crush)\b/gi,
+    '青梅竹马一直',
+  ],
   [/promised\s+to\s+marry\s+(?:each\s+other|him|her)\s+(?:when|if|after)\b/gi, '约定长大后结婚'],
 
   // --- 秘密/真相 ---
-  [/discovers?\s+(?:the|a)\s+(?:truth|secret|mystery)\s+(?:behind|about|of)\b/gi, '发现了背后的真相'],
+  [
+    /discovers?\s+(?:the|a)\s+(?:truth|secret|mystery)\s+(?:behind|about|of)\b/gi,
+    '发现了背后的真相',
+  ],
   [/hidden\s+(?:truth|secret|past|identity)\s+(?:is|behind|about)\b/gi, '隐藏的秘密'],
-  [/(\w+(?:\s+\w+){0,3})\s+is\s+not\s+who\s+(?:he|she|they)\s+(?:seems?|appears?\s+to\s+be)\b/gi,
-    '$1的真实身份并非表面所见'],
+  [
+    /(\w+(?:\s+\w+){0,3})\s+is\s+not\s+who\s+(?:he|she|they)\s+(?:seems?|appears?\s+to\s+be)\b/gi,
+    '$1的真实身份并非表面所见',
+  ],
   [/has\s+been\s+keeping\s+(?:a|the)\s+secret\b/gi, '一直保守着秘密'],
   [/dark\s+(?:secret|past|history|truth)\b/gi, '黑暗的秘密'],
-  [/true\s+(?:identity|nature|form|power)\s+(?:is|was|has\s+been)\s+revealed\b/gi, '真实身份被揭开'],
-  [/things?\s+(?:are|is|were)\s+not\s+(?:what|as)\s+(?:they|it)\s+(?:seem|appear)\b/gi, '事情并非表面所见'],
+  [
+    /true\s+(?:identity|nature|form|power)\s+(?:is|was|has\s+been)\s+revealed\b/gi,
+    '真实身份被揭开',
+  ],
+  [
+    /things?\s+(?:are|is|were)\s+not\s+(?:what|as)\s+(?:they|it)\s+(?:seem|appear)\b/gi,
+    '事情并非表面所见',
+  ],
 
   // --- 校园生活 ---
   [/joins?\s+(?:the|a)\s+(?:club|society|team|committee)\b/gi, '加入了社团'],
@@ -95,9 +159,18 @@ const SENTENCE_TEMPLATES: [RegExp, string][] = [
   [/classroom\b/gi, '教室'],
 
   // --- 时间/结局 ---
-  [/in\s+the\s+(?:end|final|last)\s+(?:battle|confrontation|showdown|episode)\b/gi, '在最终的对决中'],
-  [/as\s+(?:the\s+)?(?:time|story|series)\s+(?:goes?\s+on|progresses?|continues?)\b/gi, '随着故事的发展'],
-  [/after\s+(?:the|a)\s+(?:long|fierce|intense|desperate)\s+(?:battle|struggle|fight)\b/gi, '经过一场激烈的战斗后'],
+  [
+    /in\s+the\s+(?:end|final|last)\s+(?:battle|confrontation|showdown|episode)\b/gi,
+    '在最终的对决中',
+  ],
+  [
+    /as\s+(?:the\s+)?(?:time|story|series)\s+(?:goes?\s+on|progresses?|continues?)\b/gi,
+    '随着故事的发展',
+  ],
+  [
+    /after\s+(?:the|a)\s+(?:long|fierce|intense|desperate)\s+(?:battle|struggle|fight)\b/gi,
+    '经过一场激烈的战斗后',
+  ],
   [/in\s+order\s+to\s+(?:save|protect|rescue|defeat|stop|prevent)\b/gi, '为了'],
   [/for\s+the\s+sake\s+of\s+(?:the\s+)?(?:world|humanity|everyone|all)\b/gi, '为了整个世界'],
 
@@ -112,14 +185,22 @@ const SENTENCE_TEMPLATES: [RegExp, string][] = [
   [/fortunately[,\s]+/gi, '幸运的是，'],
   [/together[,\s]+they\s+/gi, '他们一起'],
   [/along\s+the\s+way[,\s]+/gi, '一路上，'],
-  [/along\s+with\s+(?:his|her|their)\s+(?:friends?|companions?|allies?|comrades?)\b/gi, '和同伴们一起'],
-  [/with\s+the\s+help\s+of\s+(?:his|her|their)\s+(?:friends?|allies?|companions?)\b/gi, '在同伴的帮助下'],
+  [
+    /along\s+with\s+(?:his|her|their)\s+(?:friends?|companions?|allies?|comrades?)\b/gi,
+    '和同伴们一起',
+  ],
+  [
+    /with\s+the\s+help\s+of\s+(?:his|her|their)\s+(?:friends?|allies?|companions?)\b/gi,
+    '在同伴的帮助下',
+  ],
   [/little\s+does?\s+(?:he|she|they)\s+know\b/gi, 'ta还不知道'],
   [/what\s+(?:he|she|they)\s+doesn'?t\s+know\s+is\b/gi, 'ta不知道的是'],
 
   // --- 作者/原作 ---
-  [/based\s+on\s+(?:the\s+)?(?:popular|best-selling|hit|award-winning)?\s*(?:manga|light\s+novel|novel|web\s+novel|visual\s+novel|game)\b/gi,
-    '改编自热门'],
+  [
+    /based\s+on\s+(?:the\s+)?(?:popular|best-selling|hit|award-winning)?\s*(?:manga|light\s+novel|novel|web\s+novel|visual\s+novel|game)\b/gi,
+    '改编自热门',
+  ],
   [/written\s+by\s+[\w\s]+?(?:and\s+)?(?:illustrated\s+by\s+[\w\s]+?)?\b/gi, ''],
   [/created\s+by\s+[\w\s]+?\b/gi, '由...创作'],
   [/produced\s+by\s+(?:the\s+)?(?:studio\s+)?[\w\s]+?\b/gi, '由...制作'],
@@ -140,29 +221,44 @@ const SENTENCE_TEMPLATES: [RegExp, string][] = [
   // --- 长大/变强 ---
   [/grows?\s+(?:stronger|in\s+power|in\s+strength)\b/gi, '逐渐变强'],
   [/trains?\s+(?:hard|relentlessly|tirelessly)\b/gi, '刻苦训练'],
-  [/wants?\s+to\s+become\s+(?:the\s+)?(?:strongest|best|greatest|number\s+one)\b/gi, '想要成为最强'],
+  [
+    /wants?\s+to\s+become\s+(?:the\s+)?(?:strongest|best|greatest|number\s+one)\b/gi,
+    '想要成为最强',
+  ],
   [/dreams?\s+of\s+becoming\s+(?:the\s+)?(?:strongest|best|greatest)\b/gi, '梦想成为最强'],
 
   // --- 家族/血统 ---
   [/born\s+(?:into|in)\s+(?:a|the)\s+(?:noble|royal|rich|powerful)\s+family\b/gi, '出生于贵族家庭'],
-  [/last\s+(?:of|surviving\s+member\s+of)\s+(?:his|her|their)\s+(?:clan|family|tribe|race|kind)\b/gi, '家族最后的幸存者'],
+  [
+    /last\s+(?:of|surviving\s+member\s+of)\s+(?:his|her|their)\s+(?:clan|family|tribe|race|kind)\b/gi,
+    '家族最后的幸存者',
+  ],
   [/descendant\s+of\s+(?:the\s+)?(?:legendary|ancient|mythical)\b/gi, '传说的后裔'],
 
   // --- 时间循环/穿越 ---
   [/stuck\s+in\s+(?:a|an)\s+(?:time|endless)\s+loop\b/gi, '困在了时间循环中'],
-  [/reliving?\s+(?:the\s+)?(?:same\s+)?(?:day|moment|week)\s+(?:over\s+and\s+over|again)\b/gi, '不断重复同一天'],
+  [
+    /reliving?\s+(?:the\s+)?(?:same\s+)?(?:day|moment|week)\s+(?:over\s+and\s+over|again)\b/gi,
+    '不断重复同一天',
+  ],
   [/goes?\s+back\s+in\s+time\b/gi, '回到了过去'],
   [/time\s+(?:travel|traveler|leap)\b/gi, '时间旅行'],
 
   // --- 战斗竞赛 ---
-  [/participates?\s+in\s+(?:a|the)\s+(?:battle\s+royale|death\s+game|survival\s+game|tournament)\b/gi, '参加了生死竞赛'],
+  [
+    /participates?\s+in\s+(?:a|the)\s+(?:battle\s+royale|death\s+game|survival\s+game|tournament)\b/gi,
+    '参加了生死竞赛',
+  ],
   [/forced\s+to\s+(?:fight|compete|participate)\s+in\s+(?:a|the)\b/gi, '被迫参加'],
   [/battle\s+royale\b/gi, '大逃杀'],
   [/death\s+game\b/gi, '死亡游戏'],
 
   // --- 组织/势力 ---
   [/joins?\s+(?:the|a)\s+(?:military|army|police|organization|resistance|rebellion)\b/gi, '加入了'],
-  [/part\s+of\s+(?:a|the)\s+(?:secret|elite|special)\s+(?:organization|squad|unit|team|force)\b/gi, '属于秘密组织'],
+  [
+    /part\s+of\s+(?:a|the)\s+(?:secret|elite|special)\s+(?:organization|squad|unit|team|force)\b/gi,
+    '属于秘密组织',
+  ],
   [/secret\s+(?:organization|society|group|order)\b/gi, '秘密组织'],
 
   // --- 世界设定 ---
@@ -397,7 +493,10 @@ const PHRASE_MAP: [RegExp, string][] = [
   [/\bdiscovers?\s+(?:that|the|a)\b/gi, '发现了'],
 
   // 获取/损失
-  [/\bgain(?:\s+|s\s+|ed\s+|ing\s+)(?:the\s+)?(?:power|ability|strength|knowledge)\b/gi, '获得了力量'],
+  [
+    /\bgain(?:\s+|s\s+|ed\s+|ing\s+)(?:the\s+)?(?:power|ability|strength|knowledge)\b/gi,
+    '获得了力量',
+  ],
   [/\bloses?\s+(?:his|her|their)\s+(?:memory|memories|power|family|friend|home)\b/gi, '失去了'],
   [/\bsearching?\s+for\s+(?:a|the|his|her|their)\b/gi, '寻找'],
   [/\blooking?\s+for\b/gi, '寻找'],
@@ -519,36 +618,99 @@ export function translateSynopsisLocal(text: string): string {
 // ============================================================
 
 const GENRE_DICT: Record<string, string> = {
-  action: '动作', adventure: '冒险', comedy: '喜剧', drama: '剧情',
-  fantasy: '奇幻', horror: '恐怖', mystery: '悬疑', romance: '恋爱',
-  'sci-fi': '科幻', 'slice of life': '日常', sports: '运动',
-  supernatural: '超自然', thriller: '惊悚', mecha: '机甲', music: '音乐',
-  psychological: '心理', historical: '历史', military: '军事', school: '校园',
-  magic: '魔法', ecchi: '卖肉', shounen: '少年', seinen: '青年',
-  shoujo: '少女', josei: '女性', isekai: '异世界', harem: '后宫',
-  gourmet: '美食', 'boys love': '耽美', 'girls love': '百合',
-  vampire: '吸血鬼', 'martial arts': '武术', samurai: '武士',
-  'post-apocalyptic': '末世', 'super power': '超能力', tragedy: '悲剧',
-  parody: '恶搞', 'coming of age': '成长', 'ensemble cast': '群像剧',
-  reincarnation: '转生', survival: '生存', detective: '侦探',
-  'award winning': '获奖', 'love polygon': '多角恋', 'reverse harem': '逆后宫',
-  'urban fantasy': '都市奇幻', 'virtual world': '虚拟世界', workplace: '职场',
-  'idols (female)': '女性偶像', 'idols (male)': '男性偶像',
-  space: '太空', 'time travel': '时间旅行', steampunk: '蒸汽朋克',
-  mythology: '神话', 'organized crime': '黑帮',
+  action: '动作',
+  adventure: '冒险',
+  comedy: '喜剧',
+  drama: '剧情',
+  fantasy: '奇幻',
+  horror: '恐怖',
+  mystery: '悬疑',
+  romance: '恋爱',
+  'sci-fi': '科幻',
+  'slice of life': '日常',
+  sports: '运动',
+  supernatural: '超自然',
+  thriller: '惊悚',
+  mecha: '机甲',
+  music: '音乐',
+  psychological: '心理',
+  historical: '历史',
+  military: '军事',
+  school: '校园',
+  magic: '魔法',
+  ecchi: '卖肉',
+  shounen: '少年',
+  seinen: '青年',
+  shoujo: '少女',
+  josei: '女性',
+  isekai: '异世界',
+  harem: '后宫',
+  gourmet: '美食',
+  'boys love': '耽美',
+  'girls love': '百合',
+  vampire: '吸血鬼',
+  'martial arts': '武术',
+  samurai: '武士',
+  'post-apocalyptic': '末世',
+  'super power': '超能力',
+  tragedy: '悲剧',
+  parody: '恶搞',
+  'coming of age': '成长',
+  'ensemble cast': '群像剧',
+  reincarnation: '转生',
+  survival: '生存',
+  detective: '侦探',
+  'award winning': '获奖',
+  'love polygon': '多角恋',
+  'reverse harem': '逆后宫',
+  'urban fantasy': '都市奇幻',
+  'virtual world': '虚拟世界',
+  workplace: '职场',
+  'idols (female)': '女性偶像',
+  'idols (male)': '男性偶像',
+  space: '太空',
+  'time travel': '时间旅行',
+  steampunk: '蒸汽朋克',
+  mythology: '神话',
+  'organized crime': '黑帮',
   // 补充冷门标签
-  anthropomorphic: '拟人', cgdct: '萌系日常', educational: '教育',
-  crossdressing: '女装', 'gender bender': '性转', 'mahou shoujo': '魔法少女',
-  racing: '赛车', 'performing arts': '表演艺术', pets: '宠物',
-  iyashikei: '治愈', showbiz: '演艺圈', 'team sports': '团队运动',
-  'combat sports': '格斗运动', 'high stakes game': '博弈', medical: '医疗',
-  'otaku culture': '御宅文化', 'video game': '电子游戏', 'adult cast': '成人主角',
-  childcare: '育儿', delinquents: '不良少年', 'family life': '家庭生活',
-  hikikomori: '家里蹲', revenge: '复仇', 'school club': '社团', zombie: '丧尸',
-  gag: '搞笑', 'road trip': '公路', aviation: '航空', 'guns': '枪战',
-  'body horror': '肉体恐怖', dementia: '精神错乱', demons: '恶魔',
-  'game': '游戏', 'police': '警察', 'visual arts': '视觉艺术',
-  'strategy game': '策略游戏', 'card battle': '卡牌对战',
+  anthropomorphic: '拟人',
+  cgdct: '萌系日常',
+  educational: '教育',
+  crossdressing: '女装',
+  'gender bender': '性转',
+  'mahou shoujo': '魔法少女',
+  racing: '赛车',
+  'performing arts': '表演艺术',
+  pets: '宠物',
+  iyashikei: '治愈',
+  showbiz: '演艺圈',
+  'team sports': '团队运动',
+  'combat sports': '格斗运动',
+  'high stakes game': '博弈',
+  medical: '医疗',
+  'otaku culture': '御宅文化',
+  'video game': '电子游戏',
+  'adult cast': '成人主角',
+  childcare: '育儿',
+  delinquents: '不良少年',
+  'family life': '家庭生活',
+  hikikomori: '家里蹲',
+  revenge: '复仇',
+  'school club': '社团',
+  zombie: '丧尸',
+  gag: '搞笑',
+  'road trip': '公路',
+  aviation: '航空',
+  guns: '枪战',
+  'body horror': '肉体恐怖',
+  dementia: '精神错乱',
+  demons: '恶魔',
+  game: '游戏',
+  police: '警察',
+  'visual arts': '视觉艺术',
+  'strategy game': '策略游戏',
+  'card battle': '卡牌对战',
 }
 
 const ROLE_DICT: Record<string, string> = {
@@ -595,7 +757,7 @@ const ROLE_DICT: Record<string, string> = {
   animator: '动画师',
   'in-between animation': '中间帧',
   '2nd key animation': '第二原画',
-  'finishing': '上色',
+  finishing: '上色',
   'finishing check': '上色检查',
   // 摄影/后期
   photography: '摄影',
@@ -609,7 +771,7 @@ const ROLE_DICT: Record<string, string> = {
   'line producer': '制作担当',
   'production manager': '制作进行',
   planning: '企划',
-  'production': '制作',
+  production: '制作',
   // 其他
   'cg supervisor': 'CG总监',
   'prop design': '道具设计',
@@ -627,11 +789,11 @@ const ROLE_DICT: Record<string, string> = {
   choreographer: '编舞',
   // AniList 特有格式
   'Original Creator': '原作',
-  'Director': '监督',
+  Director: '监督',
   'Character Design': '角色设计',
   'Series Composition': '系列构成',
-  'Music': '音乐',
-  'Producer': '制作人',
+  Music: '音乐',
+  Producer: '制作人',
   'Animation Director': '作画监督',
   'Sound Director': '音响监督',
   'Art Director': '美术监督',
@@ -642,16 +804,16 @@ const ROLE_DICT: Record<string, string> = {
   '3D Director': '3D监督',
   'Theme Song Performance': '主题歌',
   'Key Animation': '原画',
-  'Animator': '动画师',
+  Animator: '动画师',
   'Background Art': '背景美术',
   'Special Effects': '特效',
-  'Script': '剧本',
-  'Screenplay': '脚本',
-  'Editor': '剪辑',
-  'Editing': '剪辑',
-  'Composer': '作曲',
-  'Mangaka': '漫画家',
-  'Storyboard': '分镜',
+  Script: '剧本',
+  Screenplay: '脚本',
+  Editor: '剪辑',
+  Editing: '剪辑',
+  Composer: '作曲',
+  Mangaka: '漫画家',
+  Storyboard: '分镜',
   'Storyboard Artist': '分镜',
   'Original Character Design': '角色原案',
   'In-Between Animation': '中间帧',
@@ -660,17 +822,20 @@ const ROLE_DICT: Record<string, string> = {
   'Series Director': '系列监督',
   'CGI Director': 'CGI监督',
   'Voice Director': '音响监督',
-  'Planning': '企划',
-  'Layout': '构图',
-  'Finishing': '上色',
-  'Photography': '摄影',
-  'Setting': '设定',
+  Planning: '企划',
+  Layout: '构图',
+  Finishing: '上色',
+  Photography: '摄影',
+  Setting: '设定',
   'Props Design': '道具设计',
   'Action Animation Direction': '动作作画监督',
 }
 
 const SEASON_DICT: Record<string, string> = {
-  'Winter': '冬季', 'Spring': '春季', 'Summer': '夏季', 'Fall': '秋季',
+  Winter: '冬季',
+  Spring: '春季',
+  Summer: '夏季',
+  Fall: '秋季',
 }
 
 export function translateLocal(text: string): string | null {
@@ -687,6 +852,5 @@ export function translateLocal(text: string): string | null {
 }
 
 export function translateStaffRoles(staff: Array<{ role: string; name: string }>) {
-  return staff.map(s => ({ role: translateLocal(s.role) || s.role, name: s.name }))
+  return staff.map((s) => ({ role: translateLocal(s.role) || s.role, name: s.name }))
 }
-

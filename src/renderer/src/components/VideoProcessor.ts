@@ -201,7 +201,11 @@ function createShader(gl: WebGLRenderingContext, type: number, src: string): Web
   return shader
 }
 
-function createProgram(gl: WebGLRenderingContext, vertSrc: string, fragSrc: string): WebGLProgram | null {
+function createProgram(
+  gl: WebGLRenderingContext,
+  vertSrc: string,
+  fragSrc: string,
+): WebGLProgram | null {
   const vert = createShader(gl, gl.VERTEX_SHADER, vertSrc)
   const frag = createShader(gl, gl.FRAGMENT_SHADER, fragSrc)
   if (!vert || !frag) return null
@@ -217,7 +221,9 @@ function createProgram(gl: WebGLRenderingContext, vertSrc: string, fragSrc: stri
 }
 
 // 全屏四边形
-const QUAD_VERTS = new Float32Array([-1, -1, 0, 1, -1, 1, 0, 1, 1, 1, 0, 1, -1, -1, 0, 1, -1, 1, 1, 0, 1, 1, 1, 0])
+const QUAD_VERTS = new Float32Array([
+  -1, -1, 0, 1, -1, 1, 0, 1, 1, 1, 0, 1, -1, -1, 0, 1, -1, 1, 1, 0, 1, 1, 1, 0,
+])
 
 // ---- Pipeline Pass ----
 
@@ -248,26 +254,47 @@ interface PresetConfig {
 
 const PRESETS: Record<Preset, PresetConfig> = {
   balanced: {
-    upscale: true, upscaleMul: 1.5,
-    sharpen: true, sharpenAmount: 0.4,
-    deband: true, debandAmount: 0.6,
-    fxaa: false, fxaaAmount: 0.5,
-    color: true, saturation: 1.15, contrast: 1.05, brightness: 0.02
+    upscale: true,
+    upscaleMul: 1.5,
+    sharpen: true,
+    sharpenAmount: 0.4,
+    deband: true,
+    debandAmount: 0.6,
+    fxaa: false,
+    fxaaAmount: 0.5,
+    color: true,
+    saturation: 1.15,
+    contrast: 1.05,
+    brightness: 0.02,
   },
   quality: {
-    upscale: true, upscaleMul: 2.0,
-    sharpen: true, sharpenAmount: 0.6,
-    deband: true, debandAmount: 0.9,
-    fxaa: true, fxaaAmount: 0.5,
-    color: true, saturation: 1.2, contrast: 1.08, brightness: 0.03
+    upscale: true,
+    upscaleMul: 2.0,
+    sharpen: true,
+    sharpenAmount: 0.6,
+    deband: true,
+    debandAmount: 0.9,
+    fxaa: true,
+    fxaaAmount: 0.5,
+    color: true,
+    saturation: 1.2,
+    contrast: 1.08,
+    brightness: 0.03,
   },
   performance: {
-    upscale: false, upscaleMul: 1.0,
-    sharpen: false, sharpenAmount: 0.2,
-    deband: false, debandAmount: 0.0,
-    fxaa: false, fxaaAmount: 0.0,
-    color: false, saturation: 1.0, contrast: 1.02, brightness: 0.0
-  }
+    upscale: false,
+    upscaleMul: 1.0,
+    sharpen: false,
+    sharpenAmount: 0.2,
+    deband: false,
+    debandAmount: 0.0,
+    fxaa: false,
+    fxaaAmount: 0.0,
+    color: false,
+    saturation: 1.0,
+    contrast: 1.02,
+    brightness: 0.0,
+  },
 }
 
 // ---- VideoProcessor ----
@@ -296,10 +323,18 @@ export class VideoProcessor {
     this.canvas = canvas
   }
 
-  get enabled() { return this._enabled }
-  get preset() { return this._preset }
-  get abMode() { return this._abMode }
-  get scale() { return this._scale }
+  get enabled() {
+    return this._enabled
+  }
+  get preset() {
+    return this._preset
+  }
+  get abMode() {
+    return this._abMode
+  }
+  get scale() {
+    return this._scale
+  }
 
   /** 挂载视频源 */
   attach(video: HTMLVideoElement) {
@@ -343,7 +378,9 @@ export class VideoProcessor {
   }
 
   /** 获取输出画布 */
-  getCanvas(): HTMLCanvasElement { return this.canvas }
+  getCanvas(): HTMLCanvasElement {
+    return this.canvas
+  }
 
   /** 计算输出尺寸 */
   private calcOutput() {
@@ -376,7 +413,7 @@ export class VideoProcessor {
     this.gl = this.canvas.getContext('webgl', {
       premultipliedAlpha: false,
       preserveDrawingBuffer: false,
-      alpha: false
+      alpha: false,
     })
     if (!this.gl) {
       console.warn('[AniBox] WebGL not available')
@@ -398,7 +435,7 @@ export class VideoProcessor {
     this.srcTexture = null
     this.outputFb = null
     this.outputTexture = null
-    this.quadBuf = null  // 关键：清除旧上下文的 buffer
+    this.quadBuf = null // 关键：清除旧上下文的 buffer
   }
 
   private buildPipeline() {
@@ -417,41 +454,65 @@ export class VideoProcessor {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
 
     // 构建管线 passes
-    const passes: { name: string; frag: string; enabled: boolean; uniforms: Record<string, any>; needsTime: boolean }[] = []
+    const passes: {
+      name: string
+      frag: string
+      enabled: boolean
+      uniforms: Record<string, any>
+      needsTime: boolean
+    }[] = []
 
     if (cfg.upscale) {
       passes.push({
-        name: 'upscale', frag: UPSCALE_FRAG, enabled: true,
-        uniforms: { u_strength: cfg.upscaleMul }, needsTime: false
+        name: 'upscale',
+        frag: UPSCALE_FRAG,
+        enabled: true,
+        uniforms: { u_strength: cfg.upscaleMul },
+        needsTime: false,
       })
     }
 
     if (cfg.deband) {
       passes.push({
-        name: 'deband', frag: DEBAND_FRAG, enabled: true,
-        uniforms: { u_amount: cfg.debandAmount }, needsTime: true
+        name: 'deband',
+        frag: DEBAND_FRAG,
+        enabled: true,
+        uniforms: { u_amount: cfg.debandAmount },
+        needsTime: true,
       })
     }
 
     if (cfg.sharpen) {
       passes.push({
-        name: 'sharpen', frag: SHARPEN_FRAG, enabled: true,
-        uniforms: { u_amount: cfg.sharpenAmount }, needsTime: false
+        name: 'sharpen',
+        frag: SHARPEN_FRAG,
+        enabled: true,
+        uniforms: { u_amount: cfg.sharpenAmount },
+        needsTime: false,
       })
     }
 
     if (cfg.fxaa) {
       passes.push({
-        name: 'fxaa', frag: FXAA_FRAG, enabled: true,
-        uniforms: { u_amount: cfg.fxaaAmount }, needsTime: false
+        name: 'fxaa',
+        frag: FXAA_FRAG,
+        enabled: true,
+        uniforms: { u_amount: cfg.fxaaAmount },
+        needsTime: false,
       })
     }
 
     if (cfg.color) {
       passes.push({
-        name: 'color', frag: COLOR_FRAG, enabled: true,
-        uniforms: { u_saturation: cfg.saturation, u_contrast: cfg.contrast, u_brightness: cfg.brightness },
-        needsTime: false
+        name: 'color',
+        frag: COLOR_FRAG,
+        enabled: true,
+        uniforms: {
+          u_saturation: cfg.saturation,
+          u_contrast: cfg.contrast,
+          u_brightness: cfg.brightness,
+        },
+        needsTime: false,
       })
     }
 
@@ -461,8 +522,11 @@ export class VideoProcessor {
     // 如果没有任何 pass，加一个直通 pass 保证输出
     if (passes.length === 0) {
       passes.push({
-        name: 'passthrough', frag: PASSTHROUGH_FRAG, enabled: true,
-        uniforms: {}, needsTime: false
+        name: 'passthrough',
+        frag: PASSTHROUGH_FRAG,
+        enabled: true,
+        uniforms: {},
+        needsTime: false,
       })
     }
 
@@ -497,8 +561,9 @@ export class VideoProcessor {
       this.passes.push({
         program: prog,
         uniforms,
-        fb, texture: tex,
-        needsTime: pass.needsTime
+        fb,
+        texture: tex,
+        needsTime: pass.needsTime,
       })
     }
 
@@ -510,7 +575,13 @@ export class VideoProcessor {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.outputFb)
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.outputTexture, 0)
+    gl.framebufferTexture2D(
+      gl.FRAMEBUFFER,
+      gl.COLOR_ATTACHMENT0,
+      gl.TEXTURE_2D,
+      this.outputTexture,
+      0,
+    )
 
     this.canvas.width = w
     this.canvas.height = h
@@ -585,7 +656,8 @@ export class VideoProcessor {
 
       this.drawQuad(gl)
       prevTex = pass.texture
-      prevW = w; prevH = h
+      prevW = w
+      prevH = h
     }
 
     // 最终渲染到画布
@@ -609,7 +681,8 @@ export class VideoProcessor {
         gl.activeTexture(gl.TEXTURE0)
         gl.bindTexture(gl.TEXTURE_2D, this.srcTexture)
         if (lastPass.uniforms['u_src']) gl.uniform1i(lastPass.uniforms['u_src'], 0)
-        if (lastPass.uniforms['u_texelSize']) gl.uniform2f(lastPass.uniforms['u_texelSize'], 1.0 / srcW, 1.0 / srcH)
+        if (lastPass.uniforms['u_texelSize'])
+          gl.uniform2f(lastPass.uniforms['u_texelSize'], 1.0 / srcW, 1.0 / srcH)
         this.drawQuad(gl)
       }
 
@@ -618,7 +691,8 @@ export class VideoProcessor {
       gl.activeTexture(gl.TEXTURE0)
       gl.bindTexture(gl.TEXTURE_2D, prevTex)
       if (lastPass?.uniforms['u_src']) gl.uniform1i(lastPass.uniforms['u_src'], 0)
-      if (lastPass?.uniforms['u_texelSize']) gl.uniform2f(lastPass.uniforms['u_texelSize'], 1.0 / w, 1.0 / h)
+      if (lastPass?.uniforms['u_texelSize'])
+        gl.uniform2f(lastPass.uniforms['u_texelSize'], 1.0 / w, 1.0 / h)
       this.drawQuad(gl)
     } else {
       // 正常模式：全屏增强

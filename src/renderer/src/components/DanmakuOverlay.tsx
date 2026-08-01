@@ -12,7 +12,7 @@ export default function DanmakuOverlay({
   videoRef,
   config,
   items,
-  onConfigChange
+  onConfigChange,
 }: DanmakuOverlayProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const engineRef = useRef<DanmakuEngine | null>(null)

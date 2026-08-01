@@ -22,27 +22,26 @@ function chineseRatio(text: string): number {
 // ============================================================
 
 export interface StaffInfo {
-  role: string   // 导演 / 原作 / 脚本 / 音乐 / 角色设计 等
+  role: string // 导演 / 原作 / 脚本 / 音乐 / 角色设计 等
   name: string
 }
 
 export interface AnimeMetadata {
-  title: string          // 原标题（romaji）
-  titleCn: string        // 中文标题
-  titleEn: string        // 英文标题
-  synopsis: string       // 简介
-  rating: number         // 评分 0-10
-  genres: string[]       // 类型标签
-  year: number           // 播出年份
-  season: string         // 播出季度 如 "Winter 2024"
-  episodes: number       // 总集数
-  studio: string         // 动画制作公司
-  staff: StaffInfo[]     // 主要 Staff
-  coverUrl: string       // 封面图 URL
-  anilistId: number      // AniList ID
-  bangumiId: number      // Bangumi ID
+  title: string // 原标题（romaji）
+  titleCn: string // 中文标题
+  titleEn: string // 英文标题
+  synopsis: string // 简介
+  rating: number // 评分 0-10
+  genres: string[] // 类型标签
+  year: number // 播出年份
+  season: string // 播出季度 如 "Winter 2024"
+  episodes: number // 总集数
+  studio: string // 动画制作公司
+  staff: StaffInfo[] // 主要 Staff
+  coverUrl: string // 封面图 URL
+  anilistId: number // AniList ID
+  bangumiId: number // Bangumi ID
 }
-
 
 // ============================================================
 //  HTTP 工具
@@ -52,13 +51,22 @@ function fetchGet(url: string): Promise<{ status: number; data: string } | null>
   return new Promise((resolve) => {
     const isHttp = url.startsWith('http://')
     const mod = isHttp ? require('http') : require('https')
-    const req = mod.get(url, { headers: { 'User-Agent': UA }, timeout: TIMEOUT }, (res: IncomingMessage) => {
-      const chunks: Buffer[] = []
-      res.on('data', (c: Buffer) => chunks.push(c))
-      res.on('end', () => resolve({ status: res.statusCode || 0, data: Buffer.concat(chunks).toString('utf-8') }))
-    })
+    const req = mod.get(
+      url,
+      { headers: { 'User-Agent': UA }, timeout: TIMEOUT },
+      (res: IncomingMessage) => {
+        const chunks: Buffer[] = []
+        res.on('data', (c: Buffer) => chunks.push(c))
+        res.on('end', () =>
+          resolve({ status: res.statusCode || 0, data: Buffer.concat(chunks).toString('utf-8') }),
+        )
+      },
+    )
     req.on('error', () => resolve(null))
-    req.on('timeout', () => { req.destroy(); resolve(null) })
+    req.on('timeout', () => {
+      req.destroy()
+      resolve(null)
+    })
   })
 }
 
@@ -66,16 +74,25 @@ function httpsPost(url: string, body: string): Promise<{ status: number; data: s
   return new Promise((resolve) => {
     const options: RequestOptions = {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body), 'User-Agent': UA },
-      timeout: TIMEOUT
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body),
+        'User-Agent': UA,
+      },
+      timeout: TIMEOUT,
     }
     const req = request(url, options, (res: IncomingMessage) => {
       const chunks: Buffer[] = []
       res.on('data', (c: Buffer) => chunks.push(c))
-      res.on('end', () => resolve({ status: res.statusCode || 0, data: Buffer.concat(chunks).toString('utf-8') }))
+      res.on('end', () =>
+        resolve({ status: res.statusCode || 0, data: Buffer.concat(chunks).toString('utf-8') }),
+      )
     })
     req.on('error', () => resolve(null))
-    req.on('timeout', () => { req.destroy(); resolve(null) })
+    req.on('timeout', () => {
+      req.destroy()
+      resolve(null)
+    })
     req.write(body)
     req.end()
   })
@@ -84,27 +101,50 @@ function httpsPost(url: string, body: string): Promise<{ status: number; data: s
 async function fetchGetJson(url: string): Promise<any | null> {
   const res = await fetchGet(url)
   if (!res || res.status < 200 || res.status >= 300) return null
-  try { return JSON.parse(res.data) } catch { return null }
+  try {
+    return JSON.parse(res.data)
+  } catch {
+    return null
+  }
 }
 
 async function httpsPostJson(url: string, body: string): Promise<any | null> {
   const res = await httpsPost(url, body)
   if (!res || res.status < 200 || res.status >= 300) return null
-  try { return JSON.parse(res.data) } catch { return null }
+  try {
+    return JSON.parse(res.data)
+  } catch {
+    return null
+  }
 }
 
 function downloadImage(url: string, savePath: string): Promise<boolean> {
   return new Promise((resolve) => {
-    const req = get(url, { headers: { 'User-Agent': UA }, timeout: TIMEOUT }, (res: IncomingMessage) => {
-      if (res.statusCode !== 200) { resolve(false); return }
-      const chunks: Buffer[] = []
-      res.on('data', (c: Buffer) => chunks.push(c))
-      res.on('end', () => {
-        try { writeFileSync(savePath, Buffer.concat(chunks)); resolve(true) } catch { resolve(false) }
-      })
-    })
+    const req = get(
+      url,
+      { headers: { 'User-Agent': UA }, timeout: TIMEOUT },
+      (res: IncomingMessage) => {
+        if (res.statusCode !== 200) {
+          resolve(false)
+          return
+        }
+        const chunks: Buffer[] = []
+        res.on('data', (c: Buffer) => chunks.push(c))
+        res.on('end', () => {
+          try {
+            writeFileSync(savePath, Buffer.concat(chunks))
+            resolve(true)
+          } catch {
+            resolve(false)
+          }
+        })
+      },
+    )
     req.on('error', () => resolve(false))
-    req.on('timeout', () => { req.destroy(); resolve(false) })
+    req.on('timeout', () => {
+      req.destroy()
+      resolve(false)
+    })
   })
 }
 
@@ -121,7 +161,7 @@ function searchQueries(title: string): string[] {
   ]
   const asciiOnly = title.replace(/[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff]/g, '').trim()
   if (asciiOnly.length >= 3) qs.push(asciiOnly)
-  return [...new Set(qs.filter(q => q.length >= 2))]
+  return [...new Set(qs.filter((q) => q.length >= 2))]
 }
 
 // ============================================================
@@ -152,7 +192,7 @@ async function searchAniListMeta(query: string): Promise<AniListMedia[] | null> 
     const gql = JSON.stringify({ query: ANILIST_GQL, variables: { s: query } })
     const json = await httpsPostJson('https://graphql.anilist.co', gql)
     const media: AniListMedia[] = json?.data?.Page?.media || []
-    return media.filter(m => m.coverImage?.large)
+    return media.filter((m) => m.coverImage?.large)
   } catch {
     return null
   }
@@ -170,10 +210,13 @@ function matchAniList(query: string, candidates: AniListMedia[]): AniListMedia |
       if (n.includes(q) || q.includes(n)) return m
       const dist = levenshtein(q, n)
       const score = dist / Math.max(q.length, n.length)
-      if (score < bestScore) { bestScore = score; best = m }
+      if (score < bestScore) {
+        bestScore = score
+        best = m
+      }
     }
   }
-  return bestScore < 0.5 ? best : (candidates[0] || null)
+  return bestScore < 0.5 ? best : candidates[0] || null
 }
 
 function cleanAniListDesc(raw: string): string {
@@ -190,13 +233,21 @@ function cleanAniListDesc(raw: string): string {
 }
 
 function seasonLabel(season: string, seasonYear: number): string {
-  const map: Record<string, string> = { WINTER: '冬季', SPRING: '春季', SUMMER: '夏季', FALL: '秋季' }
+  const map: Record<string, string> = {
+    WINTER: '冬季',
+    SPRING: '春季',
+    SUMMER: '夏季',
+    FALL: '秋季',
+  }
   const yr = seasonYear || 0
   const s = map[season?.toUpperCase()] || season || ''
   return yr ? `${yr}年${s}` : s
 }
 
-async function fetchAniListMeta(query: string, targetSeason?: number): Promise<AnimeMetadata | null> {
+async function fetchAniListMeta(
+  query: string,
+  targetSeason?: number,
+): Promise<AnimeMetadata | null> {
   const candidates = await searchAniListMeta(query)
   if (!candidates?.length) return null
 
@@ -212,10 +263,13 @@ async function fetchAniListMeta(query: string, targetSeason?: number): Promise<A
   }
   if (!m) return null
 
-  const staffList: StaffInfo[] = m.staff?.nodes?.map((s: any) => ({
-    role: s.primaryOccupations?.[0] || '',
-    name: s.name?.full || ''
-  })).filter((s: StaffInfo) => s.name) || []
+  const staffList: StaffInfo[] =
+    m.staff?.nodes
+      ?.map((s: any) => ({
+        role: s.primaryOccupations?.[0] || '',
+        name: s.name?.full || '',
+      }))
+      .filter((s: StaffInfo) => s.name) || []
 
   const studioName = m.studios?.nodes?.[0]?.name || ''
 
@@ -223,7 +277,7 @@ async function fetchAniListMeta(query: string, targetSeason?: number): Promise<A
 
   return {
     title: m.title.romaji || m.title.english || '',
-    titleCn: '',  // AniList 的 native 是日文，中文由 Bangumi 补充
+    titleCn: '', // AniList 的 native 是日文，中文由 Bangumi 补充
     titleEn: m.title.english || m.title.romaji || '',
     synopsis: m.description ? cleanAniListDesc(m.description) : '',
     rating: m.averageScore ? m.averageScore / 10 : 0,
@@ -235,7 +289,7 @@ async function fetchAniListMeta(query: string, targetSeason?: number): Promise<A
     staff: staffList,
     coverUrl: m.coverImage.extraLarge || m.coverImage.large,
     anilistId: m.id,
-    bangumiId: 0
+    bangumiId: 0,
   }
 }
 
@@ -252,8 +306,8 @@ interface BangumiSubject {
   rating: { score: number; total: number }
   eps: number
   total_episodes: number
-  date: string          // "2023-09-29"
-  type: number          // 2=动画
+  date: string // "2023-09-29"
+  type: number // 2=动画
   tags: Array<{ name: string; count: number }>
   staff: Array<{ name: string; jobs: string[]; role_name?: string }>
 }
@@ -280,7 +334,7 @@ async function searchBangumiMeta(query: string): Promise<BangumiSubject[]> {
       date: s.date || '',
       type: s.type || 2,
       tags: s.tags || [],
-      staff: []
+      staff: [],
     }))
   } catch (e: any) {
     console.warn(`[AniBox] Bangumi search error for "${query}":`, e?.message || e)
@@ -310,7 +364,7 @@ async function getBangumiDetail(bgId: number): Promise<BangumiSubject | null> {
       date: json.date || '',
       type: json.type || 2,
       tags: json.tags || [],
-      staff: []
+      staff: [],
     }
   } catch (e: any) {
     console.warn(`[AniBox] Bangumi detail error for id=${bgId}:`, e?.message || e)
@@ -330,16 +384,25 @@ async function fetchBangumiMeta(query: string): Promise<AnimeMetadata | null> {
     const names = [s.name_cn, s.name].filter(Boolean)
     for (const name of names) {
       const n = name.toLowerCase()
-      if (n.includes(q) || q.includes(n)) { best = s; bestScore = 0; break }
+      if (n.includes(q) || q.includes(n)) {
+        best = s
+        bestScore = 0
+        break
+      }
       const dist = levenshtein(q, n)
       const score = dist / Math.max(q.length, n.length)
-      if (score < bestScore) { bestScore = score; best = s }
+      if (score < bestScore) {
+        bestScore = score
+        best = s
+      }
     }
     if (best && bestScore === 0) break
   }
   if (!best) best = items[0]
 
-  console.log(`[AniBox] Bangumi matched: ${best.name_cn || best.name} (score=${bestScore.toFixed(2)}, id=${best.id})`)
+  console.log(
+    `[AniBox] Bangumi matched: ${best.name_cn || best.name} (score=${bestScore.toFixed(2)}, id=${best.id})`,
+  )
 
   // v0 API 搜索已含 summary，但详情可能有更完整的 Staff 等数据
   // 如果搜索结果的 summary 已足够，可以跳过详情请求
@@ -360,13 +423,25 @@ async function fetchBangumiMeta(query: string): Promise<AnimeMetadata | null> {
   if (yearMatch) year = parseInt(yearMatch[1], 10)
 
   // 从 tags 提取类型标签（过滤掉元标签）
-  const metaTags = ['TV', 'OVA', '剧场版', 'WEB', '小说改', '漫画改', '游戏改', '原创', '新番', '日本', '中国']
+  const metaTags = [
+    'TV',
+    'OVA',
+    '剧场版',
+    'WEB',
+    '小说改',
+    '漫画改',
+    '游戏改',
+    '原创',
+    '新番',
+    '日本',
+    '中国',
+  ]
   const genres: string[] = (best.tags || [])
     .filter((t: any) => {
-      const name = typeof t === 'string' ? t : (t.name || '')
+      const name = typeof t === 'string' ? t : t.name || ''
       return name && !metaTags.includes(name)
     })
-    .map((t: any) => typeof t === 'string' ? t : (t.name || ''))
+    .map((t: any) => (typeof t === 'string' ? t : t.name || ''))
     .slice(0, 8)
 
   return {
@@ -380,10 +455,10 @@ async function fetchBangumiMeta(query: string): Promise<AnimeMetadata | null> {
     season: year ? `${year}年` : '',
     episodes: best.total_episodes || best.eps || 0,
     studio: '',
-    staff: [],  // v0 API 需要 /persons 端点，暂不获取
+    staff: [], // v0 API 需要 /persons 端点，暂不获取
     coverUrl: best.images?.large || best.images?.common || best.images?.medium || '',
     anilistId: 0,
-    bangumiId: best.id
+    bangumiId: best.id,
   }
 }
 
@@ -391,7 +466,11 @@ async function fetchBangumiMeta(query: string): Promise<AnimeMetadata | null> {
 //  合并元数据（AniList 优先，Bangumi 补充中文信息）
 // ============================================================
 
-async function fetchFullMetadata(title: string, folderPath: string, season?: number): Promise<AnimeMetadata | null> {
+async function fetchFullMetadata(
+  title: string,
+  folderPath: string,
+  season?: number,
+): Promise<AnimeMetadata | null> {
   const queries = searchQueries(title)
   const romajiTitles = extractRomajiFromFolder(folderPath)
   if (romajiTitles.length > 0) queries.unshift(...romajiTitles)
@@ -402,7 +481,7 @@ async function fetchFullMetadata(title: string, folderPath: string, season?: num
     // 并行抓取两个数据源
     const [alMeta, bgMeta] = await Promise.all([
       fetchAniListMeta(query, season),
-      fetchBangumiMeta(query)
+      fetchBangumiMeta(query),
     ])
 
     if (!alMeta && !bgMeta) continue
@@ -417,15 +496,15 @@ async function fetchFullMetadata(title: string, folderPath: string, season?: num
       titleEn: alMeta?.titleEn || bgMeta?.titleEn || '',
       synopsis: bgMeta?.synopsis || alMeta?.synopsis || '',
       rating: Math.max(alMeta?.rating || 0, bgMeta?.rating || 0),
-      genres: bgMeta?.genres?.length ? bgMeta.genres : (alMeta?.genres || []),
+      genres: bgMeta?.genres?.length ? bgMeta.genres : alMeta?.genres || [],
       year: bgMeta?.year || alMeta?.year || 0,
       season: alMeta?.season || bgMeta?.season || '',
       episodes: alMeta?.episodes || bgMeta?.episodes || 0,
       studio: alMeta?.studio || '',
-      staff: alMeta?.staff?.length ? alMeta.staff : (bgMeta?.staff || []),
+      staff: alMeta?.staff?.length ? alMeta.staff : bgMeta?.staff || [],
       coverUrl: alMeta?.coverUrl || bgMeta?.coverUrl || '',
       anilistId: alMeta?.anilistId || 0,
-      bangumiId: bgMeta?.bangumiId || 0
+      bangumiId: bgMeta?.bangumiId || 0,
     }
   }
 
@@ -437,8 +516,10 @@ async function fetchFullMetadata(title: string, folderPath: string, season?: num
 // ============================================================
 
 export async function fetchMetadataForSeries(
-  title: string, folderPath: string, season?: number,
-  onStatus?: (status: string) => void
+  title: string,
+  folderPath: string,
+  season?: number,
+  onStatus?: (status: string) => void,
 ): Promise<{ metadata: AnimeMetadata | null; coverPath: string | null }> {
   onStatus?.('搜索元数据...')
   const metadata = await fetchFullMetadata(title, folderPath, season)
@@ -512,7 +593,9 @@ export async function fetchMetadataForSeries(
     } catch (err) {
       console.warn('[AniBox] Failed to save metadata.json:', err)
     }
-    console.log(`[AniBox] Metadata OK: ${title} → rating=${metadata.rating}, genres=${metadata.genres.join(',')}, year=${metadata.year}`)
+    console.log(
+      `[AniBox] Metadata OK: ${title} → rating=${metadata.rating}, genres=${metadata.genres.join(',')}, year=${metadata.year}`,
+    )
   }
 
   return { metadata, coverPath }
@@ -526,7 +609,7 @@ export interface MetadataBatchResult {
 
 export async function fetchMetadataBatch(
   series: Array<{ title: string; folderPath: string; season?: number }>,
-  onProgress?: (current: number, total: number, title: string, ok: boolean, status: string) => void
+  onProgress?: (current: number, total: number, title: string, ok: boolean, status: string) => void,
 ): Promise<{ total: number; fetched: number; failed: number; results: MetadataBatchResult[] }> {
   let fetched = 0
   let failed = 0
@@ -543,7 +626,7 @@ export async function fetchMetadataBatch(
     results.push({
       folderPath: s.folderPath,
       metadata: result.metadata,
-      coverPath: result.coverPath
+      coverPath: result.coverPath,
     })
 
     if (result.metadata) {
@@ -556,7 +639,7 @@ export async function fetchMetadataBatch(
 
     // 限速
     if (i < series.length - 1) {
-      await new Promise(r => setTimeout(r, 1500))
+      await new Promise((r) => setTimeout(r, 1500))
     }
   }
 
@@ -568,14 +651,18 @@ export async function fetchMetadataBatch(
 // ============================================================
 
 export async function fetchCoverOnly(
-  title: string, folderPath: string,
-  onStatus?: (status: string) => void
+  title: string,
+  folderPath: string,
+  onStatus?: (status: string) => void,
 ): Promise<string | null> {
   const result = await fetchMetadataForSeries(title, folderPath, undefined, onStatus)
   return result.coverPath
 }
 
-export async function fetchCoverManual(folderPath: string, searchQuery: string): Promise<string | null> {
+export async function fetchCoverManual(
+  folderPath: string,
+  searchQuery: string,
+): Promise<string | null> {
   const coverPath = join(folderPath, 'cover.jpg')
   if (existsSync(coverPath)) return coverPath
 
@@ -595,8 +682,8 @@ export interface TitleSuggestion {
   currentTitle: string
   suggestedTitle: string
   anilistId: number
-  confidence: number   // 0-1
-  reason: string       // 为什么建议修改
+  confidence: number // 0-1
+  reason: string // 为什么建议修改
 }
 
 /**
@@ -607,7 +694,7 @@ export interface TitleSuggestion {
  */
 export async function validateSeriesTitle(
   folderPath: string,
-  currentTitle: string
+  currentTitle: string,
 ): Promise<TitleSuggestion | null> {
   try {
     // 用当前标题搜索 AniList
@@ -627,7 +714,7 @@ export async function validateSeriesTitle(
     const bestScore = Math.min(
       titleDist(currentClean, alTitle.toLowerCase()),
       titleDist(currentClean, alRomaji.toLowerCase()),
-      titleDist(currentClean, alEnglish.toLowerCase())
+      titleDist(currentClean, alEnglish.toLowerCase()),
     )
 
     // 如果相似度很高（< 0.15），说明当前标题已经很接近，不需要改
@@ -663,7 +750,7 @@ export async function validateSeriesTitle(
       suggestedTitle: suggestedTitle.trim(),
       anilistId: best.id,
       confidence: 1 - bestScore,
-      reason
+      reason,
     }
   } catch {
     return null
@@ -693,14 +780,16 @@ function titleDist(a: string, b: string): number {
  * 批量校验多个系列标题
  */
 export async function validateBatchTitles(
-  series: Array<{ folderPath: string; title: string }>
+  series: Array<{ folderPath: string; title: string }>,
 ): Promise<TitleSuggestion[]> {
   const suggestions: TitleSuggestion[] = []
   for (const s of series) {
     try {
       const result = await validateSeriesTitle(s.folderPath, s.title)
       if (result) suggestions.push(result)
-    } catch { /* skip errors on individual series */ }
+    } catch {
+      /* skip errors on individual series */
+    }
   }
   return suggestions
 }

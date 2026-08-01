@@ -28,7 +28,13 @@ export default function MpvOverlay({ filePath, onClose }: MpvOverlayProps) {
   return (
     <div className="w-full h-full flex flex-col items-center justify-center gap-3 bg-anibox-bg select-none">
       <div className="w-12 h-12 rounded-full bg-anibox-accent/10 flex items-center justify-center animate-pulse">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" className="text-anibox-accent">
+        <svg
+          width="22"
+          height="22"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+          className="text-anibox-accent"
+        >
           <polygon points="5,3 19,12 5,21" />
         </svg>
       </div>

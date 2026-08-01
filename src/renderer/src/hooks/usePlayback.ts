@@ -22,9 +22,18 @@ interface UsePlaybackOptions {
 
 export function usePlayback(opts: UsePlaybackOptions) {
   const {
-    filePath, savedPosition, folderPath, playMode, nextEpisodeTitle,
-    onNextEpisode, onFallback, onPositionChange, onDurationChange,
-    onPlayStateChange, showToast, subtitleDisplayTracks
+    filePath,
+    savedPosition,
+    folderPath,
+    playMode,
+    nextEpisodeTitle,
+    onNextEpisode,
+    onFallback,
+    onPositionChange,
+    onDurationChange,
+    onPlayStateChange,
+    showToast,
+    subtitleDisplayTracks,
   } = opts
 
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -51,46 +60,78 @@ export function usePlayback(opts: UsePlaybackOptions) {
 
   // 视频元信息
   const [videoMeta, setVideoMeta] = useState<{
-    fileSize: number; resolution: string; codec: string; fps: number; bitrate: number; isExact: boolean
+    fileSize: number
+    resolution: string
+    codec: string
+    fps: number
+    bitrate: number
+    isExact: boolean
   } | null>(null)
 
   // 内嵌轨道
-  const [embeddedTextTracks, setEmbeddedTextTracks] = useState<{ label: string; language: string; index: number }[]>([])
-  const [audioTracks, setAudioTracks] = useState<{ label: string; language: string; index: number }[]>([])
+  const [embeddedTextTracks, setEmbeddedTextTracks] = useState<
+    { label: string; language: string; index: number }[]
+  >([])
+  const [audioTracks, setAudioTracks] = useState<
+    { label: string; language: string; index: number }[]
+  >([])
   const [selectedAudioIdx, setSelectedAudioIdx] = useState(0)
   const audioPrefsRef = useRef<{ audioIndex: number; audioDelay: number } | null>(null)
 
   // —— ref 同步 ——
-  useEffect(() => { playbackRef.current.position = currentTime }, [currentTime])
-  useEffect(() => { playbackRef.current.duration = duration }, [duration])
-  useEffect(() => { playbackRef.current.volume = volume }, [volume])
-  useEffect(() => { playbackRef.current.playing = isPlaying }, [isPlaying])
+  useEffect(() => {
+    playbackRef.current.position = currentTime
+  }, [currentTime])
+  useEffect(() => {
+    playbackRef.current.duration = duration
+  }, [duration])
+  useEffect(() => {
+    playbackRef.current.volume = volume
+  }, [volume])
+  useEffect(() => {
+    playbackRef.current.playing = isPlaying
+  }, [isPlaying])
 
   // —— 播放控制 ——
   const togglePlay = useCallback(() => {
-    const v = videoRef.current; if (!v) return
-    if (v.paused) { v.play().catch(() => {}) } else { v.pause() }
+    const v = videoRef.current
+    if (!v) return
+    if (v.paused) {
+      v.play().catch(() => {})
+    } else {
+      v.pause()
+    }
   }, [])
 
   const handleSeek = useCallback((time: number) => {
-    const v = videoRef.current; if (!v) return
+    const v = videoRef.current
+    if (!v) return
     v.currentTime = Math.max(0, Math.min(time, v.duration || 0))
   }, [])
 
   const toggleMute = useCallback(() => {
-    const v = videoRef.current; if (!v) return
-    v.muted = !v.muted; setIsMuted(v.muted)
+    const v = videoRef.current
+    if (!v) return
+    v.muted = !v.muted
+    setIsMuted(v.muted)
   }, [])
 
   const handleVolumeChange = useCallback((newVolume: number) => {
-    const v = videoRef.current; if (!v) return
-    v.volume = newVolume; setVolume(newVolume)
-    if (newVolume > 0) { v.muted = false; setIsMuted(false) }
+    const v = videoRef.current
+    if (!v) return
+    v.volume = newVolume
+    setVolume(newVolume)
+    if (newVolume > 0) {
+      v.muted = false
+      setIsMuted(false)
+    }
   }, [])
 
   const handleSpeedChange = useCallback((speed: number) => {
-    const v = videoRef.current; if (!v) return
-    v.playbackRate = speed; setPlaybackRate(speed)
+    const v = videoRef.current
+    if (!v) return
+    v.playbackRate = speed
+    setPlaybackRate(speed)
   }, [])
 
   const toggleFullscreen = useCallback(() => {
@@ -141,7 +182,7 @@ export function usePlayback(opts: UsePlaybackOptions) {
         if (audioPrefsRef.current && audioPrefsRef.current.audioIndex < audio.length) {
           // 恢复已保存的音轨偏好
           for (let i = 0; i < tracks.length; i++) {
-            tracks[i].enabled = (i === audioPrefsRef.current.audioIndex)
+            tracks[i].enabled = i === audioPrefsRef.current.audioIndex
           }
           setSelectedAudioIdx(audioPrefsRef.current.audioIndex)
           console.log('[AniBox] Restored audio track:', audioPrefsRef.current.audioIndex)
@@ -164,29 +205,40 @@ export function usePlayback(opts: UsePlaybackOptions) {
   // —— 音轨偏好加载 ——
   useEffect(() => {
     if (!folderPath) return
-    window.electronAPI.audioGetPrefs(folderPath).then(prefs => {
-      if (prefs) {
-        audioPrefsRef.current = prefs
-      }
-    }).catch(() => {})
+    window.electronAPI
+      .audioGetPrefs(folderPath)
+      .then((prefs) => {
+        if (prefs) {
+          audioPrefsRef.current = prefs
+        }
+      })
+      .catch(() => {})
   }, [folderPath])
 
   // —— 音轨切换 + 保存偏好 ——
-  const saveAudioPrefs = useCallback((idx: number, delay: number) => {
-    if (!folderPath) return
-    const lang = audioTracks?.[idx]?.language || ''
-    window.electronAPI.audioSetPrefs(folderPath, { audioIndex: idx, audioDelay: delay, language: lang }).catch(() => {})
-  }, [folderPath, audioTracks.length])
+  const saveAudioPrefs = useCallback(
+    (idx: number, delay: number) => {
+      if (!folderPath) return
+      const lang = audioTracks?.[idx]?.language || ''
+      window.electronAPI
+        .audioSetPrefs(folderPath, { audioIndex: idx, audioDelay: delay, language: lang })
+        .catch(() => {})
+    },
+    [folderPath, audioTracks.length],
+  )
 
-  const handleAudioChange = useCallback((idx: number) => {
-    const v = videoRef.current
-    if (!v || !v.audioTracks) return
-    for (let i = 0; i < v.audioTracks.length; i++) {
-      v.audioTracks[i].enabled = (i === idx)
-    }
-    setSelectedAudioIdx(idx)
-    saveAudioPrefs(idx, 0 /* delay managed by useAudio hook */)
-  }, [saveAudioPrefs])
+  const handleAudioChange = useCallback(
+    (idx: number) => {
+      const v = videoRef.current
+      if (!v || !v.audioTracks) return
+      for (let i = 0; i < v.audioTracks.length; i++) {
+        v.audioTracks[i].enabled = i === idx
+      }
+      setSelectedAudioIdx(idx)
+      saveAudioPrefs(idx, 0 /* delay managed by useAudio hook */)
+    },
+    [saveAudioPrefs],
+  )
 
   // —— 视频核心事件监听 ——
   useEffect(() => {
@@ -221,21 +273,30 @@ export function usePlayback(opts: UsePlaybackOptions) {
         onFallback?.()
         return
       }
-      window.electronAPI.getVideoInfo(filePath).then(info => {
-        if (!info) return
-        const res = `${v.videoWidth}×${v.videoHeight}`
-        let codec = '—', bitrate: number, fps = 0, isExact = false
-        if (info.videoMeta && info.videoMeta.exactBitrate > 0) {
-          codec = info.videoMeta.codec
-          bitrate = info.videoMeta.exactBitrate
-          fps = info.videoMeta.fps || 0
-          isExact = true
-        } else {
-          bitrate = v.duration > 0 ? Math.round((info.size * 8) / v.duration) : 0
-        }
-        setVideoMeta({ fileSize: info.size, resolution: res, codec, fps, bitrate, isExact })
-      }).catch(() => {})
-      if (fallbackTimerRef.current) { clearTimeout(fallbackTimerRef.current); fallbackTimerRef.current = undefined }
+      window.electronAPI
+        .getVideoInfo(filePath)
+        .then((info) => {
+          if (!info) return
+          const res = `${v.videoWidth}×${v.videoHeight}`
+          let codec = '—',
+            bitrate: number,
+            fps = 0,
+            isExact = false
+          if (info.videoMeta && info.videoMeta.exactBitrate > 0) {
+            codec = info.videoMeta.codec
+            bitrate = info.videoMeta.exactBitrate
+            fps = info.videoMeta.fps || 0
+            isExact = true
+          } else {
+            bitrate = v.duration > 0 ? Math.round((info.size * 8) / v.duration) : 0
+          }
+          setVideoMeta({ fileSize: info.size, resolution: res, codec, fps, bitrate, isExact })
+        })
+        .catch(() => {})
+      if (fallbackTimerRef.current) {
+        clearTimeout(fallbackTimerRef.current)
+        fallbackTimerRef.current = undefined
+      }
       setDuration(v.duration)
       onDurationChange(v.duration)
       if (savedPosition > 0 && v.duration > 0 && !hasSeekedRef.current) {
@@ -246,15 +307,24 @@ export function usePlayback(opts: UsePlaybackOptions) {
       detectAudioTracks()
     }
 
-    const onDuration = () => { setDuration(v.duration); onDurationChange(v.duration) }
+    const onDuration = () => {
+      setDuration(v.duration)
+      onDurationChange(v.duration)
+    }
 
     const onTimeUpdate = () => {
       setCurrentTime(v.currentTime)
       onPositionChange(v.currentTime)
     }
 
-    const onPlay = () => { setIsPlaying(true); onPlayStateChange(true) }
-    const onPause = () => { setIsPlaying(false); onPlayStateChange(false) }
+    const onPlay = () => {
+      setIsPlaying(true)
+      onPlayStateChange(true)
+    }
+    const onPause = () => {
+      setIsPlaying(false)
+      onPlayStateChange(false)
+    }
 
     const onProgress = () => {
       if (v.buffered.length > 0) {
@@ -267,8 +337,14 @@ export function usePlayback(opts: UsePlaybackOptions) {
       setIsPlaying(false)
       onPlayStateChange(false)
       setShowControls(true)
-      if (filePath) { window.electronAPI.savePosition(filePath, v.duration).catch(() => {}) }
-      if (playMode === 'loop-one') { v.currentTime = 0; v.play().catch(() => {}); return }
+      if (filePath) {
+        window.electronAPI.savePosition(filePath, v.duration).catch(() => {})
+      }
+      if (playMode === 'loop-one') {
+        v.currentTime = 0
+        v.play().catch(() => {})
+        return
+      }
       if (onNextEpisode && nextEpisodeTitle) {
         showToast(`下一话: ${nextEpisodeTitle}`)
         setTimeout(() => onNextEpisode(), 400)
@@ -313,10 +389,16 @@ export function usePlayback(opts: UsePlaybackOptions) {
       v.removeEventListener('progress', onProgress)
       v.removeEventListener('enterpictureinpicture', onEnterPiP)
       v.removeEventListener('leavepictureinpicture', onLeavePiP)
-      if (fallbackTimerRef.current) { clearTimeout(fallbackTimerRef.current); fallbackTimerRef.current = undefined }
-      if (errorFallbackTimerRef.current) { clearTimeout(errorFallbackTimerRef.current); errorFallbackTimerRef.current = undefined }
+      if (fallbackTimerRef.current) {
+        clearTimeout(fallbackTimerRef.current)
+        fallbackTimerRef.current = undefined
+      }
+      if (errorFallbackTimerRef.current) {
+        clearTimeout(errorFallbackTimerRef.current)
+        errorFallbackTimerRef.current = undefined
+      }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filePath, savedPosition])
 
   // —— 全屏监听 ——
@@ -335,28 +417,61 @@ export function usePlayback(opts: UsePlaybackOptions) {
 
   useEffect(() => {
     resetHideTimer()
-    return () => { if (hideTimerRef.current) clearTimeout(hideTimerRef.current) }
+    return () => {
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current)
+    }
   }, [isPlaying, resetHideTimer])
 
   // —— 字幕选择应用 ——
   useEffect(() => {
     const v = videoRef.current
     if (!v || !v.textTracks) return
-    for (let i = 0; i < v.textTracks.length; i++) { v.textTracks[i].mode = 'hidden' }
+    for (let i = 0; i < v.textTracks.length; i++) {
+      v.textTracks[i].mode = 'hidden'
+    }
   }, [filePath])
 
   return {
     videoRef,
     previewVideoRef,
     playbackRef,
-    isPlaying, currentTime, duration, volume, isMuted, playbackRate,
-    isFullscreen, showControls, bufferProgress, isLoading, videoError,
-    videoMeta, isPiP, embeddedTextTracks, audioTracks, selectedAudioIdx,
-    togglePlay, handleSeek, toggleMute, handleVolumeChange, handleSpeedChange,
-    toggleFullscreen, resetHideTimer, handleAudioChange, saveAudioPrefs,
-    setSelectedAudioIdx, setCurrentTime, setDuration, setIsPlaying,
-    setIsFullscreen, setShowControls, setVolume, setPlaybackRate,
-    setBufferProgress, setIsLoading, setIsMuted, setIsPiP,
-    detectionRefs: { hasSeekedRef, hideTimerRef, fallbackTimerRef, errorFallbackTimerRef }
+    isPlaying,
+    currentTime,
+    duration,
+    volume,
+    isMuted,
+    playbackRate,
+    isFullscreen,
+    showControls,
+    bufferProgress,
+    isLoading,
+    videoError,
+    videoMeta,
+    isPiP,
+    embeddedTextTracks,
+    audioTracks,
+    selectedAudioIdx,
+    togglePlay,
+    handleSeek,
+    toggleMute,
+    handleVolumeChange,
+    handleSpeedChange,
+    toggleFullscreen,
+    resetHideTimer,
+    handleAudioChange,
+    saveAudioPrefs,
+    setSelectedAudioIdx,
+    setCurrentTime,
+    setDuration,
+    setIsPlaying,
+    setIsFullscreen,
+    setShowControls,
+    setVolume,
+    setPlaybackRate,
+    setBufferProgress,
+    setIsLoading,
+    setIsMuted,
+    setIsPiP,
+    detectionRefs: { hasSeekedRef, hideTimerRef, fallbackTimerRef, errorFallbackTimerRef },
   }
 }

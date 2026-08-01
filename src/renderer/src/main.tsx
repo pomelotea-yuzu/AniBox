@@ -11,7 +11,7 @@ root.render(
     <ThemeProvider>
       <App />
     </ThemeProvider>
-  </ErrorBoundary>
+  </ErrorBoundary>,
 )
 
 // 启动 splash 淡出 — React 挂载完成后平滑过渡

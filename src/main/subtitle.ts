@@ -59,17 +59,35 @@ function guessLang(fileBase: string): { lang: string; label: string } {
   const tags = parts.slice(0, -1) // remove ext
   const lastTag = tags[tags.length - 1] || ''
 
-  if (['chs', 'sc', 'zh-cn', 'zh-hans', 'gb', '简中', '简体'].some(t => lastTag === t || lower.includes(`.${t}.`)))
+  if (
+    ['chs', 'sc', 'zh-cn', 'zh-hans', 'gb', '简中', '简体'].some(
+      (t) => lastTag === t || lower.includes(`.${t}.`),
+    )
+  )
     return { lang: 'zh-CN', label: '简体中文' }
-  if (['cht', 'tc', 'zh-tw', 'zh-hant', 'big5', '繁中', '繁体'].some(t => lastTag === t || lower.includes(`.${t}.`)))
+  if (
+    ['cht', 'tc', 'zh-tw', 'zh-hant', 'big5', '繁中', '繁体'].some(
+      (t) => lastTag === t || lower.includes(`.${t}.`),
+    )
+  )
     return { lang: 'zh-TW', label: '繁體中文' }
-  if (['zh', 'chi', 'chinese', '中文'].some(t => lastTag === t || lower.includes(`.${t}.`)))
+  if (['zh', 'chi', 'chinese', '中文'].some((t) => lastTag === t || lower.includes(`.${t}.`)))
     return { lang: 'zh', label: '中文' }
-  if (['en', 'eng', 'english', '英文', '英语'].some(t => lastTag === t || lower.includes(`.${t}.`)))
+  if (
+    ['en', 'eng', 'english', '英文', '英语'].some((t) => lastTag === t || lower.includes(`.${t}.`))
+  )
     return { lang: 'en', label: 'English' }
-  if (['ja', 'jp', 'jpn', 'japanese', '日语', '日文'].some(t => lastTag === t || lower.includes(`.${t}.`)))
+  if (
+    ['ja', 'jp', 'jpn', 'japanese', '日语', '日文'].some(
+      (t) => lastTag === t || lower.includes(`.${t}.`),
+    )
+  )
     return { lang: 'ja', label: '日本語' }
-  if (['ko', 'kr', 'kor', 'korean', '韩语', '韩文'].some(t => lastTag === t || lower.includes(`.${t}.`)))
+  if (
+    ['ko', 'kr', 'kor', 'korean', '韩语', '韩文'].some(
+      (t) => lastTag === t || lower.includes(`.${t}.`),
+    )
+  )
     return { lang: 'ko', label: '한국어' }
 
   return { lang: '', label: '字幕' }
@@ -124,7 +142,9 @@ export function findSubtitles(videoPath: string): SubtitleTrack[] {
           }
         }
       }
-    } catch { /* 忽略 */ }
+    } catch {
+      /* 忽略 */
+    }
   }
 
   // 策略 1+2: 扫描视频同目录
@@ -141,7 +161,9 @@ export function findSubtitles(videoPath: string): SubtitleTrack[] {
     const subDir = join(videoDir, subDirName)
     try {
       scanDir(subDir, true)
-    } catch { /* 忽略 */ }
+    } catch {
+      /* 忽略 */
+    }
   }
 
   // 策略 3c: 父目录下的字幕子目录
@@ -150,7 +172,9 @@ export function findSubtitles(videoPath: string): SubtitleTrack[] {
       const subDir = join(parentDir, subDirName)
       try {
         scanDir(subDir, true)
-      } catch { /* 忽略 */ }
+      } catch {
+        /* 忽略 */
+      }
     }
   }
 
@@ -161,7 +185,7 @@ export function findSubtitles(videoPath: string): SubtitleTrack[] {
 
 function srtToVtt(content: string): string {
   // 移除 BOM
-  if (content.charCodeAt(0) === 0xFEFF) content = content.slice(1)
+  if (content.charCodeAt(0) === 0xfeff) content = content.slice(1)
 
   let vtt = 'WEBVTT\n\n'
 
@@ -196,7 +220,7 @@ function srtToVtt(content: string): string {
 
 function assToVtt(content: string): string {
   // 移除 BOM
-  if (content.charCodeAt(0) === 0xFEFF) content = content.slice(1)
+  if (content.charCodeAt(0) === 0xfeff) content = content.slice(1)
 
   // 查找 [Events] 段
   const eventsMatch = content.match(/\[Events\]\s*\n([\s\S]*?)(?=\n\[|\n*$)/i)
@@ -208,7 +232,7 @@ function assToVtt(content: string): string {
   const formatMatch = eventsSection.match(/Format:\s*(.+)/i)
   if (!formatMatch) return 'WEBVTT\n\n'
 
-  const columns = formatMatch[1].split(',').map(c => c.trim().toLowerCase())
+  const columns = formatMatch[1].split(',').map((c) => c.trim().toLowerCase())
   const startIdx = columns.indexOf('start')
   const endIdx = columns.indexOf('end')
   const textIdx = columns.indexOf('text')
@@ -261,9 +285,13 @@ function splitAssDialogue(line: string, textColumnIdx: number): string[] {
 
   for (let i = 0; i < line.length; i++) {
     const ch = line[i]
-    if (ch === '{') { depth++; current += ch }
-    else if (ch === '}') { depth--; current += ch }
-    else if (ch === ',' && depth === 0 && parts.length < textColumnIdx) {
+    if (ch === '{') {
+      depth++
+      current += ch
+    } else if (ch === '}') {
+      depth--
+      current += ch
+    } else if (ch === ',' && depth === 0 && parts.length < textColumnIdx) {
       parts.push(current)
       current = ''
     } else {

@@ -14,13 +14,17 @@ interface Playlist {
 interface PlaylistManagerProps {
   visible: boolean
   onClose: () => void
-  currentSeriesId?: string  // 当前选中的番剧 ID
-  onSelectPlaylist?: (seriesIds: string[]) => void  // 筛选广播墙
+  currentSeriesId?: string // 当前选中的番剧 ID
+  onSelectPlaylist?: (seriesIds: string[]) => void // 筛选广播墙
   onClearFilter?: () => void
 }
 
 export default function PlaylistManager({
-  visible, onClose, currentSeriesId, onSelectPlaylist, onClearFilter
+  visible,
+  onClose,
+  currentSeriesId,
+  onSelectPlaylist,
+  onClearFilter,
 }: PlaylistManagerProps) {
   const [playlists, setPlaylists] = useState<Playlist[]>([])
   const [newName, setNewName] = useState('')
@@ -39,7 +43,9 @@ export default function PlaylistManager({
         counts[list.id] = list.seriesIds.length
       }
       setSeriesCounts(counts)
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }, [])
 
   useEffect(() => {
@@ -54,58 +60,84 @@ export default function PlaylistManager({
       await window.electronAPI.playlistsCreate(name)
       setNewName('')
       loadPlaylists()
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }, [newName, loadPlaylists])
 
   // 删除播放列表
-  const handleDelete = useCallback(async (id: string) => {
-    try {
-      await window.electronAPI.playlistsDelete(id)
-      if (activeFilter === id) { setActiveFilter(null); onClearFilter?.() }
-      loadPlaylists()
-    } catch { /* ignore */ }
-  }, [activeFilter, loadPlaylists, onClearFilter])
+  const handleDelete = useCallback(
+    async (id: string) => {
+      try {
+        await window.electronAPI.playlistsDelete(id)
+        if (activeFilter === id) {
+          setActiveFilter(null)
+          onClearFilter?.()
+        }
+        loadPlaylists()
+      } catch {
+        /* ignore */
+      }
+    },
+    [activeFilter, loadPlaylists, onClearFilter],
+  )
 
   // 添加番剧到列表
-  const handleAddSeries = useCallback(async (listId: string) => {
-    if (!currentSeriesId) return
-    try {
-      await window.electronAPI.playlistsAddSeries(listId, currentSeriesId)
-      loadPlaylists()
-      // 刷新当前筛选
-      if (activeFilter === listId) {
-        const lists = await window.electronAPI.playlistsGetAll()
-        const found = lists.find((l: Playlist) => l.id === listId)
-        if (found) onSelectPlaylist?.(found.seriesIds)
+  const handleAddSeries = useCallback(
+    async (listId: string) => {
+      if (!currentSeriesId) return
+      try {
+        await window.electronAPI.playlistsAddSeries(listId, currentSeriesId)
+        loadPlaylists()
+        // 刷新当前筛选
+        if (activeFilter === listId) {
+          const lists = await window.electronAPI.playlistsGetAll()
+          const found = lists.find((l: Playlist) => l.id === listId)
+          if (found) onSelectPlaylist?.(found.seriesIds)
+        }
+      } catch {
+        /* ignore */
       }
-    } catch { /* ignore */ }
-  }, [currentSeriesId, activeFilter, loadPlaylists, onSelectPlaylist])
+    },
+    [currentSeriesId, activeFilter, loadPlaylists, onSelectPlaylist],
+  )
 
   // 移除番剧
-  const handleRemoveSeries = useCallback(async (listId: string) => {
-    if (!currentSeriesId) return
-    try {
-      await window.electronAPI.playlistsRemoveSeries(listId, currentSeriesId)
-      loadPlaylists()
-    } catch { /* ignore */ }
-  }, [currentSeriesId, loadPlaylists])
+  const handleRemoveSeries = useCallback(
+    async (listId: string) => {
+      if (!currentSeriesId) return
+      try {
+        await window.electronAPI.playlistsRemoveSeries(listId, currentSeriesId)
+        loadPlaylists()
+      } catch {
+        /* ignore */
+      }
+    },
+    [currentSeriesId, loadPlaylists],
+  )
 
   // 按列表筛选
-  const handleFilter = useCallback(async (list: Playlist) => {
-    if (activeFilter === list.id) {
-      setActiveFilter(null)
-      onClearFilter?.()
-    } else {
-      setActiveFilter(list.id)
-      onSelectPlaylist?.(list.seriesIds)
-    }
-  }, [activeFilter, onSelectPlaylist, onClearFilter])
+  const handleFilter = useCallback(
+    async (list: Playlist) => {
+      if (activeFilter === list.id) {
+        setActiveFilter(null)
+        onClearFilter?.()
+      } else {
+        setActiveFilter(list.id)
+        onSelectPlaylist?.(list.seriesIds)
+      }
+    },
+    [activeFilter, onSelectPlaylist, onClearFilter],
+  )
 
   // 键盘：Enter 创建
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') handleCreate()
-    if (e.key === 'Escape') onClose()
-  }, [handleCreate, onClose])
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter') handleCreate()
+      if (e.key === 'Escape') onClose()
+    },
+    [handleCreate, onClose],
+  )
 
   if (!visible) return null
 
@@ -156,11 +188,9 @@ export default function PlaylistManager({
         {/* 列表 */}
         <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1">
           {playlists.length === 0 ? (
-            <p className="text-xs text-anibox-text-muted text-center py-8">
-              暂无播放列表
-            </p>
+            <p className="text-xs text-anibox-text-muted text-center py-8">暂无播放列表</p>
           ) : (
-            playlists.map(list => {
+            playlists.map((list) => {
               const isFiltered = activeFilter === list.id
               const count = seriesCounts[list.id] ?? list.seriesIds.length
               const hasCurrent = currentSeriesId && list.seriesIds.includes(currentSeriesId)
@@ -169,24 +199,22 @@ export default function PlaylistManager({
                 <div
                   key={list.id}
                   className={`group flex items-center gap-2 px-2 py-1.5 rounded text-xs transition-colors
-                    ${isFiltered
-                      ? 'bg-anibox-accent/15 border border-anibox-accent/30'
-                      : 'hover:bg-anibox-bg/60 border border-transparent'
+                    ${
+                      isFiltered
+                        ? 'bg-anibox-accent/15 border border-anibox-accent/30'
+                        : 'hover:bg-anibox-bg/60 border border-transparent'
                     }`}
                 >
                   {/* 名称 + 数量 */}
-                  <button
-                    onClick={() => handleFilter(list)}
-                    className="flex-1 text-left min-w-0"
-                  >
+                  <button onClick={() => handleFilter(list)} className="flex-1 text-left min-w-0">
                     <span className="text-anibox-text truncate block">{list.name}</span>
                     <span className="text-[10px] text-anibox-text-muted">{count} 部番剧</span>
                   </button>
 
                   {/* 操作按钮 */}
                   <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                    {currentSeriesId && (
-                      hasCurrent ? (
+                    {currentSeriesId &&
+                      (hasCurrent ? (
                         <button
                           onClick={() => handleRemoveSeries(list.id)}
                           className="text-[10px] text-red-400 hover:text-red-500 px-1"
@@ -202,8 +230,7 @@ export default function PlaylistManager({
                         >
                           +
                         </button>
-                      )
-                    )}
+                      ))}
                     <button
                       onClick={() => handleDelete(list.id)}
                       className="text-[10px] text-anibox-text-muted hover:text-red-400 px-1"
@@ -222,7 +249,10 @@ export default function PlaylistManager({
         {activeFilter && (
           <div className="px-4 py-2 border-t border-anibox-border bg-anibox-accent/5">
             <button
-              onClick={() => { setActiveFilter(null); onClearFilter?.() }}
+              onClick={() => {
+                setActiveFilter(null)
+                onClearFilter?.()
+              }}
               className="text-[11px] text-anibox-accent hover:text-anibox-accent-hover"
             >
               ← 清除筛选，显示全部

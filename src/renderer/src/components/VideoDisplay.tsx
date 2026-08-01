@@ -29,13 +29,20 @@ const VideoDisplay = forwardRef<VideoDisplayHandle, VideoDisplayProps>(
     const previewRef = useRef<HTMLVideoElement>(null)
 
     useImperativeHandle(ref, () => ({
-      get video() { return videoRef.current },
-      get previewVideo() { return previewRef.current }
+      get video() {
+        return videoRef.current
+      },
+      get previewVideo() {
+        return previewRef.current
+      },
     }))
 
-    const objectFit = aspectMode === 'stretch' ? 'object-fill'
-      : aspectMode === 'cover' ? 'object-cover'
-      : 'object-contain'
+    const objectFit =
+      aspectMode === 'stretch'
+        ? 'object-fill'
+        : aspectMode === 'cover'
+          ? 'object-cover'
+          : 'object-contain'
 
     const containerStyle: React.CSSProperties = {}
     if (aspectMode === '4:3') containerStyle.aspectRatio = '4 / 3'
@@ -44,24 +51,31 @@ const VideoDisplay = forwardRef<VideoDisplayHandle, VideoDisplayProps>(
     const mainVideo = (
       <video
         ref={(el) => {
-          (videoRef as React.MutableRefObject<HTMLVideoElement | null>).current = el
-          if (el) console.log('[AniBox] Video element mounted, src:', el.src, 'readyState:', el.readyState)
+          ;(videoRef as React.MutableRefObject<HTMLVideoElement | null>).current = el
+          if (el)
+            console.log(
+              '[AniBox] Video element mounted, src:',
+              el.src,
+              'readyState:',
+              el.readyState,
+            )
         }}
         src={src}
         className={`w-full h-full ${objectFit}`}
         preload="auto"
         crossOrigin={crossOrigin}
       >
-        {!hideNativeSubtitles && subtitleTracks?.map((track, i) => (
-          <track
-            key={i}
-            kind="subtitles"
-            label={track.label}
-            srcLang={track.language}
-            src={track.src}
-            default={track.default}
-          />
-        ))}
+        {!hideNativeSubtitles &&
+          subtitleTracks?.map((track, i) => (
+            <track
+              key={i}
+              kind="subtitles"
+              label={track.label}
+              srcLang={track.language}
+              src={track.src}
+              default={track.default}
+            />
+          ))}
       </video>
     )
 
@@ -71,7 +85,14 @@ const VideoDisplay = forwardRef<VideoDisplayHandle, VideoDisplayProps>(
       <video
         ref={previewRef}
         src={src.includes('?') ? src + '&preview' : src + '?preview'}
-        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', visibility: 'hidden', pointerEvents: 'none' }}
+        style={{
+          position: 'absolute',
+          inset: 0,
+          width: '100%',
+          height: '100%',
+          visibility: 'hidden',
+          pointerEvents: 'none',
+        }}
         preload="auto"
         muted
       />
@@ -94,7 +115,8 @@ const VideoDisplay = forwardRef<VideoDisplayHandle, VideoDisplayProps>(
         {previewVideo}
       </>
     )
-  })
+  },
+)
 
 VideoDisplay.displayName = 'VideoDisplay'
 

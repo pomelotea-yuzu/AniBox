@@ -44,8 +44,11 @@ export default function RecentHistory({ visible, onClose, onPlay }: RecentHistor
     try {
       const recent = await window.electronAPI.getRecentProgress()
       setItems(recent)
-    } catch { setItems([]) }
-    finally { setLoading(false) }
+    } catch {
+      setItems([])
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => {
@@ -57,8 +60,10 @@ export default function RecentHistory({ visible, onClose, onPlay }: RecentHistor
   return (
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} />
-      <div className="absolute top-full right-0 z-50 mt-1 w-72 bg-anibox-surface border border-anibox-border
-        rounded-lg shadow-xl overflow-hidden animate-dropdown">
+      <div
+        className="absolute top-full right-0 z-50 mt-1 w-72 bg-anibox-surface border border-anibox-border
+        rounded-lg shadow-xl overflow-hidden animate-dropdown"
+      >
         <div className="px-3 py-2 border-b border-anibox-border/50">
           <h4 className="text-xs font-semibold text-anibox-text">最近观看</h4>
         </div>
@@ -91,7 +96,9 @@ export default function RecentHistory({ visible, onClose, onPlay }: RecentHistor
                 <div className="mt-1 h-0.5 bg-anibox-border/30 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-anibox-accent/50 rounded-full"
-                    style={{ width: `${Math.min(100, Math.round((item.position / (item.position + 300)) * 100))}%` }}
+                    style={{
+                      width: `${Math.min(100, Math.round((item.position / (item.position + 300)) * 100))}%`,
+                    }}
                   />
                 </div>
               </button>

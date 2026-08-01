@@ -8,11 +8,11 @@ import { levenshtein, titleSimilarity } from './utils'
  */
 export interface DanmakuItem {
   text: string
-  time: number       // 视频时间（秒）
+  time: number // 视频时间（秒）
   mode: 'scroll' | 'top' | 'bottom'
-  color: string      // '#RRGGBB'
+  color: string // '#RRGGBB'
   fontSize: number
-  timestamp: number  // 发送时间戳
+  timestamp: number // 发送时间戳
 }
 
 interface BilibiliSeasonResult {
@@ -33,7 +33,7 @@ interface BilibiliEpisode {
 const BILIBILI_API = {
   searchAnime: 'https://api.bilibili.com/x/web-interface/search/type?search_type=media_bangumi',
   seasonInfo: 'https://api.bilibili.com/pgc/view/web/season',
-  danmaku: 'https://api.bilibili.com/x/v1/dm/list.so'
+  danmaku: 'https://api.bilibili.com/x/v1/dm/list.so',
 }
 
 // User-Agent（B站要求）
@@ -49,29 +49,27 @@ function getCacheDir(): string {
 /**
  * 步骤1: 根据番剧名搜索B站番剧
  */
-export async function searchBilibiliAnime(
-  keyword: string
-): Promise<BilibiliSeasonResult[]> {
+export async function searchBilibiliAnime(keyword: string): Promise<BilibiliSeasonResult[]> {
   const params = new URLSearchParams({ keyword, search_type: 'media_bangumi' })
   try {
     const resp = await fetch(`${BILIBILI_API.searchAnime}?${params.toString()}`, {
-      headers: { 'User-Agent': UA, 'Referer': 'https://www.bilibili.com' },
-      signal: AbortSignal.timeout(8000)
+      headers: { 'User-Agent': UA, Referer: 'https://www.bilibili.com' },
+      signal: AbortSignal.timeout(8000),
     })
     if (!resp.ok) return []
-    const data = await resp.json() as any
+    const data = (await resp.json()) as any
     if (data.code !== 0) return []
 
     const results: BilibiliSeasonResult[] = []
-    for (const item of (data.data?.result || [])) {
+    for (const item of data.data?.result || []) {
       const m = data.data?.media_list?.find((ml: any) => ml.media_id === item.media_id)
       results.push({
         season_id: item.season_id || m?.season_id || 0,
         media_id: item.media_id || 0,
-        title: item.title || ''
+        title: item.title || '',
       })
     }
-    return results.filter(r => r.season_id > 0)
+    return results.filter((r) => r.season_id > 0)
   } catch {
     return []
   }
@@ -80,26 +78,24 @@ export async function searchBilibiliAnime(
 /**
  * 步骤2: 获取番剧分集列表
  */
-export async function getBilibiliEpisodes(
-  seasonId: number
-): Promise<BilibiliEpisode[]> {
+export async function getBilibiliEpisodes(seasonId: number): Promise<BilibiliEpisode[]> {
   try {
     const resp = await fetch(`${BILIBILI_API.seasonInfo}?season_id=${seasonId}`, {
-      headers: { 'User-Agent': UA, 'Referer': 'https://www.bilibili.com' },
-      signal: AbortSignal.timeout(8000)
+      headers: { 'User-Agent': UA, Referer: 'https://www.bilibili.com' },
+      signal: AbortSignal.timeout(8000),
     })
     if (!resp.ok) return []
-    const data = await resp.json() as any
+    const data = (await resp.json()) as any
     if (data.code !== 0) return []
 
     const episodes: BilibiliEpisode[] = []
-    for (const ep of (data.result?.episodes || [])) {
+    for (const ep of data.result?.episodes || []) {
       episodes.push({
         title: ep.long_title || ep.share_copy || `第${ep.title}话`,
         ep_id: ep.ep_id || ep.id,
         aid: ep.aid,
         cid: ep.cid,
-        index: ep.title ? parseInt(ep.title) || episodes.length + 1 : episodes.length + 1
+        index: ep.title ? parseInt(ep.title) || episodes.length + 1 : episodes.length + 1,
       })
     }
     return episodes
@@ -111,13 +107,11 @@ export async function getBilibiliEpisodes(
 /**
  * 步骤3: 获取弹幕XML
  */
-export async function fetchBilibiliDanmakuXML(
-  cid: number
-): Promise<string> {
+export async function fetchBilibiliDanmakuXML(cid: number): Promise<string> {
   try {
     const resp = await fetch(`${BILIBILI_API.danmaku}?oid=${cid}`, {
-      headers: { 'User-Agent': UA, 'Referer': 'https://www.bilibili.com' },
-      signal: AbortSignal.timeout(10000)
+      headers: { 'User-Agent': UA, Referer: 'https://www.bilibili.com' },
+      signal: AbortSignal.timeout(10000),
     })
     if (!resp.ok) return ''
     return await resp.text()
@@ -177,7 +171,7 @@ export function parseBilibiliDanmakuXML(xml: string): DanmakuItem[] {
       mode: dmMode,
       color,
       fontSize: Math.min(fontSize, 36),
-      timestamp
+      timestamp,
     })
   }
 
@@ -190,7 +184,7 @@ export function parseBilibiliDanmakuXML(xml: string): DanmakuItem[] {
 export async function fetchDanmakuForEpisode(
   animeTitle: string,
   episodeNumber: number,
-  onProgress?: (msg: string) => void
+  onProgress?: (msg: string) => void,
 ): Promise<DanmakuItem[]> {
   // 1. 搜索番剧
   onProgress?.(`搜索: ${animeTitle}`)
@@ -212,7 +206,7 @@ export async function fetchDanmakuForEpisode(
   }
 
   // 4. 按集号匹配
-  let targetEp = episodes.find(e => e.index === episodeNumber)
+  let targetEp = episodes.find((e) => e.index === episodeNumber)
   if (!targetEp) {
     // 如果按 index 找不到，尝试直接按数组索引
     targetEp = episodes[episodeNumber - 1]
@@ -233,7 +227,9 @@ export async function fetchDanmakuForEpisode(
         onProgress?.('已加载缓存弹幕')
         return cached
       }
-    } catch { /* 缓存损坏，重新下载 */ }
+    } catch {
+      /* 缓存损坏，重新下载 */
+    }
   }
 
   // 6. 下载弹幕
@@ -250,7 +246,9 @@ export async function fetchDanmakuForEpisode(
   // 8. 缓存
   try {
     writeFileSync(cacheFile, JSON.stringify(items))
-  } catch { /* ok */ }
+  } catch {
+    /* ok */
+  }
 
   return items
 }
@@ -267,7 +265,7 @@ export function cleanTitleForSearch(title: string): string {
     .replace(/第[一二三四五六七八九十\d]+季/g, '')
     .replace(/Season\s*\d+/gi, '')
     .replace(/S\d+/gi, '')
-    .replace(/\d{4}/g, '')     // 年份
+    .replace(/\d{4}/g, '') // 年份
     .replace(/1080[pP]|720[pP]|4K|BD/g, '')
     .replace(/GB|BIG5|CHS|CHT|JP|EN/g, '')
     .trim()
@@ -278,7 +276,7 @@ export function cleanTitleForSearch(title: string): string {
  */
 function fuzzyMatch(
   target: string,
-  candidates: Array<{ title: string; season_id: number; media_id: number }>
+  candidates: Array<{ title: string; season_id: number; media_id: number }>,
 ) {
   const cleanTarget = cleanTitleForSearch(target).toLowerCase()
   let best = candidates[0]
@@ -311,9 +309,7 @@ export function parseDanmakuFromFile(filePath: string): DanmakuItem[] {
 /**
  * 导出弹幕为B站XML格式
  */
-export function exportDanmakuToXML(
-  items: DanmakuItem[],
-): string {
+export function exportDanmakuToXML(items: DanmakuItem[]): string {
   let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<i>\n'
   for (const item of items) {
     const mode = item.mode === 'scroll' ? 1 : item.mode === 'bottom' ? 4 : 5
@@ -326,7 +322,7 @@ export function exportDanmakuToXML(
       item.timestamp || 0,
       0,
       '0',
-      '0'
+      '0',
     ].join(',')
     xml += `  <d p="${p}">${escapeXml(item.text)}</d>\n`
   }
@@ -335,5 +331,9 @@ export function exportDanmakuToXML(
 }
 
 function escapeXml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
 }

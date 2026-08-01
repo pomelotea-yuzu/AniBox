@@ -5,38 +5,38 @@
 
 export interface DanmakuItem {
   text: string
-  time: number       // 视频时间（秒），弹幕出现时刻
+  time: number // 视频时间（秒），弹幕出现时刻
   mode: 'scroll' | 'top' | 'bottom'
-  color: string      // 十六进制颜色，如 '#FFFFFF'
-  fontSize: number   // 字体大小，默认 25
-  timestamp: number  // B站弹幕时间戳（微秒）
+  color: string // 十六进制颜色，如 '#FFFFFF'
+  fontSize: number // 字体大小，默认 25
+  timestamp: number // B站弹幕时间戳（微秒）
 }
 
 interface ScrollTrack {
   danmaku: DanmakuItem
-  x: number          // 当前 x 坐标
-  width: number      // 弹幕文本宽度
-  y: number          // 所在轨道 y 坐标
-  speed: number      // 每秒移动像素
+  x: number // 当前 x 坐标
+  width: number // 弹幕文本宽度
+  y: number // 所在轨道 y 坐标
+  speed: number // 每秒移动像素
 }
 
 interface StaticDanmaku {
   danmaku: DanmakuItem
-  opacity: number    // 0→1 淡入淡出
-  elapsed: number    // 已显示秒数
+  opacity: number // 0→1 淡入淡出
+  elapsed: number // 已显示秒数
   y: number
 }
 
 export interface DanmakuConfig {
   enabled: boolean
-  density: number       // 0.1-2.0, 轨道密度倍率
-  speed: number         // 0.5-2.0, 滚动速度倍率
-  opacity: number       // 0.1-1.0, 全局透明度
-  fontScale: number     // 0.5-2.0, 字体缩放
-  showScroll: boolean   // 显示滚动弹幕
-  showTop: boolean      // 显示顶部弹幕
-  showBottom: boolean   // 显示底部弹幕
-  offsetMs: number      // 时间偏移（毫秒），用于微调对齐
+  density: number // 0.1-2.0, 轨道密度倍率
+  speed: number // 0.5-2.0, 滚动速度倍率
+  opacity: number // 0.1-1.0, 全局透明度
+  fontScale: number // 0.5-2.0, 字体缩放
+  showScroll: boolean // 显示滚动弹幕
+  showTop: boolean // 显示顶部弹幕
+  showBottom: boolean // 显示底部弹幕
+  offsetMs: number // 时间偏移（毫秒），用于微调对齐
 }
 
 const DEFAULT_CONFIG: DanmakuConfig = {
@@ -48,13 +48,13 @@ const DEFAULT_CONFIG: DanmakuConfig = {
   showScroll: true,
   showTop: true,
   showBottom: true,
-  offsetMs: 0
+  offsetMs: 0,
 }
 
-const ROW_HEIGHT = 36         // 每行弹幕高度
+const ROW_HEIGHT = 36 // 每行弹幕高度
 const FONT_FAMILY = 'SimHei, "Microsoft YaHei", sans-serif'
-const STATIC_DURATION = 5000  // 顶部/底部弹幕持续显示 ms
-const FADE_DURATION = 300     // 淡入淡出 ms
+const STATIC_DURATION = 5000 // 顶部/底部弹幕持续显示 ms
+const FADE_DURATION = 300 // 淡入淡出 ms
 const TRACK_PADDING_RIGHT = 60 // 滚动弹幕右侧边距
 
 export default class DanmakuEngine {
@@ -150,7 +150,7 @@ export default class DanmakuEngine {
 
   private updateCanvasSize(): void {
     const rect = this.canvas.getBoundingClientRect()
-    if (rect.width > 0 && (this.canvas.width !== rect.width * devicePixelRatio)) {
+    if (rect.width > 0 && this.canvas.width !== rect.width * devicePixelRatio) {
       this.canvas.width = rect.width * devicePixelRatio
       this.canvas.height = rect.height * devicePixelRatio
       this.recalcTracks()
@@ -224,7 +224,7 @@ export default class DanmakuEngine {
       x: canvasWidth,
       width: textWidth,
       y: bestTrack * rowH + rowH * 0.75,
-      speed
+      speed,
     }
   }
 
@@ -244,20 +244,22 @@ export default class DanmakuEngine {
     // 找一个不重叠的轨道
     let trackIdx = 0
     while (true) {
-      const y = mode === 'top'
-        ? trackIdx * rowH + rowH * 0.7 + 10
-        : h - (trackIdx + 1) * rowH + rowH * 0.7 - 10
+      const y =
+        mode === 'top'
+          ? trackIdx * rowH + rowH * 0.7 + 10
+          : h - (trackIdx + 1) * rowH + rowH * 0.7 - 10
       // 简单重叠检测
       const overlaps = this.staticDanmakus.some(
-        s => Math.abs(s.y - y) < rowH * 0.8 &&
-             this.ctx.measureText(s.danmaku.text).width + textWidth > canvasWidth * 1.5
+        (s) =>
+          Math.abs(s.y - y) < rowH * 0.8 &&
+          this.ctx.measureText(s.danmaku.text).width + textWidth > canvasWidth * 1.5,
       )
       if (!overlaps || trackIdx > 20) {
         this.staticDanmakus.push({
           danmaku: item,
           opacity: 0,
           elapsed: 0,
-          y
+          y,
         })
         break
       }

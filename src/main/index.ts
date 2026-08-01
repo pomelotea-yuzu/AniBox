@@ -14,18 +14,33 @@ import * as store from './store'
 import { flushStore } from './store'
 import { fetchCoversBatch, fetchCoverManual } from './cover-fetcher'
 import { readSubtitleAsVtt, findSubtitles } from './subtitle'
-import { searchOnlineSubtitles, downloadSubtitle, getOpenSubtitlesStatus, setOpenSubtitlesConfig } from './online-subtitle'
+import {
+  searchOnlineSubtitles,
+  downloadSubtitle,
+  getOpenSubtitlesStatus,
+  setOpenSubtitlesConfig,
+} from './online-subtitle'
 import { parseMP4Meta, detectAudioCodec } from './video-info'
 import { fetchMetadataForSeries, fetchMetadataBatch, validateBatchTitles } from './metadata-fetcher'
 import { loadModel, getTranslateStatus } from './local-translate'
 import {
-  setWhisperConfig, isWhisperAvailable, getWhisperStatus, getDefaultWhisperPaths,
-  transcribeWithWhisper, setTranslationConfig, translateText, translateSubtitleSegments,
-  lookupWord, analyzeJapaneseText, getTranslationStatus
+  setWhisperConfig,
+  isWhisperAvailable,
+  getWhisperStatus,
+  getDefaultWhisperPaths,
+  transcribeWithWhisper,
+  setTranslationConfig,
+  translateText,
+  translateSubtitleSegments,
+  lookupWord,
+  analyzeJapaneseText,
+  getTranslationStatus,
 } from './whisper-translate'
 import {
-  fetchDanmakuForEpisode, cleanTitleForSearch,
-  parseDanmakuFromFile, exportDanmakuToXML
+  fetchDanmakuForEpisode,
+  cleanTitleForSearch,
+  parseDanmakuFromFile,
+  exportDanmakuToXML,
 } from './danmaku-fetcher'
 import { startWatching, stopWatching, getWatcherStatus } from './file-watcher'
 
@@ -35,7 +50,10 @@ app.commandLine.appendSwitch('enable-features', 'PlatformHEVCDecoderSupport')
 // 启用视频硬件解码加速
 // 注册 anibox:// 协议权限（CORS / fetch / 标准 URL 解析）
 protocol.registerSchemesAsPrivileged([
-  { scheme: 'anibox', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }
+  {
+    scheme: 'anibox',
+    privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true },
+  },
 ])
 
 app.commandLine.appendSwitch('enable-accelerated-video-decode')
@@ -50,15 +68,20 @@ let mainWindow: BrowserWindow | null = null
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
-    width: 1200, height: 800, minWidth: 800, minHeight: 600,
+    width: 1200,
+    height: 800,
+    minWidth: 800,
+    minHeight: 600,
     title: 'AniBox',
     show: false,
     backgroundColor: '#F5F0E8',
     icon: join(__dirname, '../../resources/icon.ico'),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false, contextIsolation: true, nodeIntegration: false
-    }
+      sandbox: false,
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
   })
 
   // 页面就绪后再显示窗口，避免白屏/黑屏闪现
@@ -66,16 +89,22 @@ function createWindow(): void {
     mainWindow?.show()
   })
 
-  mainWindow.on('closed', () => { mainWindow = null })
+  mainWindow.on('closed', () => {
+    mainWindow = null
+  })
   mainWindow.on('enter-full-screen', () =>
-    mainWindow?.webContents.send('window:fullscreen-changed', true))
+    mainWindow?.webContents.send('window:fullscreen-changed', true),
+  )
   mainWindow.on('leave-full-screen', () =>
-    mainWindow?.webContents.send('window:fullscreen-changed', false))
+    mainWindow?.webContents.send('window:fullscreen-changed', false),
+  )
 
   // 允许 F12 / Ctrl+Shift+I 打开 DevTools
   mainWindow.webContents.on('before-input-event', (_e, input) => {
-    if (input.type === 'keyDown' && (input.key === 'F12'
-      || (input.key === 'I' && input.control && input.shift))) {
+    if (
+      input.type === 'keyDown' &&
+      (input.key === 'F12' || (input.key === 'I' && input.control && input.shift))
+    ) {
       mainWindow?.webContents.toggleDevTools()
     }
   })
@@ -93,29 +122,73 @@ const isDev = !app.isPackaged
 
 const MIME: Record<string, string> = {
   // 视频格式
-  '.mp4': 'video/mp4', '.m4v': 'video/mp4',
-  '.mkv': 'video/x-matroska', '.webm': 'video/webm',
-  '.avi': 'video/x-msvideo', '.mov': 'video/quicktime',
-  '.flv': 'video/x-flv', '.f4v': 'video/mp4',
-  '.ts': 'video/mp2t', '.mts': 'video/mp2t', '.m2ts': 'video/mp2t',
-  '.ogg': 'video/ogg', '.ogv': 'video/ogg', '.ogm': 'video/ogg',
-  '.wmv': 'video/x-ms-wmv', '.asf': 'video/x-ms-asf',
-  '.3gp': 'video/3gpp', '.3g2': 'video/3gpp2',
-  '.mpeg': 'video/mpeg', '.mpg': 'video/mpeg', '.mpe': 'video/mpeg',
-  '.vob': 'video/mpeg', '.evo': 'video/mpeg',
-  '.divx': 'video/x-msvideo', '.rmvb': 'application/vnd.rn-realmedia',
+  '.mp4': 'video/mp4',
+  '.m4v': 'video/mp4',
+  '.mkv': 'video/x-matroska',
+  '.webm': 'video/webm',
+  '.avi': 'video/x-msvideo',
+  '.mov': 'video/quicktime',
+  '.flv': 'video/x-flv',
+  '.f4v': 'video/mp4',
+  '.ts': 'video/mp2t',
+  '.mts': 'video/mp2t',
+  '.m2ts': 'video/mp2t',
+  '.ogg': 'video/ogg',
+  '.ogv': 'video/ogg',
+  '.ogm': 'video/ogg',
+  '.wmv': 'video/x-ms-wmv',
+  '.asf': 'video/x-ms-asf',
+  '.3gp': 'video/3gpp',
+  '.3g2': 'video/3gpp2',
+  '.mpeg': 'video/mpeg',
+  '.mpg': 'video/mpeg',
+  '.mpe': 'video/mpeg',
+  '.vob': 'video/mpeg',
+  '.evo': 'video/mpeg',
+  '.divx': 'video/x-msvideo',
+  '.rmvb': 'application/vnd.rn-realmedia',
   '.rm': 'application/vnd.rn-realmedia',
-  '.qt': 'video/quicktime', '.mxf': 'application/mxf',
+  '.qt': 'video/quicktime',
+  '.mxf': 'application/mxf',
   // 图片格式
-  '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
-  '.webp': 'image/webp', '.gif': 'image/gif', '.bmp': 'image/bmp'
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+  '.bmp': 'image/bmp',
 }
 
 /** 所有支持的视频扩展名（供 dialog 过滤和格式检测使用） */
 const ALL_VIDEO_EXTS = [
-  'mp4', 'mkv', 'webm', 'avi', 'mov', 'flv', 'ts', 'm2ts', 'rmvb', 'wmv',
-  'm4v', '3gp', '3g2', 'asf', 'divx', 'f4v', 'mpeg', 'mpg', 'mpe', 'ogv',
-  'ogm', 'qt', 'vob', 'evo', 'mts', 'mxf', 'rm', 'ogg'
+  'mp4',
+  'mkv',
+  'webm',
+  'avi',
+  'mov',
+  'flv',
+  'ts',
+  'm2ts',
+  'rmvb',
+  'wmv',
+  'm4v',
+  '3gp',
+  '3g2',
+  'asf',
+  'divx',
+  'f4v',
+  'mpeg',
+  'mpg',
+  'mpe',
+  'ogv',
+  'ogm',
+  'qt',
+  'vob',
+  'evo',
+  'mts',
+  'mxf',
+  'rm',
+  'ogg',
 ]
 
 function fileStream(path: string): ReadableStream {
@@ -133,65 +206,71 @@ function registerProtocol(): void {
     try {
       const url = new URL(req.url)
       const fp = url.searchParams.get('path') || ''
-      if (isDev) console.log('[AniBox] Protocol request:', {
-        url: req.url,
-        method: req.method,
-        path: fp,
-        exists: fp ? existsSync(fp) : false,
-        hasRange: req.headers.get('range') ? true : false
-      })
+      if (isDev)
+        console.log('[AniBox] Protocol request:', {
+          url: req.url,
+          method: req.method,
+          path: fp,
+          exists: fp ? existsSync(fp) : false,
+          hasRange: req.headers.get('range') ? true : false,
+        })
       if (!fp || !existsSync(fp)) {
         console.warn('[AniBox] Protocol 404:', fp)
         return new Response('Not Found', { status: 404 })
       }
 
-    const st = statSync(fp)
-    const mime = MIME['.' + (fp.split('.').pop()?.toLowerCase() || '')] || 'application/octet-stream'
-    const isImage = mime.startsWith('image/')
+      const st = statSync(fp)
+      const mime =
+        MIME['.' + (fp.split('.').pop()?.toLowerCase() || '')] || 'application/octet-stream'
+      const isImage = mime.startsWith('image/')
 
-    // 图片不需要 Range 请求，直接返回
-    if (isImage) {
-      if (isDev) console.log('[AniBox] Protocol serving image:', fp, st.size, 'bytes')
+      // 图片不需要 Range 请求，直接返回
+      if (isImage) {
+        if (isDev) console.log('[AniBox] Protocol serving image:', fp, st.size, 'bytes')
+        return new Response(fileStream(fp), {
+          status: 200,
+          headers: {
+            'Content-Length': String(st.size),
+            'Content-Type': mime,
+            'Cache-Control': 'max-age=86400',
+          },
+        })
+      }
+
+      const range = req.headers.get('range')
+
+      if (range) {
+        const [s, e] = range
+          .replace(/bytes=/, '')
+          .split('-')
+          .map(Number)
+        const end = e || st.size - 1
+        if (isDev)
+          console.log('[AniBox] Protocol range response:', fp, `bytes ${s}-${end}/${st.size}`)
+        const body = rangeStream(fp, s, end)
+        return new Response(body, {
+          status: 206,
+          headers: {
+            'Content-Range': `bytes ${s}-${end}/${st.size}`,
+            'Accept-Ranges': 'bytes',
+            'Content-Length': String(end - s + 1),
+            'Content-Type': mime,
+            'Access-Control-Allow-Origin': '*',
+          },
+        })
+      }
+
+      if (isDev) console.log('[AniBox] Protocol full response:', fp, st.size, 'bytes, type:', mime)
       return new Response(fileStream(fp), {
         status: 200,
         headers: {
           'Content-Length': String(st.size),
           'Content-Type': mime,
-          'Cache-Control': 'max-age=86400'
-        }
-      })
-    }
-
-    const range = req.headers.get('range')
-
-    if (range) {
-      const [s, e] = range.replace(/bytes=/, '').split('-').map(Number)
-      const end = e || st.size - 1
-      if (isDev) console.log('[AniBox] Protocol range response:', fp, `bytes ${s}-${end}/${st.size}`)
-      const body = rangeStream(fp, s, end)
-      return new Response(body, {
-        status: 206,
-        headers: {
-          'Content-Range': `bytes ${s}-${end}/${st.size}`,
           'Accept-Ranges': 'bytes',
-          'Content-Length': String(end - s + 1),
-          'Content-Type': mime,
-          'Access-Control-Allow-Origin': '*'
-        }
+          'Cache-Control': 'no-cache',
+          'Access-Control-Allow-Origin': '*',
+        },
       })
-    }
-
-    if (isDev) console.log('[AniBox] Protocol full response:', fp, st.size, 'bytes, type:', mime)
-    return new Response(fileStream(fp), {
-      status: 200,
-      headers: {
-        'Content-Length': String(st.size),
-        'Content-Type': mime,
-        'Accept-Ranges': 'bytes',
-        'Cache-Control': 'no-cache',
-        'Access-Control-Allow-Origin': '*'
-      }
-    })
     } catch (err) {
       console.error('[AniBox] Protocol handler error:', err)
       return new Response('Internal Server Error', { status: 500 })
@@ -209,13 +288,25 @@ function mpvKill(): void {
   const proc = mpvProcess
   mpvProcess = null
   if (mpvSock) {
-    try { mpvSock.write(JSON.stringify({ command: ['quit'] }) + '\n') } catch { /* ok */ }
-    try { mpvSock.destroy() } catch { /* ok */ }
+    try {
+      mpvSock.write(JSON.stringify({ command: ['quit'] }) + '\n')
+    } catch {
+      /* ok */
+    }
+    try {
+      mpvSock.destroy()
+    } catch {
+      /* ok */
+    }
     mpvSock = null
   }
   mpvBuf = ''
   if (proc && !proc.killed) {
-    try { proc.kill() } catch { /* ok */ }
+    try {
+      proc.kill()
+    } catch {
+      /* ok */
+    }
   }
 }
 
@@ -232,13 +323,11 @@ function mpvLaunch(fp: string): Promise<void> {
   mpvKill()
   return new Promise<void>((resolve, reject) => {
     const exe = getMpvPath()
-    const proc = spawn(exe, [
-      `--input-ipc-server=${PIPE}`,
-      '--keep-open=yes',
-      '--osc=yes',
-      '--cursor-autohide=2000',
-      fp
-    ], { stdio: ['ignore', 'pipe', 'pipe'] })
+    const proc = spawn(
+      exe,
+      [`--input-ipc-server=${PIPE}`, '--keep-open=yes', '--osc=yes', '--cursor-autohide=2000', fp],
+      { stdio: ['ignore', 'pipe', 'pipe'] },
+    )
 
     mpvProcess = proc
 
@@ -269,10 +358,14 @@ function mpvLaunch(fp: string): Promise<void> {
             try {
               const msg = JSON.parse(line)
               if (msg.event) mainWindow?.webContents.send('mpv:event', msg)
-            } catch { /* ignore malformed */ }
+            } catch {
+              /* ignore malformed */
+            }
           }
         })
-        sock.on('close', () => { mpvSock = null })
+        sock.on('close', () => {
+          mpvSock = null
+        })
         resolve()
       })
 
@@ -301,9 +394,9 @@ function registerIpcHandlers(): void {
       title: '选择视频',
       filters: [
         { name: '视频', extensions: ALL_VIDEO_EXTS },
-        { name: '所有', extensions: ['*'] }
+        { name: '所有', extensions: ['*'] },
       ],
-      properties: ['openFile']
+      properties: ['openFile'],
     })
     if (r.canceled || !r.filePaths.length) return null
     const filePath = r.filePaths[0]
@@ -324,7 +417,8 @@ function registerIpcHandlers(): void {
     try {
       const st = statSync(p)
       // 尝试容器解析拿精确视频码率
-      let videoMeta: { width: number; height: number; codec: string; exactBitrate: number } | null = null
+      let videoMeta: { width: number; height: number; codec: string; exactBitrate: number } | null =
+        null
       if (p.toLowerCase().endsWith('.mp4')) {
         videoMeta = parseMP4Meta(p)
       }
@@ -332,9 +426,11 @@ function registerIpcHandlers(): void {
         size: st.size,
         mtime: st.mtimeMs,
         ctime: st.ctimeMs,
-        videoMeta
+        videoMeta,
       }
-    } catch { return null }
+    } catch {
+      return null
+    }
   })
 
   ipcMain.handle('video:checkAudio', (_e, p: string) => {
@@ -342,7 +438,9 @@ function registerIpcHandlers(): void {
       if (!p.toLowerCase().endsWith('.mp4')) return { codec: 'unknown', supported: true }
       const info = detectAudioCodec(p)
       return info || { codec: 'unknown', supported: true }
-    } catch { return { codec: 'unknown', supported: true } }
+    } catch {
+      return { codec: 'unknown', supported: true }
+    }
   })
 
   ipcMain.handle('playback:savePosition', (_e, filePath: string, position: number) => {
@@ -358,9 +456,9 @@ function registerIpcHandlers(): void {
     if (!mainWindow) return null
     const r = await dialog.showOpenDialog(mainWindow, {
       title: '选择番剧目录',
-      properties: ['openDirectory']
+      properties: ['openDirectory'],
     })
-    return (r.canceled || !r.filePaths.length) ? null : r.filePaths[0]
+    return r.canceled || !r.filePaths.length ? null : r.filePaths[0]
   })
 
   ipcMain.handle('scanner:scan', (_e, root: string) => {
@@ -418,7 +516,11 @@ function registerIpcHandlers(): void {
           allResults.push(s)
         }
       } catch (err) {
-        console.error('[AniBox] Scan root error:', root, err instanceof Error ? err.message : String(err))
+        console.error(
+          '[AniBox] Scan root error:',
+          root,
+          err instanceof Error ? err.message : String(err),
+        )
       }
     }
 
@@ -453,7 +555,14 @@ function registerIpcHandlers(): void {
     const seriesId = hashPath(folderPath)
     const s = store.getSeriesById(seriesId)
     if (s) {
-      store.upsertSeries(seriesId, newTitle, folderPath, s.season, s.seriesType || 'tv', s.coverPath)
+      store.upsertSeries(
+        seriesId,
+        newTitle,
+        folderPath,
+        s.season,
+        s.seriesType || 'tv',
+        s.coverPath,
+      )
     }
   })
 
@@ -466,12 +575,15 @@ function registerIpcHandlers(): void {
   })
 
   // 封面爬取
-  ipcMain.handle('cover:fetchBatch', async (_e, series: Array<{ title: string; folderPath: string }>) => {
-    const result = await fetchCoversBatch(series, (cur, total, title, ok, status) => {
-      mainWindow?.webContents.send('cover:progress', { current: cur, total, title, ok, status })
-    })
-    return result
-  })
+  ipcMain.handle(
+    'cover:fetchBatch',
+    async (_e, series: Array<{ title: string; folderPath: string }>) => {
+      const result = await fetchCoversBatch(series, (cur, total, title, ok, status) => {
+        mainWindow?.webContents.send('cover:progress', { current: cur, total, title, ok, status })
+      })
+      return result
+    },
+  )
 
   // 手动搜索封面
   ipcMain.handle('cover:fetchManual', async (_e, folderPath: string, searchQuery: string) => {
@@ -480,7 +592,10 @@ function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('mpv:play', (_e, p: string) => mpvLaunch(p))
-  ipcMain.handle('mpv:quit', () => { mpvKill(); mainWindow?.focus() })
+  ipcMain.handle('mpv:quit', () => {
+    mpvKill()
+    mainWindow?.focus()
+  })
 
   ipcMain.handle('window:toggleFullscreen', () => {
     mainWindow?.setFullScreen(!mainWindow?.isFullScreen())
@@ -509,16 +624,25 @@ function registerIpcHandlers(): void {
   })
 
   // 在线字幕搜索
-  ipcMain.handle('subtitle:searchOnline', async (_e, query: {
-    title: string; episode?: number; videoPath?: string; preferredLanguages?: string[]
-  }) => {
-    try {
-      return await searchOnlineSubtitles(query)
-    } catch (err) {
-      console.error('[AniBox] online subtitle search error:', err)
-      return []
-    }
-  })
+  ipcMain.handle(
+    'subtitle:searchOnline',
+    async (
+      _e,
+      query: {
+        title: string
+        episode?: number
+        videoPath?: string
+        preferredLanguages?: string[]
+      },
+    ) => {
+      try {
+        return await searchOnlineSubtitles(query)
+      } catch (err) {
+        console.error('[AniBox] online subtitle search error:', err)
+        return []
+      }
+    },
+  )
 
   // 在线字幕下载
   ipcMain.handle('subtitle:download', async (_e, result: any, videoPath: string) => {
@@ -544,11 +668,20 @@ function registerIpcHandlers(): void {
     return store.getAudioPrefs(seriesId)
   })
 
-  ipcMain.handle('audio:setPrefs', (_e, seriesId: string, prefs: {
-    audioIndex: number; audioDelay: number; language?: string
-  }) => {
-    store.setAudioPrefs(seriesId, prefs)
-  })
+  ipcMain.handle(
+    'audio:setPrefs',
+    (
+      _e,
+      seriesId: string,
+      prefs: {
+        audioIndex: number
+        audioDelay: number
+        language?: string
+      },
+    ) => {
+      store.setAudioPrefs(seriesId, prefs)
+    },
+  )
 
   ipcMain.handle('audio:getGlobalPrefs', () => {
     return store.getGlobalAudioPrefs()
@@ -569,7 +702,11 @@ function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('whisper:configure', (_e, config: { binaryPath: string; modelPath: string }) => {
-    setWhisperConfig({ binaryPath: config.binaryPath, modelPath: config.modelPath, modelSize: 'small' })
+    setWhisperConfig({
+      binaryPath: config.binaryPath,
+      modelPath: config.modelPath,
+      modelSize: 'small',
+    })
   })
 
   ipcMain.handle('whisper:transcribe', async (_e, videoPath: string) => {
@@ -590,21 +727,30 @@ function registerIpcHandlers(): void {
   // ===== AI 翻译 =====
   ipcMain.handle('translate:status', () => getTranslationStatus())
 
-  ipcMain.handle('translate:configure', (_e, config: { engine?: string; apiKey?: string; apiUrl?: string }) => {
-    setTranslationConfig(config as Parameters<typeof setTranslationConfig>[0])
-  })
+  ipcMain.handle(
+    'translate:configure',
+    (_e, config: { engine?: string; apiKey?: string; apiUrl?: string }) => {
+      setTranslationConfig(config as Parameters<typeof setTranslationConfig>[0])
+    },
+  )
 
   ipcMain.handle('translate:text', async (_e, text: string, fromLang?: string, toLang?: string) => {
     return await translateText(text, fromLang || 'ja', toLang || 'zh-CN')
   })
 
-  ipcMain.handle('translate:segments', async (_e, segments: any[], fromLang?: string, toLang?: string) => {
-    return await translateSubtitleSegments(segments, fromLang || 'ja', toLang || 'zh-CN',
-      (cur, total) => {
-        mainWindow?.webContents.send('translate:progress', { current: cur, total })
-      }
-    )
-  })
+  ipcMain.handle(
+    'translate:segments',
+    async (_e, segments: any[], fromLang?: string, toLang?: string) => {
+      return await translateSubtitleSegments(
+        segments,
+        fromLang || 'ja',
+        toLang || 'zh-CN',
+        (cur, total) => {
+          mainWindow?.webContents.send('translate:progress', { current: cur, total })
+        },
+      )
+    },
+  )
 
   // ===== 日语词典 =====
   ipcMain.handle('dict:lookup', (_e, word: string) => {
@@ -640,18 +786,20 @@ function registerIpcHandlers(): void {
   ipcMain.handle('danmaku:export', async (_e, items: any[]) => {
     if (!mainWindow) return false
     const now = new Date()
-    const ts = `${now.getFullYear()}${(now.getMonth()+1).toString().padStart(2,'0')}${now.getDate().toString().padStart(2,'0')}_${now.getHours().toString().padStart(2,'0')}${now.getMinutes().toString().padStart(2,'0')}`
+    const ts = `${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}_${now.getHours().toString().padStart(2, '0')}${now.getMinutes().toString().padStart(2, '0')}`
     const r = await dialog.showSaveDialog(mainWindow, {
       title: '导出弹幕',
       defaultPath: `danmaku_${ts}.xml`,
-      filters: [{ name: '弹幕XML', extensions: ['xml'] }]
+      filters: [{ name: '弹幕XML', extensions: ['xml'] }],
     })
     if (r.canceled || !r.filePath) return false
     try {
       const xml = exportDanmakuToXML(items)
       writeFileSync(r.filePath, xml, 'utf-8')
       return true
-    } catch { return false }
+    } catch {
+      return false
+    }
   })
 
   // ===== 文件监控 =====
@@ -678,37 +826,44 @@ function registerIpcHandlers(): void {
   ipcMain.handle('playlists:getAll', () => store.getPlaylists())
   ipcMain.handle('playlists:create', (_e, name: string) => store.createPlaylist(name))
   ipcMain.handle('playlists:delete', (_e, id: string) => store.deletePlaylist(id))
-  ipcMain.handle('playlists:addSeries', (_e, listId: string, seriesId: string) => { store.addToPlaylist(listId, seriesId) })
-  ipcMain.handle('playlists:removeSeries', (_e, listId: string, seriesId: string) => { store.removeFromPlaylist(listId, seriesId) })
+  ipcMain.handle('playlists:addSeries', (_e, listId: string, seriesId: string) => {
+    store.addToPlaylist(listId, seriesId)
+  })
+  ipcMain.handle('playlists:removeSeries', (_e, listId: string, seriesId: string) => {
+    store.removeFromPlaylist(listId, seriesId)
+  })
 
   // ===== 追番同步 =====
-  ipcMain.handle('tracking:sync', async (_e, anilistId: number, bangumiId: number, status: string, watchedEpisodes: number) => {
-    try {
-      // 同步到 AniList（需要 OAuth token，此处为框架）
-      if (anilistId > 0) {
-        // TODO: 实现 AniList OAuth 流程
-        console.log('[AniBox] Would sync to AniList:', anilistId, status, watchedEpisodes)
+  ipcMain.handle(
+    'tracking:sync',
+    async (_e, anilistId: number, bangumiId: number, status: string, watchedEpisodes: number) => {
+      try {
+        // 同步到 AniList（需要 OAuth token，此处为框架）
+        if (anilistId > 0) {
+          // TODO: 实现 AniList OAuth 流程
+          console.log('[AniBox] Would sync to AniList:', anilistId, status, watchedEpisodes)
+        }
+        // 同步到 Bangumi
+        if (bangumiId > 0) {
+          // TODO: 实现 Bangumi OAuth 流程
+          console.log('[AniBox] Would sync to Bangumi:', bangumiId, status, watchedEpisodes)
+        }
+        return true
+      } catch {
+        return false
       }
-      // 同步到 Bangumi
-      if (bangumiId > 0) {
-        // TODO: 实现 Bangumi OAuth 流程
-        console.log('[AniBox] Would sync to Bangumi:', bangumiId, status, watchedEpisodes)
-      }
-      return true
-    } catch {
-      return false
-    }
-  })
+    },
+  )
 
   // 截图保存
   ipcMain.handle('screenshot:save', async (_e, dataUrl: string) => {
     if (!mainWindow) return false
     const now = new Date()
-    const ts = `${now.getFullYear()}${(now.getMonth()+1).toString().padStart(2,'0')}${now.getDate().toString().padStart(2,'0')}_${now.getHours().toString().padStart(2,'0')}${now.getMinutes().toString().padStart(2,'0')}${now.getSeconds().toString().padStart(2,'0')}`
+    const ts = `${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}_${now.getHours().toString().padStart(2, '0')}${now.getMinutes().toString().padStart(2, '0')}${now.getSeconds().toString().padStart(2, '0')}`
     const r = await dialog.showSaveDialog(mainWindow, {
       title: '保存截图',
       defaultPath: `AniBox_${ts}.png`,
-      filters: [{ name: 'PNG 图片', extensions: ['png'] }]
+      filters: [{ name: 'PNG 图片', extensions: ['png'] }],
     })
     if (r.canceled || !r.filePath) return false
     try {
@@ -726,9 +881,16 @@ function registerIpcHandlers(): void {
     return store.getSkipTimes(hashPath(folderPath))
   })
 
-  ipcMain.handle('series:setSkipTimes', (_e, folderPath: string, times: { opStart: number; opEnd: number; edStart: number; edEnd: number }) => {
-    store.setSkipTimes(hashPath(folderPath), times)
-  })
+  ipcMain.handle(
+    'series:setSkipTimes',
+    (
+      _e,
+      folderPath: string,
+      times: { opStart: number; opEnd: number; edStart: number; edEnd: number },
+    ) => {
+      store.setSkipTimes(hashPath(folderPath), times)
+    },
+  )
 
   // 元数据
   ipcMain.handle('metadata:fetch', async (_e, title: string, folderPath: string) => {
@@ -744,20 +906,29 @@ function registerIpcHandlers(): void {
     }
   })
 
-  ipcMain.handle('metadata:fetchBatch', async (_e, series: Array<{ title: string; folderPath: string; season?: number }>) => {
-    try {
-      const result = await fetchMetadataBatch(series, (cur, total, title, ok, status) => {
-        mainWindow?.webContents.send('metadata:progress', { current: cur, total, title, ok, status })
-      })
-      for (const r of result.results) {
-        if (r.metadata) store.setSeriesMetadata(hashPath(r.folderPath), r.metadata)
+  ipcMain.handle(
+    'metadata:fetchBatch',
+    async (_e, series: Array<{ title: string; folderPath: string; season?: number }>) => {
+      try {
+        const result = await fetchMetadataBatch(series, (cur, total, title, ok, status) => {
+          mainWindow?.webContents.send('metadata:progress', {
+            current: cur,
+            total,
+            title,
+            ok,
+            status,
+          })
+        })
+        for (const r of result.results) {
+          if (r.metadata) store.setSeriesMetadata(hashPath(r.folderPath), r.metadata)
+        }
+        return result
+      } catch (err) {
+        console.error('[AniBox] metadata batch error:', err)
+        return []
       }
-      return result
-    } catch (err) {
-      console.error('[AniBox] metadata batch error:', err)
-      return []
-    }
-  })
+    },
+  )
 
   ipcMain.handle('metadata:get', (_e, folderPath: string) => {
     const stored = store.getSeriesMetadata(hashPath(folderPath))
@@ -786,22 +957,25 @@ function registerIpcHandlers(): void {
   })
 
   // AniList 标题校验
-  ipcMain.handle('metadata:validateTitles', async (_e, series: Array<{ folderPath: string; title: string }>) => {
-    try {
-      return await validateBatchTitles(series)
-    } catch (err) {
-      console.error('[AniBox] Title validation error:', err)
-      return []
-    }
-  })
+  ipcMain.handle(
+    'metadata:validateTitles',
+    async (_e, series: Array<{ folderPath: string; title: string }>) => {
+      try {
+        return await validateBatchTitles(series)
+      } catch (err) {
+        console.error('[AniBox] Title validation error:', err)
+        return []
+      }
+    },
+  )
 
   // 系列列表（含 metadata）
   ipcMain.handle('series:getAll', () => {
     const series = store.getAllSeries()
     const metadata = store.getAllMetadata()
-    return series.map(s => ({
+    return series.map((s) => ({
       ...s,
-      metadata: metadata[s.id] || null
+      metadata: metadata[s.id] || null,
     }))
   })
 }
@@ -816,11 +990,17 @@ process.on('uncaughtException', (error: Error) => {
     mainWindow?.webContents.send('app:error', {
       type: 'uncaughtException',
       message: error.message,
-      stack: error.stack?.split('\n').slice(0, 5).join('\n') || ''
+      stack: error.stack?.split('\n').slice(0, 5).join('\n') || '',
     })
-  } catch { /* 渲染进程可能还未就绪 */ }
+  } catch {
+    /* 渲染进程可能还未就绪 */
+  }
   // GPU 相关崩溃不退出（可能是驱动问题），其他保底退出
-  if (error.message.includes('GPU') || error.message.includes('gpu') || error.message.includes('WebGL')) {
+  if (
+    error.message.includes('GPU') ||
+    error.message.includes('gpu') ||
+    error.message.includes('WebGL')
+  ) {
     console.warn('[AniBox] GPU-related error, keeping app alive')
   } else {
     console.error('[AniBox] Fatal error, app will exit. Details written to log.')
@@ -836,9 +1016,11 @@ process.on('unhandledRejection', (reason: unknown) => {
   try {
     mainWindow?.webContents.send('app:error', {
       type: 'unhandledRejection',
-      message: msg
+      message: msg,
     })
-  } catch { /* ok */ }
+  } catch {
+    /* ok */
+  }
 })
 
 // === 应用生命周期 ===

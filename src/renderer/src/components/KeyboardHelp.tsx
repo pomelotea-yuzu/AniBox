@@ -39,7 +39,7 @@ const SHORTCUTS = [
 export default function KeyboardHelp() {
   const [visible, setVisible] = useState(false)
 
-  const toggle = useCallback(() => setVisible(v => !v), [])
+  const toggle = useCallback(() => setVisible((v) => !v), [])
   const hide = useCallback(() => setVisible(false), [])
 
   useEffect(() => {
@@ -81,7 +81,10 @@ export default function KeyboardHelp() {
 
         <div className="grid grid-cols-2 gap-x-6 gap-y-1.5">
           {SHORTCUTS.map((s) => (
-            <div key={s.key} className="flex items-center justify-between text-xs py-1 border-b border-white/5">
+            <div
+              key={s.key}
+              className="flex items-center justify-between text-xs py-1 border-b border-white/5"
+            >
               <kbd className="px-1.5 py-0.5 bg-white/10 rounded text-[11px] text-neutral-200 font-mono">
                 {s.key}
               </kbd>

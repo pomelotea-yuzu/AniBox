@@ -12,8 +12,8 @@ let whisperBinaryPath = ''
 export type WhisperModelSize = 'tiny' | 'base' | 'small' | 'medium' | 'large-v3'
 
 export interface WhisperConfig {
-  binaryPath: string  // whisper.cpp 可执行文件路径
-  modelPath: string   // 模型文件路径（如 ggml-small.bin）
+  binaryPath: string // whisper.cpp 可执行文件路径
+  modelPath: string // 模型文件路径（如 ggml-small.bin）
   modelSize: WhisperModelSize
 }
 
@@ -58,7 +58,7 @@ export function getWhisperStatus(): {
     binaryExists: existsSync(whisperBinaryPath),
     modelExists: existsSync(whisperModelPath),
     modelPath: whisperModelPath,
-    binaryPath: whisperBinaryPath
+    binaryPath: whisperBinaryPath,
   }
 }
 
@@ -69,12 +69,12 @@ export function getDefaultWhisperPaths(): { binary: string; models: string } {
   if (app.isPackaged) {
     return {
       binary: join(process.resourcesPath, 'whisper', 'whisper-cli.exe'),
-      models: join(process.resourcesPath, 'whisper', 'models')
+      models: join(process.resourcesPath, 'whisper', 'models'),
     }
   }
   return {
     binary: join(__dirname, '../../whisper/whisper-cli.exe'),
-    models: join(__dirname, '../../whisper/models')
+    models: join(__dirname, '../../whisper/models'),
   }
 }
 
@@ -84,7 +84,7 @@ export function getDefaultWhisperPaths(): { binary: string; models: string } {
  */
 export async function transcribeWithWhisper(
   videoPath: string,
-  onProgress?: (msg: string) => void
+  onProgress?: (msg: string) => void,
 ): Promise<WhisperResult | null> {
   if (!isWhisperAvailable()) {
     throw new Error('Whisper 未配置。请下载 whisper.cpp 和模型文件。')
@@ -101,10 +101,17 @@ export async function transcribeWithWhisper(
     // Step 1: 用 FFmpeg 提取音频为 16kHz mono WAV
     onProgress?.('正在提取音频...')
     await runCommand('ffmpeg', [
-      '-y', '-i', videoPath,
-      '-vn', '-acodec', 'pcm_s16le',
-      '-ar', '16000', '-ac', '1',
-      audioPath
+      '-y',
+      '-i',
+      videoPath,
+      '-vn',
+      '-acodec',
+      'pcm_s16le',
+      '-ar',
+      '16000',
+      '-ac',
+      '1',
+      audioPath,
     ])
 
     if (!existsSync(audioPath)) {
@@ -114,13 +121,18 @@ export async function transcribeWithWhisper(
     // Step 2: 运行 whisper.cpp
     onProgress?.('正在语音识别...')
     await runCommand(whisperBinaryPath, [
-      '-m', whisperModelPath,
-      '-f', audioPath,
-      '-l', 'ja',   // 默认日语（动漫最常见）
-      '-osrt',       // 输出 SRT 字幕
-      '-of', outputPath.replace('.srt', ''),
-      '-ocsv',       // 输出 CSV（含时间戳）
-      '-of', join(audioDir, 'output')
+      '-m',
+      whisperModelPath,
+      '-f',
+      audioPath,
+      '-l',
+      'ja', // 默认日语（动漫最常见）
+      '-osrt', // 输出 SRT 字幕
+      '-of',
+      outputPath.replace('.srt', ''),
+      '-ocsv', // 输出 CSV（含时间戳）
+      '-of',
+      join(audioDir, 'output'),
     ])
 
     // Step 3: 读取结果
@@ -140,9 +152,9 @@ export async function transcribeWithWhisper(
 
     return {
       segments,
-      fullText: segments.map(s => s.text).join(' '),
+      fullText: segments.map((s) => s.text).join(' '),
       language: 'ja',
-      duration: segments.length > 0 ? segments[segments.length - 1].end : 0
+      duration: segments.length > 0 ? segments[segments.length - 1].end : 0,
     }
   } catch (err) {
     console.error('[AniBox] Whisper error:', err)
@@ -153,7 +165,9 @@ export async function transcribeWithWhisper(
       if (existsSync(audioPath)) {
         // 保留音频文件供后续使用，不要删除
       }
-    } catch { /* ok */ }
+    } catch {
+      /* ok */
+    }
   }
 }
 
@@ -165,11 +179,21 @@ function parseSrtToSegments(srt: string): Array<{ start: number; end: number; te
     const lines = block.trim().split('\n')
     if (lines.length < 3) continue
 
-    const tsMatch = lines[1].match(/(\d{2}):(\d{2}):(\d{2})[,.](\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2})[,.](\d{3})/)
+    const tsMatch = lines[1].match(
+      /(\d{2}):(\d{2}):(\d{2})[,.](\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2})[,.](\d{3})/,
+    )
     if (!tsMatch) continue
 
-    const start = parseInt(tsMatch[1]) * 3600 + parseInt(tsMatch[2]) * 60 + parseInt(tsMatch[3]) + parseInt(tsMatch[4]) / 1000
-    const end = parseInt(tsMatch[5]) * 3600 + parseInt(tsMatch[6]) * 60 + parseInt(tsMatch[7]) + parseInt(tsMatch[8]) / 1000
+    const start =
+      parseInt(tsMatch[1]) * 3600 +
+      parseInt(tsMatch[2]) * 60 +
+      parseInt(tsMatch[3]) +
+      parseInt(tsMatch[4]) / 1000
+    const end =
+      parseInt(tsMatch[5]) * 3600 +
+      parseInt(tsMatch[6]) * 60 +
+      parseInt(tsMatch[7]) +
+      parseInt(tsMatch[8]) / 1000
     const text = lines.slice(2).join('\n').trim()
 
     segments.push({ start, end, text })
@@ -184,8 +208,12 @@ function runCommand(cmd: string, args: string[]): Promise<string> {
     let stdout = ''
     let stderr = ''
 
-    proc.stdout?.on('data', (d: Buffer) => { stdout += d.toString() })
-    proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString() })
+    proc.stdout?.on('data', (d: Buffer) => {
+      stdout += d.toString()
+    })
+    proc.stderr?.on('data', (d: Buffer) => {
+      stderr += d.toString()
+    })
 
     proc.on('close', (code) => {
       if (code === 0) resolve(stdout)
@@ -202,8 +230,8 @@ export type TranslationEngine = 'google' | 'deepl' | 'libre'
 
 export interface TranslationConfig {
   engine: TranslationEngine
-  apiKey?: string       // DeepL API Key
-  apiUrl?: string       // LibreTranslate 服务器 URL
+  apiKey?: string // DeepL API Key
+  apiUrl?: string // LibreTranslate 服务器 URL
 }
 
 let translationConfig: TranslationConfig = { engine: 'google' }
@@ -218,7 +246,7 @@ export function setTranslationConfig(config: Partial<TranslationConfig>): void {
 export async function translateText(
   text: string,
   fromLang: string = 'ja',
-  toLang: string = 'zh-CN'
+  toLang: string = 'zh-CN',
 ): Promise<string> {
   if (!text.trim()) return ''
 
@@ -239,7 +267,8 @@ export async function translateText(
 }
 
 async function translateGoogle(text: string, from: string, to: string): Promise<string> {
-  const url = 'https://translate.googleapis.com/translate_a/single?' +
+  const url =
+    'https://translate.googleapis.com/translate_a/single?' +
     new URLSearchParams({
       client: 'gtx',
       sl: from === 'ja' ? 'ja' : 'auto',
@@ -255,24 +284,31 @@ async function translateGoogle(text: string, from: string, to: string): Promise<
     try {
       const resp = await fetch(url, {
         signal: AbortSignal.timeout(8000 + attempt * 2000),
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
       })
 
       if (!resp.ok) {
-        if (attempt < 2) { await new Promise(r => setTimeout(r, 500 * (attempt + 1))); continue }
+        if (attempt < 2) {
+          await new Promise((r) => setTimeout(r, 500 * (attempt + 1)))
+          continue
+        }
         throw new Error(`HTTP ${resp.status}`)
       }
 
-      const data = await resp.json() as any
-      const result = (data[0] || [])
-        .map((item: any) => item[0] || '')
-        .join('')
+      const data = (await resp.json()) as any
+      const result = (data[0] || []).map((item: any) => item[0] || '').join('')
 
       if (result && result !== text) return result
-      if (attempt < 2) { await new Promise(r => setTimeout(r, 500 * (attempt + 1))); continue }
+      if (attempt < 2) {
+        await new Promise((r) => setTimeout(r, 500 * (attempt + 1)))
+        continue
+      }
       return text
     } catch {
-      if (attempt < 2) { await new Promise(r => setTimeout(r, 500 * (attempt + 1))); continue }
+      if (attempt < 2) {
+        await new Promise((r) => setTimeout(r, 500 * (attempt + 1)))
+        continue
+      }
       return text
     }
   }
@@ -286,19 +322,19 @@ async function translateDeepL(text: string, from: string, to: string): Promise<s
   const resp = await fetch('https://api-free.deepl.com/v2/translate', {
     method: 'POST',
     headers: {
-      'Authorization': `DeepL-Auth-Key ${translationConfig.apiKey}`,
-      'Content-Type': 'application/json'
+      Authorization: `DeepL-Auth-Key ${translationConfig.apiKey}`,
+      'Content-Type': 'application/json',
     },
     body: JSON.stringify({
       text: [text],
       target_lang: targetLang,
-      source_lang: from === 'ja' ? 'JA' : 'EN'
+      source_lang: from === 'ja' ? 'JA' : 'EN',
     }),
-    signal: AbortSignal.timeout(5000)
+    signal: AbortSignal.timeout(5000),
   })
 
   if (!resp.ok) throw new Error(`DeepL HTTP ${resp.status}`)
-  const data = await resp.json() as any
+  const data = (await resp.json()) as any
   return data.translations?.[0]?.text || text
 }
 
@@ -311,13 +347,13 @@ async function translateLibre(text: string, from: string, to: string): Promise<s
       q: text,
       source: from,
       target: to === 'zh-CN' ? 'zh' : to,
-      format: 'text'
+      format: 'text',
     }),
-    signal: AbortSignal.timeout(5000)
+    signal: AbortSignal.timeout(5000),
   })
 
   if (!resp.ok) throw new Error(`Libre HTTP ${resp.status}`)
-  const data = await resp.json() as any
+  const data = (await resp.json()) as any
   return data.translatedText || text
 }
 
@@ -328,7 +364,7 @@ export async function translateSubtitleSegments(
   segments: Array<{ start: number; end: number; text: string }>,
   fromLang: string = 'ja',
   toLang: string = 'zh-CN',
-  onProgress?: (current: number, total: number) => void
+  onProgress?: (current: number, total: number) => void,
 ): Promise<Array<{ start: number; end: number; text: string }>> {
   const results: Array<{ start: number; end: number; text: string }> = []
   const total = segments.length
@@ -351,7 +387,7 @@ interface DictEntry {
   word: string
   reading: string
   meanings: Array<{
-    pos: string   // 词性
+    pos: string // 词性
     gloss: string // 释义
   }>
 }
@@ -359,18 +395,42 @@ interface DictEntry {
 // 内置常用动漫词汇词典
 const BUILTIN_DICT: DictEntry[] = [
   { word: 'ありがとう', reading: 'arigatou', meanings: [{ pos: '感', gloss: '谢谢' }] },
-  { word: 'すみません', reading: 'sumimasen', meanings: [{ pos: '感', gloss: '对不起；不好意思；谢谢（用于麻烦他人时）' }] },
+  {
+    word: 'すみません',
+    reading: 'sumimasen',
+    meanings: [{ pos: '感', gloss: '对不起；不好意思；谢谢（用于麻烦他人时）' }],
+  },
   { word: 'おはよう', reading: 'ohayou', meanings: [{ pos: '感', gloss: '早上好' }] },
-  { word: 'こんにちは', reading: 'konnichiwa', meanings: [{ pos: '感', gloss: '你好（白天问候）' }] },
+  {
+    word: 'こんにちは',
+    reading: 'konnichiwa',
+    meanings: [{ pos: '感', gloss: '你好（白天问候）' }],
+  },
   { word: 'こんばんは', reading: 'konbanwa', meanings: [{ pos: '感', gloss: '晚上好' }] },
   { word: 'さようなら', reading: 'sayounara', meanings: [{ pos: '感', gloss: '再见' }] },
-  { word: 'お願いします', reading: 'onegaishimasu', meanings: [{ pos: '慣', gloss: '拜托了；请（礼貌请求）' }] },
-  { word: 'いただきます', reading: 'itadakimasu', meanings: [{ pos: '慣', gloss: '我开动了（饭前用语）' }] },
-  { word: 'ごちそうさま', reading: 'gochisousama', meanings: [{ pos: '慣', gloss: '我吃好了（饭后用语）' }] },
+  {
+    word: 'お願いします',
+    reading: 'onegaishimasu',
+    meanings: [{ pos: '慣', gloss: '拜托了；请（礼貌请求）' }],
+  },
+  {
+    word: 'いただきます',
+    reading: 'itadakimasu',
+    meanings: [{ pos: '慣', gloss: '我开动了（饭前用语）' }],
+  },
+  {
+    word: 'ごちそうさま',
+    reading: 'gochisousama',
+    meanings: [{ pos: '慣', gloss: '我吃好了（饭后用语）' }],
+  },
   { word: '大丈夫', reading: 'daijoubu', meanings: [{ pos: '形動', gloss: '没关系；没问题' }] },
   { word: 'すごい', reading: 'sugoi', meanings: [{ pos: '形', gloss: '厉害；了不起' }] },
   { word: 'かわいい', reading: 'kawaii', meanings: [{ pos: '形', gloss: '可爱' }] },
-  { word: 'やばい', reading: 'yabai', meanings: [{ pos: '形', gloss: '糟了；不妙；厉害（口语）' }] },
+  {
+    word: 'やばい',
+    reading: 'yabai',
+    meanings: [{ pos: '形', gloss: '糟了；不妙；厉害（口语）' }],
+  },
   { word: 'ちょっと', reading: 'chotto', meanings: [{ pos: '副', gloss: '稍微；有点' }] },
   { word: 'もう', reading: 'mou', meanings: [{ pos: '副', gloss: '已经；再也' }] },
   { word: 'まだ', reading: 'mada', meanings: [{ pos: '副', gloss: '还；尚未' }] },
@@ -468,7 +528,9 @@ function ensureDictLoaded(): void {
         BUILTIN_DICT.push(...data)
       }
     }
-  } catch { /* 使用内置词典 */ }
+  } catch {
+    /* 使用内置词典 */
+  }
 }
 
 /**
@@ -477,12 +539,13 @@ function ensureDictLoaded(): void {
 export function lookupWord(word: string): DictEntry[] {
   ensureDictLoaded()
   const lower = word.toLowerCase()
-  return BUILTIN_DICT.filter(e =>
-    e.word === word ||
-    e.word === lower ||
-    e.reading === word ||
-    e.reading === lower ||
-    (word.length >= 2 && e.word.includes(word))
+  return BUILTIN_DICT.filter(
+    (e) =>
+      e.word === word ||
+      e.word === lower ||
+      e.reading === word ||
+      e.reading === lower ||
+      (word.length >= 2 && e.word.includes(word)),
   ).slice(0, 5)
 }
 
@@ -505,7 +568,7 @@ export function analyzeJapaneseText(text: string): Array<{
       seen.add(entry.word)
       results.push({
         word: entry.word,
-        entries: [entry]
+        entries: [entry],
       })
     }
   }
@@ -522,6 +585,6 @@ export function getTranslationStatus(): {
 } {
   return {
     engine: translationConfig.engine,
-    apiKeyConfigured: !!translationConfig.apiKey
+    apiKeyConfigured: !!translationConfig.apiKey,
   }
 }

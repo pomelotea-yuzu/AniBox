@@ -10,13 +10,13 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
-const IMG_WIDTH = 160      // 缩略图宽
-const IMG_HEIGHT = 90      // 缩略图高
-const BORDER = 2           // 外容器 border (1px * 2)
-const TEXT_HEIGHT = 28     // 时间文字行高（px-2 py-1 = 8+8+12 ≈ 28）
-const POPUP_EST_W = IMG_WIDTH + BORDER  // 弹窗估算宽度
-const POPUP_EST_H = IMG_HEIGHT + BORDER + TEXT_HEIGHT  // 弹窗估算高度
-const EDGE_PAD = 8         // 视口边缘最小间距
+const IMG_WIDTH = 160 // 缩略图宽
+const IMG_HEIGHT = 90 // 缩略图高
+const BORDER = 2 // 外容器 border (1px * 2)
+const TEXT_HEIGHT = 28 // 时间文字行高（px-2 py-1 = 8+8+12 ≈ 28）
+const POPUP_EST_W = IMG_WIDTH + BORDER // 弹窗估算宽度
+const POPUP_EST_H = IMG_HEIGHT + BORDER + TEXT_HEIGHT // 弹窗估算高度
+const EDGE_PAD = 8 // 视口边缘最小间距
 
 /** 稳定取视口宽度 */
 function vpW(): number {
@@ -36,10 +36,15 @@ interface ProgressBarProps {
 }
 
 export default function ProgressBar({
-  currentTime, duration, bufferProgress = 0,
-  loopA, loopB,
-  previewTime, previewImage,
-  onSeek, onPreviewHover
+  currentTime,
+  duration,
+  bufferProgress = 0,
+  loopA,
+  loopB,
+  previewTime,
+  previewImage,
+  onSeek,
+  onPreviewHover,
 }: ProgressBarProps) {
   const barRef = useRef<HTMLDivElement>(null)
   const popupRef = useRef<HTMLDivElement>(null)
@@ -61,14 +66,14 @@ export default function ProgressBar({
       const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
       return ratio * duration
     },
-    [duration]
+    [duration],
   )
 
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
       onSeek(calcSeekTime(e.clientX))
     },
-    [calcSeekTime, onSeek]
+    [calcSeekTime, onSeek],
   )
 
   const handleMouseMove = useCallback(
@@ -96,7 +101,7 @@ export default function ProgressBar({
 
       onPreviewHover?.(ratio * duration)
     },
-    [duration, onPreviewHover]
+    [duration, onPreviewHover],
   )
 
   const handleMouseLeave = useCallback(() => {
@@ -140,34 +145,31 @@ export default function ProgressBar({
   }, [hoverPercent, popupLeft, popupTop, previewImage])
 
   // ---- 弹窗内容 ----
-  const popupContent = hoverPercent !== null ? (
-    <div
-      ref={popupRef}
-      className="fixed z-[9999] pointer-events-none"
-      style={{ left: popupLeft, top: popupTop }}
-    >
-      <div className="bg-anibox-overlay border border-neutral-700 rounded-lg shadow-xl overflow-hidden">
-        {/* 缩略图区域——始终占位 160×90，避免图片未加载时高度跳变 */}
-        <div style={{ width: IMG_WIDTH, height: IMG_HEIGHT }} className="bg-black relative">
-          {previewImage ? (
-            <img
-              src={previewImage}
-              alt=""
-              className="w-full h-full object-cover block"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <div className="w-5 h-5 border-2 border-white/20 border-t-white/60 rounded-full animate-spin" />
-            </div>
-          )}
-        </div>
-        {/* 时间标签 */}
-        <div className="px-2 py-1 text-xs text-neutral-200 tabular-nums text-center">
-          {previewTime != null ? formatTime(previewTime) : '--:--'}
+  const popupContent =
+    hoverPercent !== null ? (
+      <div
+        ref={popupRef}
+        className="fixed z-[9999] pointer-events-none"
+        style={{ left: popupLeft, top: popupTop }}
+      >
+        <div className="bg-anibox-overlay border border-neutral-700 rounded-lg shadow-xl overflow-hidden">
+          {/* 缩略图区域——始终占位 160×90，避免图片未加载时高度跳变 */}
+          <div style={{ width: IMG_WIDTH, height: IMG_HEIGHT }} className="bg-black relative">
+            {previewImage ? (
+              <img src={previewImage} alt="" className="w-full h-full object-cover block" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <div className="w-5 h-5 border-2 border-white/20 border-t-white/60 rounded-full animate-spin" />
+              </div>
+            )}
+          </div>
+          {/* 时间标签 */}
+          <div className="px-2 py-1 text-xs text-neutral-200 tabular-nums text-center">
+            {previewTime != null ? formatTime(previewTime) : '--:--'}
+          </div>
         </div>
       </div>
-    </div>
-  ) : null
+    ) : null
 
   return (
     <div

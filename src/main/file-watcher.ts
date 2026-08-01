@@ -6,11 +6,14 @@ import { hashPath, VIDEO_EXTS } from './utils'
 
 const SUBTITLE_EXTS = new Set(['.ass', '.ssa', '.srt', '.vtt', '.sub', '.idx'])
 
-type WatchCallback = (event: 'added' | 'removed' | 'changed', payload: {
-  type: 'video' | 'subtitle' | 'unknown'
-  path: string
-  folderPath?: string
-}) => void
+type WatchCallback = (
+  event: 'added' | 'removed' | 'changed',
+  payload: {
+    type: 'video' | 'subtitle' | 'unknown'
+    path: string
+    folderPath?: string
+  },
+) => void
 
 let watcher: FSWatcher | null = null
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
@@ -20,21 +23,18 @@ const pendingDirs = new Set<string>()
  * 启动文件夹监控
  * 防抖 2 秒聚合变化后触发完整重新扫描
  */
-export function startWatching(
-  rootPath: string,
-  onEvent?: WatchCallback
-): void {
+export function startWatching(rootPath: string, onEvent?: WatchCallback): void {
   stopWatching()
 
   watcher = watch(rootPath, {
-    ignored: /(^|[\\/])\./,  // 忽略隐藏文件/目录
+    ignored: /(^|[\\/])\./, // 忽略隐藏文件/目录
     persistent: true,
     depth: 10,
-    ignoreInitial: true,     // 不触发初始扫描
+    ignoreInitial: true, // 不触发初始扫描
     awaitWriteFinish: {
       stabilityThreshold: 3000,
-      pollInterval: 500
-    }
+      pollInterval: 500,
+    },
   })
 
   const scheduleRescan = (folderPath: string) => {
@@ -81,7 +81,11 @@ export function startWatching(
     const ext = extname(filePath).toLowerCase()
     if (VIDEO_EXTS.has(ext) || SUBTITLE_EXTS.has(ext)) {
       const folderPath = filePath.replace(/[/\\][^/\\]*$/, '')
-      onEvent?.('removed', { type: VIDEO_EXTS.has(ext) ? 'video' : 'subtitle', path: filePath, folderPath })
+      onEvent?.('removed', {
+        type: VIDEO_EXTS.has(ext) ? 'video' : 'subtitle',
+        path: filePath,
+        folderPath,
+      })
       scheduleRescan(folderPath)
     }
   })
@@ -114,6 +118,6 @@ export function getWatcherStatus(): {
 } {
   return {
     active: watcher !== null,
-    watchingPath: (watcher as any)?._settings?.cwd
+    watchingPath: (watcher as any)?._settings?.cwd,
   }
 }

@@ -43,7 +43,7 @@ export default function SubtitleOverlay({
   primaryVtt,
   secondaryVtt,
   style,
-  visible
+  visible,
 }: SubtitleOverlayProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const primaryCuesRef = useRef<CueData[]>([])
@@ -62,7 +62,7 @@ export default function SubtitleOverlay({
 
       const tsLine = lines[0]
       const timeMatch = tsLine.match(
-        /(\d{2}:\d{2}:\d{2}[.,]\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}[.,]\d{3})/
+        /(\d{2}:\d{2}:\d{2}[.,]\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}[.,]\d{3})/,
       )
       if (!timeMatch) continue
 
@@ -72,7 +72,7 @@ export default function SubtitleOverlay({
       cues.push({
         text,
         startTime: parseTimestamp(timeMatch[1]),
-        endTime: parseTimestamp(timeMatch[2])
+        endTime: parseTimestamp(timeMatch[2]),
       })
     }
 
@@ -82,11 +82,7 @@ export default function SubtitleOverlay({
   function parseTimestamp(ts: string): number {
     const parts = ts.split(':')
     const seconds = parts[2].replace(',', '.')
-    return (
-      parseInt(parts[0]) * 3600 +
-      parseInt(parts[1]) * 60 +
-      parseFloat(seconds)
-    )
+    return parseInt(parts[0]) * 3600 + parseInt(parts[1]) * 60 + parseFloat(seconds)
   }
 
   // 当 VTT 更新时重新解析
@@ -100,7 +96,7 @@ export default function SubtitleOverlay({
 
   // 查找当前时间点的 cue
   function findCuesAtTime(cues: CueData[], time: number): CueData[] {
-    return cues.filter(c => time >= c.startTime && time <= c.endTime)
+    return cues.filter((c) => time >= c.startTime && time <= c.endTime)
   }
 
   // Canvas 渲染循环
@@ -120,7 +116,7 @@ export default function SubtitleOverlay({
 
       // 同步 canvas 尺寸
       const rect = canvas.getBoundingClientRect()
-      if (rect.width > 0 && (canvas.width !== rect.width * devicePixelRatio)) {
+      if (rect.width > 0 && canvas.width !== rect.width * devicePixelRatio) {
         canvas.width = rect.width * devicePixelRatio
         canvas.height = rect.height * devicePixelRatio
       }
@@ -168,14 +164,14 @@ export default function SubtitleOverlay({
 
       // 渲染主字幕
       if (primaryCues.length > 0) {
-        const text = primaryCues.map(c => c.text).join('\n')
+        const text = primaryCues.map((c) => c.text).join('\n')
         renderText(ctx, text, cw, baseY, primaryFontSize, style, 'primary')
         baseY += lineHeight + gap + 8
       }
 
       // 渲染副字幕
       if (secondaryCues.length > 0) {
-        const text = secondaryCues.map(c => c.text).join('\n')
+        const text = secondaryCues.map((c) => c.text).join('\n')
         renderText(ctx, text, cw, baseY, secondaryFontSize, style, 'secondary')
       }
 
@@ -194,7 +190,7 @@ export default function SubtitleOverlay({
     y: number,
     fontSize: number,
     style: SubtitleStyleConfig,
-    _type: 'primary' | 'secondary'
+    _type: 'primary' | 'secondary',
   ) {
     const lines = text.split('\n')
 
@@ -214,12 +210,7 @@ export default function SubtitleOverlay({
       const bgH = fontSize + 6
 
       ctx.fillStyle = style.bgColor || 'rgba(0,0,0,0.5)'
-      ctx.fillRect(
-        canvasWidth / 2 - tw / 2 - padding,
-        lineY - 3,
-        tw + padding * 2,
-        bgH
-      )
+      ctx.fillRect(canvasWidth / 2 - tw / 2 - padding, lineY - 3, tw + padding * 2, bgH)
 
       // 描边
       if (style.strokeWidth > 0) {

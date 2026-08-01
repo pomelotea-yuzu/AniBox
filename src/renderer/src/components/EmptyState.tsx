@@ -19,7 +19,8 @@ interface EmptyStateProps {
 }
 
 function relativeTime(iso: string): string {
-  const now = Date.now(); const then = new Date(iso).getTime()
+  const now = Date.now()
+  const then = new Date(iso).getTime()
   const diffMin = Math.floor((now - then) / 60000)
   if (diffMin < 1) return '刚刚'
   if (diffMin < 60) return `${diffMin}分钟前`
@@ -30,18 +31,34 @@ function relativeTime(iso: string): string {
   return new Date(iso).toLocaleDateString('zh-CN')
 }
 
-export default function EmptyState({ onOpenFolder, onSmartDiscover, onOpenFile, onPlayRecent }: EmptyStateProps) {
+export default function EmptyState({
+  onOpenFolder,
+  onSmartDiscover,
+  onOpenFile,
+  onPlayRecent,
+}: EmptyStateProps) {
   const [recentItems, setRecentItems] = useState<RecentEntry[]>([])
 
   useEffect(() => {
-    window.electronAPI.getRecentProgress().then(items => setRecentItems(items.slice(0, 5))).catch(() => {})
+    window.electronAPI
+      .getRecentProgress()
+      .then((items) => setRecentItems(items.slice(0, 5)))
+      .catch(() => {})
   }, [])
 
   return (
     <div className="w-full h-full flex flex-col items-center justify-center gap-4 select-none overflow-y-auto py-8">
       {/* 图标 */}
       <div className="w-24 h-24 rounded-2xl bg-anibox-surface border border-anibox-border flex items-center justify-center mb-2">
-        <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" className="text-anibox-text-muted">
+        <svg
+          width="44"
+          height="44"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.2"
+          className="text-anibox-text-muted"
+        >
           <rect x="3" y="5" width="18" height="14" rx="2" />
           <line x1="3" y1="9" x2="21" y2="9" />
           <circle cx="8" cy="6.5" r="0.8" fill="currentColor" stroke="none" />
@@ -62,7 +79,14 @@ export default function EmptyState({ onOpenFolder, onSmartDiscover, onOpenFile, 
             rounded-lg transition-all shadow-md shadow-anibox-accent/20
             flex items-center gap-2 border border-anibox-accent/60"
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
             <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
           </svg>
           添加目录
@@ -75,7 +99,14 @@ export default function EmptyState({ onOpenFolder, onSmartDiscover, onOpenFile, 
             border border-anibox-accent/40 hover:border-anibox-accent/70"
           title="智能扫描常用目录，自动发现番剧文件夹"
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
             <circle cx="11" cy="11" r="8" />
             <path d="M21 21l-4.3-4.3" />
           </svg>
@@ -88,7 +119,14 @@ export default function EmptyState({ onOpenFolder, onSmartDiscover, onOpenFile, 
             rounded-lg transition-all flex items-center gap-2
             border border-anibox-border hover:border-anibox-text-muted"
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
             <polygon points="5,3 19,12 5,21" />
           </svg>
           打开单个视频
@@ -107,14 +145,21 @@ export default function EmptyState({ onOpenFolder, onSmartDiscover, onOpenFile, 
                 className="w-full text-left px-3 py-2 bg-anibox-surface hover:bg-anibox-border/60 border border-anibox-border/50 rounded-lg transition-colors"
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-anibox-text truncate font-medium">{item.seriesTitle}</span>
-                  <span className="text-[10px] text-anibox-text-muted ml-2 shrink-0">{relativeTime(item.updatedAt)}</span>
+                  <span className="text-xs text-anibox-text truncate font-medium">
+                    {item.seriesTitle}
+                  </span>
+                  <span className="text-[10px] text-anibox-text-muted ml-2 shrink-0">
+                    {relativeTime(item.updatedAt)}
+                  </span>
                 </div>
-                <p className="text-[10px] text-anibox-text-muted mt-0.5">
-                  第 {item.epNumber} 话
-                </p>
+                <p className="text-[10px] text-anibox-text-muted mt-0.5">第 {item.epNumber} 话</p>
                 <div className="mt-1 h-0.5 bg-anibox-border/30 rounded-full overflow-hidden">
-                  <div className="h-full bg-anibox-accent/50 rounded-full" style={{ width: `${Math.min(100, Math.round((item.position / (item.position + 300)) * 100))}%` }} />
+                  <div
+                    className="h-full bg-anibox-accent/50 rounded-full"
+                    style={{
+                      width: `${Math.min(100, Math.round((item.position / (item.position + 300)) * 100))}%`,
+                    }}
+                  />
                 </div>
               </button>
             ))}

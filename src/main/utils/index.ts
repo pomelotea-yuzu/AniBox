@@ -21,9 +21,34 @@ export function hashPath(p: string): string {
 
 /** 支持的视频文件扩展名 */
 export const VIDEO_EXTS = new Set([
-  '.mp4', '.mkv', '.webm', '.avi', '.mov', '.flv', '.ts', '.m2ts', '.rmvb', '.wmv',
-  '.m4v', '.3gp', '.3g2', '.asf', '.divx', '.f4v', '.mpeg', '.mpg', '.mpe', '.ogv',
-  '.ogm', '.qt', '.vob', '.evo', '.mts', '.mxf', '.rm', '.ogg'
+  '.mp4',
+  '.mkv',
+  '.webm',
+  '.avi',
+  '.mov',
+  '.flv',
+  '.ts',
+  '.m2ts',
+  '.rmvb',
+  '.wmv',
+  '.m4v',
+  '.3gp',
+  '.3g2',
+  '.asf',
+  '.divx',
+  '.f4v',
+  '.mpeg',
+  '.mpg',
+  '.mpe',
+  '.ogv',
+  '.ogm',
+  '.qt',
+  '.vob',
+  '.evo',
+  '.mts',
+  '.mxf',
+  '.rm',
+  '.ogg',
 ])
 
 // ============================================================
@@ -32,8 +57,10 @@ export const VIDEO_EXTS = new Set([
 
 /** 计算两个字符串的 Levenshtein 编辑距离（1D 数组优化版） */
 export function levenshtein(a: string, b: string): number {
-  const m = a.length; const n = b.length
-  if (m === 0) return n; if (n === 0) return m
+  const m = a.length
+  const n = b.length
+  if (m === 0) return n
+  if (n === 0) return m
 
   const dp: number[] = Array.from({ length: n + 1 }, (_, i) => i)
   for (let i = 0; i < m; i++) {
@@ -41,9 +68,7 @@ export function levenshtein(a: string, b: string): number {
     dp[0] = i + 1
     for (let j = 0; j < n; j++) {
       const temp = dp[j + 1]
-      dp[j + 1] = a[i] === b[j]
-        ? prev
-        : 1 + Math.min(prev, dp[j], dp[j + 1])
+      dp[j + 1] = a[i] === b[j] ? prev : 1 + Math.min(prev, dp[j], dp[j + 1])
       prev = temp
     }
   }
@@ -62,8 +87,14 @@ export const SIMILARITY_THRESHOLD = 0.85
  * 对分隔符做了归一化处理
  */
 export function titleSimilarity(a: string, b: string): number {
-  const s1 = a.toLowerCase().replace(/[\s\-_.:：·・]+/g, ' ').trim()
-  const s2 = b.toLowerCase().replace(/[\s\-_.:：·・]+/g, ' ').trim()
+  const s1 = a
+    .toLowerCase()
+    .replace(/[\s\-_.:：·・]+/g, ' ')
+    .trim()
+  const s2 = b
+    .toLowerCase()
+    .replace(/[\s\-_.:：·・]+/g, ' ')
+    .trim()
   if (s1 === s2) return 1
   if (!s1 || !s2) return 0
 
@@ -116,7 +147,9 @@ export function extractRomajiFromFolder(folderPath: string): string[] {
             titles.set(extracted, (titles.get(extracted) || 0) + 1)
           }
         }
-      } catch { /* skip corrupted filename */ }
+      } catch {
+        /* skip corrupted filename */
+      }
     }
 
     return Array.from(titles.entries())

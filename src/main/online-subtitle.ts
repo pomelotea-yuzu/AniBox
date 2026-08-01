@@ -41,8 +41,8 @@ const ANIME_SUB_SOURCES: Array<{
   {
     name: 'A4K 字幕',
     searchUrl: (q) => `https://a4k.net/search?keyword=${encodeURIComponent(q)}`,
-    resultsParser: () => [] // 需要服务端渲染，简化处理
-  }
+    resultsParser: () => [], // 需要服务端渲染，简化处理
+  },
 ]
 
 // ========== OpenSubtitles API ==========
@@ -80,7 +80,9 @@ interface OSFileInfo {
 }
 
 async function searchOpenSubtitles(
-  query: string, episode?: number, lang?: string
+  query: string,
+  episode?: number,
+  lang?: string,
 ): Promise<OnlineSubtitleResult[]> {
   if (!openSubtitlesApiKey) return []
 
@@ -89,7 +91,7 @@ async function searchOpenSubtitles(
     query: searchQuery,
     languages: lang || 'zh,ja,en',
     order_by: 'download_count',
-    type: episode ? 'episode' : 'movie'
+    type: episode ? 'episode' : 'movie',
   })
 
   try {
@@ -99,17 +101,17 @@ async function searchOpenSubtitles(
         headers: {
           'Api-Key': openSubtitlesApiKey,
           'User-Agent': openSubtitlesUserAgent,
-          'Content-Type': 'application/json'
-        }
-      }
+          'Content-Type': 'application/json',
+        },
+      },
     )
 
     if (!resp.ok) return []
 
-    const data = await resp.json() as { data: OSSearchResult[] }
+    const data = (await resp.json()) as { data: OSSearchResult[] }
     const results: OnlineSubtitleResult[] = []
 
-    for (const item of (data.data || [])) {
+    for (const item of data.data || []) {
       const attrs = item.attributes
       const file = attrs.files?.[0]
       if (!file) continue
@@ -123,7 +125,7 @@ async function searchOpenSubtitles(
         downloadUrl: '', // 需要二次请求获取下载链接
         fileName: file.file_name,
         rating: attrs.ratings || 0,
-        downloads: attrs.download_count || 0
+        downloads: attrs.download_count || 0,
       })
     }
 
@@ -141,13 +143,13 @@ async function getOpenSubtitlesDownloadUrl(fileId: number): Promise<string> {
       headers: {
         'Api-Key': openSubtitlesApiKey,
         'User-Agent': openSubtitlesUserAgent,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ file_id: fileId })
+      body: JSON.stringify({ file_id: fileId }),
     })
 
     if (!resp.ok) return ''
-    const data = await resp.json() as { link: string; file_name: string }
+    const data = (await resp.json()) as { link: string; file_name: string }
     return data.link || ''
   } catch {
     return ''
@@ -156,17 +158,14 @@ async function getOpenSubtitlesDownloadUrl(fileId: number): Promise<string> {
 
 // ========== 射手网（伪·射手网 API） ==========
 
-async function searchShooter(
-  query: string, episode?: number
-): Promise<OnlineSubtitleResult[]> {
+async function searchShooter(query: string, episode?: number): Promise<OnlineSubtitleResult[]> {
   // 射手网已关停，使用存档 API 镜像
   const hash = await computeFileHash(query)
   const fileHash = episode ? `${hash}_${episode}` : hash
   try {
-    const resp = await fetch(
-      `https://api.ass.sn/sub/search?q=${encodeURIComponent(fileHash)}`,
-      { signal: AbortSignal.timeout(5000) }
-    )
+    const resp = await fetch(`https://api.ass.sn/sub/search?q=${encodeURIComponent(fileHash)}`, {
+      signal: AbortSignal.timeout(5000),
+    })
     if (!resp.ok) return []
     // 射手镜像 API 格式各异，简单处理
     return []
@@ -180,7 +179,7 @@ async function computeFileHash(query: string): Promise<string> {
   let hash = 0
   for (let i = 0; i < query.length; i++) {
     const char = query.charCodeAt(i)
-    hash = ((hash << 5) - hash) + char
+    hash = (hash << 5) - hash + char
     hash |= 0
   }
   return Math.abs(hash).toString(16)
@@ -204,7 +203,7 @@ export interface SubtitleSearchQuery {
  * 按优先级顺序搜索：OpenSubtitles → 动漫字幕库 → 射手网
  */
 export async function searchOnlineSubtitles(
-  query: SubtitleSearchQuery
+  query: SubtitleSearchQuery,
 ): Promise<OnlineSubtitleResult[]> {
   const results: OnlineSubtitleResult[] = []
   const lang = query.preferredLanguages?.join(',') || 'zh,ja,en'
@@ -212,7 +211,7 @@ export async function searchOnlineSubtitles(
   // 并行搜索所有源
   const [osResults, animeResults] = await Promise.all([
     searchOpenSubtitles(query.title, query.episode, lang),
-    searchAnimeSubs(query.title, query.episode)
+    searchAnimeSubs(query.title, query.episode),
   ])
 
   results.push(...osResults)
@@ -221,7 +220,7 @@ export async function searchOnlineSubtitles(
   // 去重 + 按评分/下载量排序
   const seen = new Set<string>()
   return results
-    .filter(r => {
+    .filter((r) => {
       if (seen.has(r.id)) return false
       seen.add(r.id)
       return true
@@ -235,7 +234,7 @@ export async function searchOnlineSubtitles(
  */
 export async function downloadSubtitle(
   result: OnlineSubtitleResult,
-  videoPath: string
+  videoPath: string,
 ): Promise<string | null> {
   const videoDir = dirname(videoPath)
   const videoName = videoPath.replace(/\.[^.]+$/, '').replace(/.*[/\\]/, '')
@@ -289,7 +288,7 @@ export async function downloadSubtitle(
 export function getOpenSubtitlesStatus(): { configured: boolean; apiKeySet: boolean } {
   return {
     configured: openSubtitlesApiKey.length > 0,
-    apiKeySet: openSubtitlesApiKey.length > 0
+    apiKeySet: openSubtitlesApiKey.length > 0,
   }
 }
 
@@ -304,12 +303,23 @@ async function searchAnimeSubs(_title: string, _ep?: number): Promise<OnlineSubt
 
 function getLanguageLabel(code: string): string {
   const map: Record<string, string> = {
-    'zh': '中文', 'zh-CN': '简体中文', 'zh-TW': '繁體中文',
-    'zh-Hans': '简体中文', 'zh-Hant': '繁體中文',
-    'ja': '日本語', 'en': 'English', 'ko': '한국어',
-    'fr': 'Français', 'de': 'Deutsch', 'es': 'Español',
-    'pt': 'Português', 'it': 'Italiano', 'ru': 'Русский',
-    'ar': 'العربية', 'th': 'ไทย', 'vi': 'Tiếng Việt'
+    zh: '中文',
+    'zh-CN': '简体中文',
+    'zh-TW': '繁體中文',
+    'zh-Hans': '简体中文',
+    'zh-Hant': '繁體中文',
+    ja: '日本語',
+    en: 'English',
+    ko: '한국어',
+    fr: 'Français',
+    de: 'Deutsch',
+    es: 'Español',
+    pt: 'Português',
+    it: 'Italiano',
+    ru: 'Русский',
+    ar: 'العربية',
+    th: 'ไทย',
+    vi: 'Tiếng Việt',
   }
   return map[code] || code
 }

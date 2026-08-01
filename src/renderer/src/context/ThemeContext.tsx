@@ -41,14 +41,20 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       if (saved && THEMES[saved]) {
         setThemeState(saved)
       }
-    } catch { /* localStorage unavailable */ }
+    } catch {
+      /* localStorage unavailable */
+    }
   }, [])
 
   // 应用 CSS 变量
   useEffect(() => {
     const colors = THEMES[theme] ?? THEMES[DEFAULT_THEME]
     applyTheme(colors)
-    try { localStorage.setItem(THEME_STORAGE_KEY, theme) } catch { /* ok */ }
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, theme)
+    } catch {
+      /* ok */
+    }
   }, [theme])
 
   const setTheme = useCallback((name: string) => {

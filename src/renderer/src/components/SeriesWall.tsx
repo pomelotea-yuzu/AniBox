@@ -23,12 +23,24 @@ interface FailedItem {
 }
 
 export default function SeriesWall({
-  seriesList, selectedId, onSelect, scanRoots, onAddRoot, onRemoveRoot, onSmartDiscover, onRefresh,
-  onOpenSettings
+  seriesList,
+  selectedId,
+  onSelect,
+  scanRoots,
+  onAddRoot,
+  onRemoveRoot,
+  onSmartDiscover,
+  onRefresh,
+  onOpenSettings,
 }: SeriesWallProps) {
   const [progressMap, setProgressMap] = useState<Record<string, number>>({})
   const [scraping, setScraping] = useState(false)
-  const [scrapeProgress, setScrapeProgress] = useState({ current: 0, total: 0, title: '', status: '' })
+  const [scrapeProgress, setScrapeProgress] = useState({
+    current: 0,
+    total: 0,
+    title: '',
+    status: '',
+  })
   const [failedList, setFailedList] = useState<FailedItem[]>([])
 
   // 筛选排序
@@ -60,7 +72,7 @@ export default function SeriesWall({
   const handleValidateTitles = useCallback(async () => {
     setValidating(true)
     try {
-      const series = seriesList.map(s => ({ folderPath: s.folderPath, title: s.title }))
+      const series = seriesList.map((s) => ({ folderPath: s.folderPath, title: s.title }))
       const result = await window.electronAPI.validateTitles(series)
       if (result.length > 0) {
         setSuggestions(result)
@@ -76,30 +88,40 @@ export default function SeriesWall({
     }
   }, [seriesList])
 
-  const handleAcceptSuggestion = useCallback(async (folderPath: string, newTitle: string, index: number) => {
-    try {
-      await window.electronAPI.updateTitle(folderPath, newTitle)
-      setSuggestions(prev => prev.filter((_, i) => i !== index))
-      // 如果全部处理完了，关闭弹窗并刷新
+  const handleAcceptSuggestion = useCallback(
+    async (folderPath: string, newTitle: string, index: number) => {
+      try {
+        await window.electronAPI.updateTitle(folderPath, newTitle)
+        setSuggestions((prev) => prev.filter((_, i) => i !== index))
+        // 如果全部处理完了，关闭弹窗并刷新
+        if (suggestions.length <= 1) {
+          setShowSuggestions(false)
+          onRefresh()
+        }
+      } catch {
+        /* skip */
+      }
+    },
+    [suggestions.length, onRefresh],
+  )
+
+  const handleRejectSuggestion = useCallback(
+    (index: number) => {
+      setSuggestions((prev) => prev.filter((_, i) => i !== index))
       if (suggestions.length <= 1) {
         setShowSuggestions(false)
-        onRefresh()
       }
-    } catch { /* skip */ }
-  }, [suggestions.length, onRefresh])
-
-  const handleRejectSuggestion = useCallback((index: number) => {
-    setSuggestions(prev => prev.filter((_, i) => i !== index))
-    if (suggestions.length <= 1) {
-      setShowSuggestions(false)
-    }
-  }, [suggestions.length])
+    },
+    [suggestions.length],
+  )
 
   const handleAcceptAll = useCallback(async () => {
     for (const sug of suggestions) {
       try {
         await window.electronAPI.updateTitle(sug.folderPath, sug.suggestedTitle)
-      } catch { /* skip */ }
+      } catch {
+        /* skip */
+      }
     }
     setSuggestions([])
     setShowSuggestions(false)
@@ -108,7 +130,10 @@ export default function SeriesWall({
 
   // 加载收藏列表
   useEffect(() => {
-    window.electronAPI.favoritesGetAll().then(ids => setFavorites(new Set(ids))).catch(() => {})
+    window.electronAPI
+      .favoritesGetAll()
+      .then((ids) => setFavorites(new Set(ids)))
+      .catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -120,12 +145,16 @@ export default function SeriesWall({
         try {
           const p = await window.electronAPI.getSeriesProgress(s.folderPath)
           map[s.folderPath] = p.watched
-        } catch { map[s.folderPath] = 0 }
+        } catch {
+          map[s.folderPath] = 0
+        }
       }
       if (!cancelled) setProgressMap(map)
     }
     load()
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [seriesList])
 
   // 加载元数据
@@ -136,7 +165,9 @@ export default function SeriesWall({
         try {
           const meta = await window.electronAPI.getMetadata(s.folderPath)
           if (meta) map[s.folderPath] = meta
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
       }
       setMetadataMap(map)
     }
@@ -144,54 +175,83 @@ export default function SeriesWall({
   }, [seriesList])
 
   // 筛选 + 排序
-  const visibleSeries = useMemo(() => seriesList
-    .filter(s => {
-      if (playlistFilter && !playlistFilter.has(s.folderPath)) return false
-      if (search) {
-        const q = search.toLowerCase()
-        const meta = metadataMap[s.folderPath]
-        const matchTitle = s.title.toLowerCase().includes(q)
-        const matchCn = meta?.titleCn?.toLowerCase().includes(q)
-        const matchEn = meta?.titleEn?.toLowerCase().includes(q)
-        if (!matchTitle && !matchCn && !matchEn) return false
-      }
-      if (filterType !== 'all' && s.seriesType !== filterType) return false
-      if (showFavoritesOnly && !favorites.has(s.folderPath)) return false
-      return true
-    })
-    .sort((a, b) => {
-      const ma = metadataMap[a.folderPath]
-      const mb = metadataMap[b.folderPath]
-      let cmp = 0
-      switch (sortBy) {
-        case 'title': cmp = a.title.localeCompare(b.title, 'zh-CN'); break
-        case 'rating': cmp = ((mb?.rating || 0) - (ma?.rating || 0)); break
-        case 'year': cmp = ((mb?.year || 0) - (ma?.year || 0)); break
-        case 'eps': cmp = (b.episodes.length - a.episodes.length); break
-      }
-      return sortAsc ? cmp : -cmp
-    }), [seriesList, search, filterType, sortBy, sortAsc, metadataMap, playlistFilter, showFavoritesOnly, favorites])
+  const visibleSeries = useMemo(
+    () =>
+      seriesList
+        .filter((s) => {
+          if (playlistFilter && !playlistFilter.has(s.folderPath)) return false
+          if (search) {
+            const q = search.toLowerCase()
+            const meta = metadataMap[s.folderPath]
+            const matchTitle = s.title.toLowerCase().includes(q)
+            const matchCn = meta?.titleCn?.toLowerCase().includes(q)
+            const matchEn = meta?.titleEn?.toLowerCase().includes(q)
+            if (!matchTitle && !matchCn && !matchEn) return false
+          }
+          if (filterType !== 'all' && s.seriesType !== filterType) return false
+          if (showFavoritesOnly && !favorites.has(s.folderPath)) return false
+          return true
+        })
+        .sort((a, b) => {
+          const ma = metadataMap[a.folderPath]
+          const mb = metadataMap[b.folderPath]
+          let cmp = 0
+          switch (sortBy) {
+            case 'title':
+              cmp = a.title.localeCompare(b.title, 'zh-CN')
+              break
+            case 'rating':
+              cmp = (mb?.rating || 0) - (ma?.rating || 0)
+              break
+            case 'year':
+              cmp = (mb?.year || 0) - (ma?.year || 0)
+              break
+            case 'eps':
+              cmp = b.episodes.length - a.episodes.length
+              break
+          }
+          return sortAsc ? cmp : -cmp
+        }),
+    [
+      seriesList,
+      search,
+      filterType,
+      sortBy,
+      sortAsc,
+      metadataMap,
+      playlistFilter,
+      showFavoritesOnly,
+      favorites,
+    ],
+  )
 
   // 封面 + 元数据进度监听（统一）
   useEffect(() => {
     const unsub1 = window.electronAPI.onCoverProgress((data) => {
-      setScrapeProgress(prev => ({
+      setScrapeProgress((prev) => ({
         ...data,
-        status: data.ok ? '✓封面' : (data.status || ''),
+        status: data.ok ? '✓封面' : data.status || '',
         current: prev.current || data.current,
-        total: prev.total || data.total
+        total: prev.total || data.total,
       }))
     })
     const unsub2 = window.electronAPI.onMetadataProgress((data) => {
-      setScrapeProgress(prev => ({
+      setScrapeProgress((prev) => ({
         current: data.current,
         total: data.total,
         title: data.title,
-        status: data.ok ? (prev.status ? `${prev.status} ✓元数据` : '✓元数据') : (data.status || '搜索中...'),
-        ok: data.ok
+        status: data.ok
+          ? prev.status
+            ? `${prev.status} ✓元数据`
+            : '✓元数据'
+          : data.status || '搜索中...',
+        ok: data.ok,
       }))
     })
-    return () => { unsub1(); unsub2() }
+    return () => {
+      unsub1()
+      unsub2()
+    }
   }, [])
 
   // 统一刮削：先获取元数据（含封面），再补齐遗漏的封面
@@ -200,7 +260,11 @@ export default function SeriesWall({
     setFailedList([])
     setScrapeProgress({ current: 0, total: seriesList.length, title: '', status: '准备中...' })
     try {
-      const data = seriesList.map(s => ({ title: s.title, folderPath: s.folderPath, season: s.season }))
+      const data = seriesList.map((s) => ({
+        title: s.title,
+        folderPath: s.folderPath,
+        season: s.season,
+      }))
       await window.electronAPI.fetchMetadataBatch(data)
       await onRefresh()
       // 强制重新加载元数据（确保使用最新翻译结果）
@@ -209,7 +273,9 @@ export default function SeriesWall({
         try {
           const meta = await window.electronAPI.getMetadata(s.folderPath)
           if (meta) newMap[s.folderPath] = meta
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
       }
       setMetadataMap(newMap)
     } catch (e) {
@@ -224,16 +290,16 @@ export default function SeriesWall({
     setFetching(true)
     const ok = await window.electronAPI.fetchManualCover(item.folderPath, item.manualQuery.trim())
     if (ok) {
-      setFailedList(prev => prev.filter(f => f.folderPath !== item.folderPath))
+      setFailedList((prev) => prev.filter((f) => f.folderPath !== item.folderPath))
       await onRefresh()
     }
     setFetching(false)
   }, [])
 
   const handleManualQueryChange = useCallback((folderPath: string, value: string) => {
-    setFailedList(prev => prev.map(f =>
-      f.folderPath === folderPath ? { ...f, manualQuery: value } : f
-    ))
+    setFailedList((prev) =>
+      prev.map((f) => (f.folderPath === folderPath ? { ...f, manualQuery: value } : f)),
+    )
   }, [])
 
   return (
@@ -242,7 +308,7 @@ export default function SeriesWall({
       {scanRoots.length > 0 && (
         <div className="flex items-center gap-1 px-4 py-1.5 bg-anibox-surface/50 border-b border-anibox-border/50 shrink-0 overflow-x-auto">
           <span className="text-[10px] text-anibox-text-muted mr-1 shrink-0">扫描目录:</span>
-          {scanRoots.map(root => {
+          {scanRoots.map((root) => {
             const short = root.length > 40 ? '...' + root.slice(-37) : root
             return (
               <span
@@ -282,10 +348,20 @@ export default function SeriesWall({
           }`}
           title="播放列表"
         >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" />
-            <line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" />
-            <line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" />
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <line x1="8" y1="6" x2="21" y2="6" />
+            <line x1="8" y1="12" x2="21" y2="12" />
+            <line x1="8" y1="18" x2="21" y2="18" />
+            <line x1="3" y1="6" x2="3.01" y2="6" />
+            <line x1="3" y1="12" x2="3.01" y2="12" />
+            <line x1="3" y1="18" x2="3.01" y2="18" />
           </svg>
           播放列表
         </button>
@@ -299,7 +375,14 @@ export default function SeriesWall({
               className="text-anibox-text-muted hover:text-anibox-text transition-colors"
               title="设置"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
                 <circle cx="12" cy="12" r="3" />
                 <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
               </svg>
@@ -316,8 +399,17 @@ export default function SeriesWall({
             disabled:opacity-40 disabled:cursor-not-allowed"
           title="从 AniList/Bangumi 获取封面、评分、年份、简介、Staff"
         >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="7,10 12,15 17,10" /><line x1="12" y1="15" x2="12" y2="3" />
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+            <polyline points="7,10 12,15 17,10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
           </svg>
           {scraping
             ? scrapeProgress.total > 0
@@ -334,8 +426,16 @@ export default function SeriesWall({
             disabled:opacity-40 disabled:cursor-not-allowed"
           title="用 AniList 校验标题"
         >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <path d="M9 11l3 3L22 4" />
+            <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
           </svg>
           {validating ? '校验中...' : '校验标题'}
         </button>
@@ -343,9 +443,14 @@ export default function SeriesWall({
 
       {/* 标题校验建议弹窗 */}
       {showSuggestions && suggestions.length > 0 && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowSuggestions(false)}>
-          <div className="bg-anibox-surface border border-anibox-border rounded-xl shadow-2xl w-[560px] max-h-[80vh] flex flex-col"
-            onClick={e => e.stopPropagation()}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          onClick={() => setShowSuggestions(false)}
+        >
+          <div
+            className="bg-anibox-surface border border-anibox-border rounded-xl shadow-2xl w-[560px] max-h-[80vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between px-5 py-3 border-b border-anibox-border shrink-0">
               <h3 className="text-sm font-medium text-anibox-text">
                 AniList 标题建议 ({suggestions.length})
@@ -359,10 +464,15 @@ export default function SeriesWall({
             </div>
             <div className="overflow-y-auto flex-1 px-5 py-3 space-y-3">
               {suggestions.map((sug, i) => (
-                <div key={sug.folderPath} className="flex items-start gap-3 p-3 bg-anibox-bg rounded-lg border border-anibox-border/50">
+                <div
+                  key={sug.folderPath}
+                  className="flex items-start gap-3 p-3 bg-anibox-bg rounded-lg border border-anibox-border/50"
+                >
                   <div className="flex-1 min-w-0">
                     <p className="text-[11px] text-anibox-text-muted mb-1">当前</p>
-                    <p className="text-xs text-anibox-text-muted line-through">{sug.currentTitle}</p>
+                    <p className="text-xs text-anibox-text-muted line-through">
+                      {sug.currentTitle}
+                    </p>
                     <p className="text-[11px] text-anibox-text-muted mt-2 mb-1">
                       建议 <span className="text-anibox-accent">({sug.reason})</span>
                     </p>
@@ -412,9 +522,7 @@ export default function SeriesWall({
             <span className="text-xs text-anibox-text truncate" title={scrapeProgress.title}>
               {scrapeProgress.title || '搜索中...'}
             </span>
-            <span className="text-xs text-anibox-accent/60 shrink-0">
-              {scrapeProgress.status}
-            </span>
+            <span className="text-xs text-anibox-accent/60 shrink-0">{scrapeProgress.status}</span>
           </div>
           <div className="mt-1.5 h-1 bg-anibox-accent/10 rounded-full overflow-hidden">
             <div
@@ -431,16 +539,21 @@ export default function SeriesWall({
             以下番剧自动获取失败，请输入英文/romaji 名称手动搜索：
           </p>
           <div className="flex flex-wrap gap-2">
-            {failedList.map(item => (
+            {failedList.map((item) => (
               <div key={item.folderPath} className="flex items-center gap-1.5">
-                <span className="text-xs text-anibox-text-muted truncate max-w-[120px]" title={item.title}>
+                <span
+                  className="text-xs text-anibox-text-muted truncate max-w-[120px]"
+                  title={item.title}
+                >
                   {item.title}
                 </span>
                 <input
                   type="text"
                   value={item.manualQuery}
                   onChange={(e) => handleManualQueryChange(item.folderPath, e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleManualSearch(item) }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleManualSearch(item)
+                  }}
                   placeholder="英文名..."
                   className="w-28 px-1.5 py-0.5 text-xs bg-anibox-surface border border-anibox-border rounded
                     text-anibox-text placeholder:text-anibox-text-muted focus:border-anibox-accent outline-none"
@@ -482,7 +595,7 @@ export default function SeriesWall({
           <option value="special">特别篇</option>
         </select>
         <button
-          onClick={() => setShowFavoritesOnly(prev => !prev)}
+          onClick={() => setShowFavoritesOnly((prev) => !prev)}
           className={`px-2 py-1 text-xs rounded border transition-colors ${
             showFavoritesOnly
               ? 'text-yellow-400 border-yellow-400/30 bg-yellow-400/5'
@@ -517,8 +630,12 @@ export default function SeriesWall({
       <div className="flex-1 overflow-y-auto p-4">
         {visibleSeries.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-3 text-anibox-text-muted">
-            <p className="text-sm">{seriesList.length === 0 ? '该目录下未找到番剧' : '没有匹配的番剧'}</p>
-            <p className="text-xs">{seriesList.length === 0 ? '请选择包含番剧子文件夹的目录' : '尝试修改筛选条件'}</p>
+            <p className="text-sm">
+              {seriesList.length === 0 ? '该目录下未找到番剧' : '没有匹配的番剧'}
+            </p>
+            <p className="text-xs">
+              {seriesList.length === 0 ? '请选择包含番剧子文件夹的目录' : '尝试修改筛选条件'}
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
@@ -531,8 +648,8 @@ export default function SeriesWall({
                 onClick={() => onSelect(s)}
                 isFavorited={favorites.has(s.folderPath)}
                 onToggleFavorite={() => {
-                  window.electronAPI.favoritesToggle(s.folderPath).then(added => {
-                    setFavorites(prev => {
+                  window.electronAPI.favoritesToggle(s.folderPath).then((added) => {
+                    setFavorites((prev) => {
                       const next = new Set(prev)
                       if (added) next.add(s.folderPath)
                       else next.delete(s.folderPath)

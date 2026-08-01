@@ -16,14 +16,18 @@ function fetchGet(url: string): Promise<{ status: number; data: string } | null>
   return new Promise((resolve) => {
     const isHttp = url.startsWith('http://')
     const mod = isHttp ? require('http') : require('https')
-    const req = mod.get(url, { headers: { 'User-Agent': UA }, timeout: TIMEOUT }, (res: IncomingMessage) => {
-      const chunks: Buffer[] = []
-      res.on('data', (c: Buffer) => chunks.push(c))
-      res.on('end', () => {
-        console.log('[AniBox] GET', res.statusCode, url.slice(0, 60))
-        resolve({ status: res.statusCode || 0, data: Buffer.concat(chunks).toString('utf-8') })
-      })
-    })
+    const req = mod.get(
+      url,
+      { headers: { 'User-Agent': UA }, timeout: TIMEOUT },
+      (res: IncomingMessage) => {
+        const chunks: Buffer[] = []
+        res.on('data', (c: Buffer) => chunks.push(c))
+        res.on('end', () => {
+          console.log('[AniBox] GET', res.statusCode, url.slice(0, 60))
+          resolve({ status: res.statusCode || 0, data: Buffer.concat(chunks).toString('utf-8') })
+        })
+      },
+    )
     req.on('error', (e: any) => {
       console.error('[AniBox] GET failed:', url.slice(0, 80), e.message)
       resolve(null)
@@ -41,8 +45,12 @@ function httpsPost(url: string, body: string): Promise<{ status: number; data: s
   return new Promise((resolve) => {
     const options: RequestOptions = {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body), 'User-Agent': UA },
-      timeout: TIMEOUT
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body),
+        'User-Agent': UA,
+      },
+      timeout: TIMEOUT,
     }
     const req = request(url, options, (res: IncomingMessage) => {
       const chunks: Buffer[] = []
@@ -69,32 +77,52 @@ function httpsPost(url: string, body: string): Promise<{ status: number; data: s
 async function fetchGetJson(url: string): Promise<any | null> {
   const res = await fetchGet(url)
   if (!res || res.status < 200 || res.status >= 300) return null
-  try { return JSON.parse(res.data) } catch { return null }
+  try {
+    return JSON.parse(res.data)
+  } catch {
+    return null
+  }
 }
 
 async function httpsPostJson(url: string, body: string): Promise<any | null> {
   const res = await httpsPost(url, body)
   if (!res || res.status < 200 || res.status >= 300) return null
-  try { return JSON.parse(res.data) } catch { return null }
+  try {
+    return JSON.parse(res.data)
+  } catch {
+    return null
+  }
 }
 
 /** 下载图片到本地 */
 function downloadImage(url: string, savePath: string): Promise<boolean> {
   return new Promise((resolve) => {
-    const req = get(url, { headers: { 'User-Agent': UA }, timeout: TIMEOUT }, (res: IncomingMessage) => {
-      if (res.statusCode !== 200) { resolve(false); return }
-      const chunks: Buffer[] = []
-      res.on('data', (c: Buffer) => chunks.push(c))
-      res.on('end', () => {
-        try {
-          mkdirSync(dirname(savePath), { recursive: true })
-          writeFileSync(savePath, Buffer.concat(chunks))
-          resolve(true)
-        } catch { resolve(false) }
-      })
-    })
+    const req = get(
+      url,
+      { headers: { 'User-Agent': UA }, timeout: TIMEOUT },
+      (res: IncomingMessage) => {
+        if (res.statusCode !== 200) {
+          resolve(false)
+          return
+        }
+        const chunks: Buffer[] = []
+        res.on('data', (c: Buffer) => chunks.push(c))
+        res.on('end', () => {
+          try {
+            mkdirSync(dirname(savePath), { recursive: true })
+            writeFileSync(savePath, Buffer.concat(chunks))
+            resolve(true)
+          } catch {
+            resolve(false)
+          }
+        })
+      },
+    )
     req.on('error', () => resolve(false))
-    req.on('timeout', () => { req.destroy(); resolve(false) })
+    req.on('timeout', () => {
+      req.destroy()
+      resolve(false)
+    })
   })
 }
 
@@ -116,12 +144,12 @@ function searchQueries(title: string): string[] {
     qs.push(asciiOnly)
   }
 
-  return [...new Set(qs.filter(q => q.length >= 2))]
+  return [...new Set(qs.filter((q) => q.length >= 2))]
 }
 
 function bestMatch(
   query: string,
-  candidates: Array<{ names: string[]; coverUrl: string }>
+  candidates: Array<{ names: string[]; coverUrl: string }>,
 ): { coverUrl: string } | null {
   const q = query.toLowerCase()
 
@@ -129,7 +157,18 @@ function bestMatch(
   const qSeason = q.match(/第([一二三四五六七八九十\d]+)季|Season\s*(\d+)|S(\d+)/i)
   const qSeasonNum = qSeason
     ? (() => {
-        const cnMap: Record<string, number> = {'一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9,'十':10}
+        const cnMap: Record<string, number> = {
+          一: 1,
+          二: 2,
+          三: 3,
+          四: 4,
+          五: 5,
+          六: 6,
+          七: 7,
+          八: 8,
+          九: 9,
+          十: 10,
+        }
         if (qSeason[1]) return cnMap[qSeason[1]] || parseInt(qSeason[1])
         if (qSeason[2]) return parseInt(qSeason[2])
         if (qSeason[3]) return parseInt(qSeason[3])
@@ -137,7 +176,7 @@ function bestMatch(
       })()
     : 0
 
-  let best: typeof candidates[0] | null = null
+  let best: (typeof candidates)[0] | null = null
   let bestScore = Infinity
 
   for (const c of candidates) {
@@ -149,10 +188,23 @@ function bestMatch(
 
       // 如果查询包含季号，检查候选是否也包含相同季号
       if (qSeasonNum > 0) {
-        const cSeason = n.match(/第([一二三四五六七八九十\d]+)季|Season\s*(\d+)|(?:\b|_)(\d+)(?:st|nd|rd|th)\s*Season|S(\d+)/i)
+        const cSeason = n.match(
+          /第([一二三四五六七八九十\d]+)季|Season\s*(\d+)|(?:\b|_)(\d+)(?:st|nd|rd|th)\s*Season|S(\d+)/i,
+        )
         const cSeasonNum = cSeason
           ? (() => {
-              const cnMap: Record<string, number> = {'一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9,'十':10}
+              const cnMap: Record<string, number> = {
+                一: 1,
+                二: 2,
+                三: 3,
+                四: 4,
+                五: 5,
+                六: 6,
+                七: 7,
+                八: 8,
+                九: 9,
+                十: 10,
+              }
               if (cSeason[1]) return cnMap[cSeason[1]] || parseInt(cSeason[1])
               if (cSeason[2]) return parseInt(cSeason[2])
               if (cSeason[3]) return parseInt(cSeason[3])
@@ -170,10 +222,13 @@ function bestMatch(
         }
       }
 
-      if (score < bestScore) { bestScore = score; best = c }
+      if (score < bestScore) {
+        bestScore = score
+        best = c
+      }
     }
   }
-  return bestScore < 0.5 ? best : (candidates[0] || null)
+  return bestScore < 0.5 ? best : candidates[0] || null
 }
 
 // ============================================================
@@ -184,7 +239,7 @@ async function searchAniList(query: string): Promise<Array<{ names: string[]; co
   try {
     const gql = JSON.stringify({
       query: `query($s:String){Page(perPage:5){media(search:$s,type:ANIME,format_not:MUSIC){id title{romaji english native}coverImage{large}}}}`,
-      variables: { s: query }
+      variables: { s: query },
     })
     const json = await httpsPostJson('https://graphql.anilist.co', gql)
     const media = json?.data?.Page?.media
@@ -194,7 +249,7 @@ async function searchAniList(query: string): Promise<Array<{ names: string[]; co
       .filter((m: any) => m.coverImage?.large)
       .map((m: any) => ({
         names: [m.title.romaji, m.title.english, m.title.native].filter(Boolean),
-        coverUrl: m.coverImage.large
+        coverUrl: m.coverImage.large,
       }))
   } catch (e: any) {
     console.error('[AniBox] AniList error:', e.message)
@@ -206,7 +261,12 @@ async function fetchAniList(query: string): Promise<string | null> {
   const items = await searchAniList(query)
   if (!items.length) return null
   const match = bestMatch(query, items)
-  console.log('[AniList] bestMatch:', match ? items[0].names[0] : 'null', '| cover:', match?.coverUrl ? 'OK' : 'NO')
+  console.log(
+    '[AniList] bestMatch:',
+    match ? items[0].names[0] : 'null',
+    '| cover:',
+    match?.coverUrl ? 'OK' : 'NO',
+  )
   return match?.coverUrl || null
 }
 
@@ -223,7 +283,7 @@ async function searchJikan(query: string): Promise<Array<{ names: string[]; cove
       .filter((e: any) => e.images?.jpg?.large_image_url)
       .map((e: any) => ({
         names: [e.title, e.title_english, e.title_japanese].filter(Boolean),
-        coverUrl: e.images.jpg.large_image_url
+        coverUrl: e.images.jpg.large_image_url,
       }))
   } catch (e: any) {
     console.error('[AniBox] Jikan error:', e.message)
@@ -243,7 +303,9 @@ async function fetchJikan(query: string): Promise<string | null> {
 //  Provider 3: Bangumi
 // ============================================================
 
-async function searchBangumi(query: string): Promise<Array<{ id: number; names: string[]; coverUrl: string }>> {
+async function searchBangumi(
+  query: string,
+): Promise<Array<{ id: number; names: string[]; coverUrl: string }>> {
   try {
     const url = `http://api.bgm.tv/search/subject/${encodeURIComponent(query)}?type=2&responseGroup=small&max_results=5`
     const json = await fetchGetJson(url)
@@ -251,7 +313,7 @@ async function searchBangumi(query: string): Promise<Array<{ id: number; names: 
     return json.list.map((s: any) => ({
       id: s.id,
       names: [s.name_cn, s.name].filter(Boolean),
-      coverUrl: ''
+      coverUrl: '',
     }))
   } catch (e: any) {
     console.error('[AniBox] Bangumi error:', e.message)
@@ -268,7 +330,10 @@ async function getBangumiDetail(id: number): Promise<string | null> {
 async function fetchBangumi(query: string): Promise<string | null> {
   const items = await searchBangumi(query)
   if (!items.length) return null
-  const match = bestMatch(query, items.map(s => ({ names: s.names, coverUrl: s.coverUrl })))
+  const match = bestMatch(
+    query,
+    items.map((s) => ({ names: s.names, coverUrl: s.coverUrl })),
+  )
   if (!match) return null
   const coverUrl = await getBangumiDetail(items[0].id)
   if (coverUrl) console.log('[Bangumi] matched -> cover found')
@@ -294,8 +359,9 @@ export interface CoverProgress {
 }
 
 export async function fetchCoverForSeries(
-  title: string, folderPath: string,
-  onStatus?: (status: string) => void
+  title: string,
+  folderPath: string,
+  onStatus?: (status: string) => void,
 ): Promise<string | null> {
   const aniboxDir = join(folderPath, '.anibox')
   const coverPath = join(aniboxDir, 'cover.jpg')
@@ -318,16 +384,14 @@ export async function fetchCoverForSeries(
 
   // 如果有季号：先尝试含季号的查询，全部失败后再尝试去除季号的查询
   const seasonQueries = hasSeason
-    ? queries.filter(q => /第[一二三四五六七八九十\d]+季|Season\s*\d+|S\d+/i.test(q))
+    ? queries.filter((q) => /第[一二三四五六七八九十\d]+季|Season\s*\d+|S\d+/i.test(q))
     : queries
   const strippedQueries = hasSeason
-    ? queries.filter(q => !seasonQueries.includes(q) && !romajiTitles.includes(q))
+    ? queries.filter((q) => !seasonQueries.includes(q) && !romajiTitles.includes(q))
     : []
 
   // 合并：先季号查询，再 romaji，最后去季号查询
-  const orderedQueries = hasSeason
-    ? [...seasonQueries, ...strippedQueries]
-    : queries
+  const orderedQueries = hasSeason ? [...seasonQueries, ...strippedQueries] : queries
 
   for (let qi = 0; qi < Math.min(orderedQueries.length, 5); qi++) {
     const query = orderedQueries[qi]
@@ -354,7 +418,10 @@ export async function fetchCoverForSeries(
 /**
  * 手动搜索封面（用户自行输入英文/romaji 名，仅用 AniList）
  */
-export async function fetchCoverManual(folderPath: string, searchQuery: string): Promise<string | null> {
+export async function fetchCoverManual(
+  folderPath: string,
+  searchQuery: string,
+): Promise<string | null> {
   const aniboxDir = join(folderPath, '.anibox')
   const coverPath = join(aniboxDir, 'cover.jpg')
   if (existsSync(coverPath)) return coverPath
@@ -368,7 +435,7 @@ export async function fetchCoverManual(folderPath: string, searchQuery: string):
 }
 export async function fetchCoversBatch(
   series: Array<{ title: string; folderPath: string }>,
-  onProgress?: (current: number, total: number, title: string, ok: boolean, status: string) => void
+  onProgress?: (current: number, total: number, title: string, ok: boolean, status: string) => void,
 ): Promise<{ total: number; fetched: number; failed: number }> {
   let fetched = 0
   let failed = 0
@@ -390,7 +457,7 @@ export async function fetchCoversBatch(
     }
 
     if (i < series.length - 1) {
-      await new Promise(r => setTimeout(r, 1500))
+      await new Promise((r) => setTimeout(r, 1500))
     }
   }
 

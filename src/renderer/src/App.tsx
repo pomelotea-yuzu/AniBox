@@ -17,7 +17,9 @@ export default function App() {
   const [seriesList, setSeriesList] = useState<SeriesInfo[]>([])
   const [selectedSeries, setSelectedSeries] = useState<SeriesInfo | null>(null)
   const [currentVideo, setCurrentVideo] = useState<{
-    filePath: string; mediaUrl: string; savedPosition: number
+    filePath: string
+    mediaUrl: string
+    savedPosition: number
   } | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [mpvFallback, setMpvFallback] = useState(false)
@@ -30,35 +32,40 @@ export default function App() {
 
   // 启动：不自动扫描，显示空状态让用户手动选择
   useEffect(() => {
-    (async () => {
+    ;(async () => {
       try {
         const roots = await window.electronAPI.scanRootsGet()
         if (roots && roots.length > 0) {
           setScanRoots(roots)
         }
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
       setView('empty')
     })()
   }, [])
 
   // 扫描所有根目录
-  const scanAll = useCallback(async (roots?: string[]) => {
-    const r = roots ?? scanRoots
-    if (r.length === 0) {
-      setSeriesList([])
-      setView('empty')
-      return
-    }
-    setView('loading')
-    try {
-      const result = await window.electronAPI.scanRootsScanAll()
-      setSeriesList(result)
-      setView('wall')
-    } catch (err) {
-      console.error('[AniBox] Scan error:', err)
-      setView('empty')
-    }
-  }, [scanRoots])
+  const scanAll = useCallback(
+    async (roots?: string[]) => {
+      const r = roots ?? scanRoots
+      if (r.length === 0) {
+        setSeriesList([])
+        setView('empty')
+        return
+      }
+      setView('loading')
+      try {
+        const result = await window.electronAPI.scanRootsScanAll()
+        setSeriesList(result)
+        setView('wall')
+      } catch (err) {
+        console.error('[AniBox] Scan error:', err)
+        setView('empty')
+      }
+    },
+    [scanRoots],
+  )
 
   // 添加扫描根目录（替换模式，每次选新目录即替换旧目录）
   const handleAddRoot = useCallback(async () => {
@@ -70,11 +77,14 @@ export default function App() {
   }, [scanAll])
 
   // 移除扫描根目录
-  const handleRemoveRoot = useCallback(async (root: string) => {
-    const updated = await window.electronAPI.scanRootsRemove(root)
-    setScanRoots(updated)
-    await scanAll(updated)
-  }, [scanAll])
+  const handleRemoveRoot = useCallback(
+    async (root: string) => {
+      const updated = await window.electronAPI.scanRootsRemove(root)
+      setScanRoots(updated)
+      await scanAll(updated)
+    },
+    [scanAll],
+  )
 
   // 智能发现（替换模式）
   const handleSmartDiscover = useCallback(async () => {
@@ -107,9 +117,12 @@ export default function App() {
     setSelectedSeries(series)
     setSeriesMetadata(null)
     // 异步加载元数据
-    window.electronAPI.getMetadata(series.folderPath).then(meta => {
-      if (meta) setSeriesMetadata(meta)
-    }).catch(() => {})
+    window.electronAPI
+      .getMetadata(series.folderPath)
+      .then((meta) => {
+        if (meta) setSeriesMetadata(meta)
+      })
+      .catch(() => {})
     setView('episodes')
   }, [])
 
@@ -128,7 +141,9 @@ export default function App() {
         console.log('[AniBox] Unsupported audio codec:', audio.codec, 'using mpv')
         setMpvFallback(true)
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     const savedPosition = await window.electronAPI.getPosition(ep.filePath)
     const mediaUrl = window.electronAPI.getMediaUrl(ep.filePath)
     setCurrentVideo({ filePath: ep.filePath, mediaUrl, savedPosition })
@@ -154,14 +169,21 @@ export default function App() {
     const eps = selectedSeries.episodes
     let nextIdx: number
     if (playMode === 'shuffle') {
-      const otherIdxs = eps.map((_, i) => i).filter(i => i !== currentEpIndexRef.current)
-      if (otherIdxs.length === 0) { nextIdx = currentEpIndexRef.current }
-      else { nextIdx = otherIdxs[Math.floor(Math.random() * otherIdxs.length)] }
+      const otherIdxs = eps.map((_, i) => i).filter((i) => i !== currentEpIndexRef.current)
+      if (otherIdxs.length === 0) {
+        nextIdx = currentEpIndexRef.current
+      } else {
+        nextIdx = otherIdxs[Math.floor(Math.random() * otherIdxs.length)]
+      }
     } else {
       nextIdx = currentEpIndexRef.current + 1
       if (nextIdx >= eps.length) {
-        if (playMode === 'loop-all') { nextIdx = 0 }
-        else { setView('episodes'); return }
+        if (playMode === 'loop-all') {
+          nextIdx = 0
+        } else {
+          setView('episodes')
+          return
+        }
       }
     }
     switchToEpisode(eps, nextIdx)
@@ -180,18 +202,21 @@ export default function App() {
     currentEpIndexRef.current = idx
     setMpvFallback(false)
     // 播放前检查音频编码兼容性
-    window.electronAPI.checkAudio(ep.filePath).then(audio => {
-      if (!audio.supported) {
-        console.log('[AniBox] Unsupported audio codec:', audio.codec, 'using mpv')
-        setMpvFallback(true)
-      }
-    }).catch(() => {})
+    window.electronAPI
+      .checkAudio(ep.filePath)
+      .then((audio) => {
+        if (!audio.supported) {
+          console.log('[AniBox] Unsupported audio codec:', audio.codec, 'using mpv')
+          setMpvFallback(true)
+        }
+      })
+      .catch(() => {})
     window.electronAPI.mpvQuit().then(() => {
-      window.electronAPI.getPosition(ep.filePath).then(p => {
+      window.electronAPI.getPosition(ep.filePath).then((p) => {
         setCurrentVideo({
           filePath: ep.filePath,
           mediaUrl: window.electronAPI.getMediaUrl(ep.filePath),
-          savedPosition: p
+          savedPosition: p,
         })
       })
     })
@@ -199,16 +224,24 @@ export default function App() {
 
   const cyclePlayMode = useCallback(() => {
     const modes: PlayMode[] = ['sequential', 'loop-one', 'loop-all', 'shuffle']
-    setPlayMode(prev => {
+    setPlayMode((prev) => {
       const idx = modes.indexOf(prev)
       return modes[(idx + 1) % modes.length]
     })
   }, [])
 
-  const handlePositionChange = useCallback((p: number) => { playbackRef.current.position = p }, [])
-  const handleDurationChange = useCallback((d: number) => { playbackRef.current.duration = d }, [])
-  const handlePlayStateChange = useCallback((playing: boolean) => { playbackRef.current.isPlaying = playing }, [])
-  const handleFallback = useCallback(() => { setMpvFallback(true) }, [])
+  const handlePositionChange = useCallback((p: number) => {
+    playbackRef.current.position = p
+  }, [])
+  const handleDurationChange = useCallback((d: number) => {
+    playbackRef.current.duration = d
+  }, [])
+  const handlePlayStateChange = useCallback((playing: boolean) => {
+    playbackRef.current.isPlaying = playing
+  }, [])
+  const handleFallback = useCallback(() => {
+    setMpvFallback(true)
+  }, [])
 
   useEffect(() => {
     if (!currentVideo) return
@@ -267,8 +300,16 @@ export default function App() {
                   border border-anibox-accent/40 hover:border-anibox-accent/70"
                 title="自动扫描常用目录，智能发现番剧"
               >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.3-4.3" />
+                <svg
+                  width="13"
+                  height="13"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <circle cx="11" cy="11" r="8" />
+                  <path d="M21 21l-4.3-4.3" />
                 </svg>
                 智能发现
               </button>
@@ -279,7 +320,14 @@ export default function App() {
                   flex items-center gap-1"
                 title="手动选择番剧目录"
               >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg
+                  width="13"
+                  height="13"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
                   <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
                 </svg>
                 手动添加
@@ -288,7 +336,9 @@ export default function App() {
           )}
         </header>
       )}
-      <main className={`flex-1 relative ${view === 'player' ? '' : 'overflow-hidden bg-anibox-bg'}`}>
+      <main
+        className={`flex-1 relative ${view === 'player' ? '' : 'overflow-hidden bg-anibox-bg'}`}
+      >
         {/* 所有非播放器视图常驻 DOM，display 切换 — 保留筛选/滚动状态 */}
         <div style={{ display: view === 'empty' ? 'block' : 'none' }} className="w-full h-full">
           <EmptyState
@@ -301,7 +351,7 @@ export default function App() {
               setCurrentVideo({
                 filePath: r.filePath,
                 mediaUrl: window.electronAPI.getMediaUrl(r.filePath),
-                savedPosition: r.savedPosition
+                savedPosition: r.savedPosition,
               })
               setView('player')
             }}
@@ -320,7 +370,7 @@ export default function App() {
               setCurrentVideo({
                 filePath,
                 mediaUrl: window.electronAPI.getMediaUrl(filePath),
-                savedPosition: position
+                savedPosition: position,
               })
               setView('player')
             }}
@@ -350,7 +400,10 @@ export default function App() {
           </div>
         )}
         {selectedSeries && (
-          <div style={{ display: view === 'episodes' ? 'block' : 'none' }} className="w-full h-full">
+          <div
+            style={{ display: view === 'episodes' ? 'block' : 'none' }}
+            className="w-full h-full"
+          >
             <EpisodeList
               series={selectedSeries}
               metadata={seriesMetadata}
@@ -360,68 +413,70 @@ export default function App() {
           </div>
         )}
         {/* 播放器：保持 key 重挂载，无筛选状态需保留 */}
-        {currentVideo && view === 'player' ? (() => {
-          const eps = selectedSeries?.episodes || []
-          const curIdx = currentEpIndexRef.current
-          const next = (curIdx >= 0 && curIdx + 1 < eps.length) ? eps[curIdx + 1] : null
-          const prev = (curIdx > 0) ? eps[curIdx - 1] : null
-          const curEp = (curIdx >= 0 && curIdx < eps.length) ? eps[curIdx] : null
+        {currentVideo && view === 'player'
+          ? (() => {
+              const eps = selectedSeries?.episodes || []
+              const curIdx = currentEpIndexRef.current
+              const next = curIdx >= 0 && curIdx + 1 < eps.length ? eps[curIdx + 1] : null
+              const prev = curIdx > 0 ? eps[curIdx - 1] : null
+              const curEp = curIdx >= 0 && curIdx < eps.length ? eps[curIdx] : null
 
-          if (!mpvFallback) {
-            return (
-              <ErrorBoundary
-                fallback={
-                  <div className="w-full h-screen bg-black flex items-center justify-center">
-                    <div className="text-center">
-                      <p className="text-neutral-400 mb-3">播放器出错</p>
-                      <button
-                        onClick={handleEpisodeList}
-                        className="px-4 py-2 text-sm bg-anibox-accent text-white rounded"
-                      >
-                        返回选集
-                      </button>
-                    </div>
-                  </div>
-                }
-              >
-                <Player
-                key={currentVideo.filePath}
-                mediaUrl={currentVideo.mediaUrl}
-                filePath={currentVideo.filePath}
-                folderPath={selectedSeries?.folderPath}
-                savedPosition={currentVideo.savedPosition}
-                subtitleTracks={curEp?.subtitleTracks}
-                playMode={playMode}
-                nextEpisodeTitle={next?.fileName}
-                prevEpisodeTitle={prev?.fileName}
-                onNextEpisode={next ? handleNextEpisode : undefined}
-                onPrevEpisode={prev ? handlePrevEpisode : undefined}
-                onCyclePlayMode={cyclePlayMode}
-                onFallback={handleFallback}
-                onEpisodeList={selectedSeries ? handleEpisodeList : undefined}
-                episodes={selectedSeries?.episodes}
-                currentEpIndex={selectedSeries ? currentEpIndexRef.current : -1}
-                onSelectEpisode={(idx) => {
-                  if (selectedSeries) {
-                    switchToEpisode(selectedSeries.episodes, idx)
-                  }
-                }}
-                onOpenSettings={() => setShowSettings(true)}
-                onPositionChange={handlePositionChange}
-                onDurationChange={handleDurationChange}
-                onPlayStateChange={handlePlayStateChange}
-              />
-              </ErrorBoundary>
-            )
-          }
-          return (
-            <MpvOverlay
-              key={currentVideo.filePath}
-              filePath={currentVideo.filePath}
-              onClose={handleClosePlayer}
-            />
-          )
-        })() : null}
+              if (!mpvFallback) {
+                return (
+                  <ErrorBoundary
+                    fallback={
+                      <div className="w-full h-screen bg-black flex items-center justify-center">
+                        <div className="text-center">
+                          <p className="text-neutral-400 mb-3">播放器出错</p>
+                          <button
+                            onClick={handleEpisodeList}
+                            className="px-4 py-2 text-sm bg-anibox-accent text-white rounded"
+                          >
+                            返回选集
+                          </button>
+                        </div>
+                      </div>
+                    }
+                  >
+                    <Player
+                      key={currentVideo.filePath}
+                      mediaUrl={currentVideo.mediaUrl}
+                      filePath={currentVideo.filePath}
+                      folderPath={selectedSeries?.folderPath}
+                      savedPosition={currentVideo.savedPosition}
+                      subtitleTracks={curEp?.subtitleTracks}
+                      playMode={playMode}
+                      nextEpisodeTitle={next?.fileName}
+                      prevEpisodeTitle={prev?.fileName}
+                      onNextEpisode={next ? handleNextEpisode : undefined}
+                      onPrevEpisode={prev ? handlePrevEpisode : undefined}
+                      onCyclePlayMode={cyclePlayMode}
+                      onFallback={handleFallback}
+                      onEpisodeList={selectedSeries ? handleEpisodeList : undefined}
+                      episodes={selectedSeries?.episodes}
+                      currentEpIndex={selectedSeries ? currentEpIndexRef.current : -1}
+                      onSelectEpisode={(idx) => {
+                        if (selectedSeries) {
+                          switchToEpisode(selectedSeries.episodes, idx)
+                        }
+                      }}
+                      onOpenSettings={() => setShowSettings(true)}
+                      onPositionChange={handlePositionChange}
+                      onDurationChange={handleDurationChange}
+                      onPlayStateChange={handlePlayStateChange}
+                    />
+                  </ErrorBoundary>
+                )
+              }
+              return (
+                <MpvOverlay
+                  key={currentVideo.filePath}
+                  filePath={currentVideo.filePath}
+                  onClose={handleClosePlayer}
+                />
+              )
+            })()
+          : null}
       </main>
 
       <SettingsModal visible={showSettings} onClose={() => setShowSettings(false)} />

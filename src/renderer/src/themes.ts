@@ -7,18 +7,18 @@ export interface ThemeColors {
   name: string
   label: string
   description: string
-  bg: string           // 页面底色
-  surface: string      // 卡片/面板底色
-  accent: string       // 主要强调色
-  accentHover: string  // 强调色悬浮态
-  secondary: string    // 辅助强调色
+  bg: string // 页面底色
+  surface: string // 卡片/面板底色
+  accent: string // 主要强调色
+  accentHover: string // 强调色悬浮态
+  secondary: string // 辅助强调色
   secondaryHover: string
-  text: string         // 主文字色
-  textMuted: string    // 次要文字色
-  border: string       // 边框色
-  overlay: string      // 播放器覆盖层（始终深色）
-  scrollThumb: string  // 滚动条滑块
-  scrollHover: string  // 滚动条悬浮
+  text: string // 主文字色
+  textMuted: string // 次要文字色
+  border: string // 边框色
+  overlay: string // 播放器覆盖层（始终深色）
+  scrollThumb: string // 滚动条滑块
+  scrollHover: string // 滚动条悬浮
 }
 
 const THEMES: Record<string, ThemeColors> = {
@@ -94,7 +94,7 @@ const THEMES: Record<string, ThemeColors> = {
     scrollHover: '#B0A898',
   },
 
-  'sakura': {
+  sakura: {
     name: 'sakura',
     label: '樱',
     description: '淡樱粉 + 灰绿，温柔清新',

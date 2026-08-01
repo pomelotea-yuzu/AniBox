@@ -2,41 +2,55 @@
 @tailwind components;
 @tailwind utilities;
 
-* { margin: 0; padding: 0; box-sizing: border-box; }
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
 
 /* CSS 变量定义 — 由 ThemeContext 动态注入，此处为默认回退 */
 :root {
-  --ab-bg: #F5F0E8;
-  --ab-surface: #EBE5D9;
-  --ab-accent: #9CAF88;
+  --ab-bg: #f5f0e8;
+  --ab-surface: #ebe5d9;
+  --ab-accent: #9caf88;
   --ab-accent-hover: #859972;
-  --ab-secondary: #8EACBF;
-  --ab-secondary-hover: #7B9BB0;
-  --ab-text: #3D3A35;
-  --ab-text-muted: #8B8579;
-  --ab-border: #DDD6CB;
+  --ab-secondary: #8eacbf;
+  --ab-secondary-hover: #7b9bb0;
+  --ab-text: #3d3a35;
+  --ab-text-muted: #8b8579;
+  --ab-border: #ddd6cb;
   --ab-overlay: #1a1a1a;
-  --ab-scroll-thumb: #C5BFB3;
-  --ab-scroll-hover: #A8A093;
+  --ab-scroll-thumb: #c5bfb3;
+  --ab-scroll-hover: #a8a093;
 }
 
-html, body {
-  width: 100%; height: 100%;
+html,
+body {
+  width: 100%;
+  height: 100%;
   background-color: var(--ab-bg);
   color: var(--ab-text);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
   -webkit-font-smoothing: antialiased;
   user-select: none;
-  transition: background-color 0.4s ease, color 0.4s ease;
+  transition:
+    background-color 0.4s ease,
+    color 0.4s ease;
 }
 
 #root {
-  width: 100%; height: 100%; overflow: hidden;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
 }
 
 /* 滚动条 — 跟随主题 */
-::-webkit-scrollbar { width: 5px; }
-::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar {
+  width: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
 ::-webkit-scrollbar-thumb {
   background: var(--ab-scroll-thumb);
   border-radius: 3px;
@@ -113,13 +127,19 @@ html, body {
   animation: fadeIn 0.25s ease-out both;
 }
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 /* 卡片悬浮效果 */
 .card-hover {
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
 }
 .card-hover:hover {
   transform: translateY(-2px);
@@ -127,7 +147,7 @@ html, body {
 }
 
 /* Range 滑块 — 跟随主题强调色 */
-input[type="range"] {
+input[type='range'] {
   -webkit-appearance: none;
   appearance: none;
   height: 4px;
@@ -136,21 +156,23 @@ input[type="range"] {
   outline: none;
   cursor: pointer;
 }
-input[type="range"]::-webkit-slider-thumb {
+input[type='range']::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 12px; height: 12px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
   background: var(--ab-accent);
   border: none;
   cursor: pointer;
   transition: transform 0.15s;
 }
-input[type="range"]::-webkit-slider-thumb:hover {
+input[type='range']::-webkit-slider-thumb:hover {
   transform: scale(1.25);
 }
-input[type="range"]::-moz-range-thumb {
-  width: 12px; height: 12px;
+input[type='range']::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
   background: var(--ab-accent);
   border: none;

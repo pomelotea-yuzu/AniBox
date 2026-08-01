@@ -4,7 +4,10 @@
 import { useRef, useState, useEffect } from 'react'
 import { VideoProcessor, type Preset } from '../components/VideoProcessor'
 
-export function useEnhancement(filePath: string, videoRef: React.RefObject<HTMLVideoElement | null>) {
+export function useEnhancement(
+  filePath: string,
+  videoRef: React.RefObject<HTMLVideoElement | null>,
+) {
   const [enhanceEnabled, setEnhanceEnabled] = useState(false)
   const [enhancePreset, setEnhancePreset] = useState<Preset>('balanced')
   const [abCompare, setAbCompare] = useState(false)
@@ -14,8 +17,12 @@ export function useEnhancement(filePath: string, videoRef: React.RefObject<HTMLV
   // ref 版状态，供 filePath effect 换集时读取
   const enhanceEnabledRef = useRef(false)
   const enhancePresetRef = useRef<Preset>('balanced')
-  useEffect(() => { enhanceEnabledRef.current = enhanceEnabled }, [enhanceEnabled])
-  useEffect(() => { enhancePresetRef.current = enhancePreset }, [enhancePreset])
+  useEffect(() => {
+    enhanceEnabledRef.current = enhanceEnabled
+  }, [enhanceEnabled])
+  useEffect(() => {
+    enhancePresetRef.current = enhancePreset
+  }, [enhancePreset])
 
   // 处理器生命周期：创建/销毁
   useEffect(() => {
@@ -58,8 +65,15 @@ export function useEnhancement(filePath: string, videoRef: React.RefObject<HTMLV
   }, [abCompare])
 
   return {
-    enhanceEnabled, enhancePreset, abCompare, enhanceCanvasRef, processorRef,
-    setEnhanceEnabled, setEnhancePreset, setAbCompare,
-    enhanceEnabledRef, enhancePresetRef
+    enhanceEnabled,
+    enhancePreset,
+    abCompare,
+    enhanceCanvasRef,
+    processorRef,
+    setEnhanceEnabled,
+    setEnhancePreset,
+    setAbCompare,
+    enhanceEnabledRef,
+    enhancePresetRef,
   }
 }

@@ -7,13 +7,15 @@ import { titleSimilarity, SIMILARITY_THRESHOLD as MERGE_THRESHOLD, VIDEO_EXTS } 
  * 非番剧子目录模式（即使含视频也不作为独立系列）
  * 这些目录中的视频属于父系列的附赠内容
  */
-const NON_SERIES_DIR_PATTERNS = /^(PV|PVs?|menu|menus?|特典映像?|映像特典?|メニュー|SPs?|NCOP|NCED|CM|creditless|ノンクレジット|イベント|予告|CDs?|Scans?|Fonts?)$/i
+const NON_SERIES_DIR_PATTERNS =
+  /^(PV|PVs?|menu|menus?|特典映像?|映像特典?|メニュー|SPs?|NCOP|NCED|CM|creditless|ノンクレジット|イベント|予告|CDs?|Scans?|Fonts?)$/i
 
 /**
  * BD 压制组文件夹名模式（以 [压制组名] 开头）
  * 这类文件夹名缺乏语义标题，需要向上回退取父目录名
  */
-const BD_FOLDER_RE = /^\[(?:VCB-Studio|DBD-Raws|Moozzi2|UHA-WINGS|Airota|Nekomoe\s*kissaten|DMG|LoliHouse|BeanSub|FZSD|XKsub|KTXP|orion\s*origin|Sakurato|Comicat|Romanticat|T\.H\.X|YUI-7)/i
+const BD_FOLDER_RE =
+  /^\[(?:VCB-Studio|DBD-Raws|Moozzi2|UHA-WINGS|Airota|Nekomoe\s*kissaten|DMG|LoliHouse|BeanSub|FZSD|XKsub|KTXP|orion\s*origin|Sakurato|Comicat|Romanticat|T\.H\.X|YUI-7)/i
 
 /**
  * 从 BD 压制组文件夹名中提取有意义的标题
@@ -35,7 +37,10 @@ function extractTitleFromBDFolder(name: string): string {
   // 去掉纯数字集数范围标签 [01-06] [12-22]
   s = s.replace(/\s*\[\d{1,3}[-~～]\d{1,3}\]/g, '')
   // 去掉描述性标签（正片+特典映像、TV + SP 等，不含中文或字母的纯技术描述）
-  s = s.replace(/\s*\[(?:正片[+＋]特典映像?|TV\s*[+＋]\s*SP|SP|OVA|特典映像?|映像特典?|メニュー)\]/gi, '')
+  s = s.replace(
+    /\s*\[(?:正片[+＋]特典映像?|TV\s*[+＋]\s*SP|SP|OVA|特典映像?|映像特典?|メニュー)\]/gi,
+    '',
+  )
   // 如果去除完后仍然有方括号，提取第一个方括号内的内容作为标题
   const firstBracket = s.match(/\[([^\]]+)\]/)
   if (firstBracket) {
@@ -68,9 +73,15 @@ const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif'])
 
 /** 封面图优先文件名（按优先级排列） */
 const COVER_NAMES = [
-  'cover', 'poster', 'folder',
-  'Cover', 'Poster', 'Folder',
-  'COVER', 'POSTER', 'FOLDER'
+  'cover',
+  'poster',
+  'folder',
+  'Cover',
+  'Poster',
+  'Folder',
+  'COVER',
+  'POSTER',
+  'FOLDER',
 ]
 
 export interface EpisodeInfo {
@@ -140,8 +151,16 @@ function parseEpisodeNumber(fileName: string): number {
  */
 function inferSeason(folderName: string): number {
   const chineseNums: Record<string, number> = {
-    '一': 1, '二': 2, '三': 3, '四': 4, '五': 5,
-    '六': 6, '七': 7, '八': 8, '九': 9, '十': 10
+    一: 1,
+    二: 2,
+    三: 3,
+    四: 4,
+    五: 5,
+    六: 6,
+    七: 7,
+    八: 8,
+    九: 9,
+    十: 10,
   }
 
   // 中文: 第X季
@@ -152,9 +171,10 @@ function inferSeason(folderName: string): number {
   }
 
   // 英文: Season 2 / S2 / 2nd Season
-  const en = folderName.match(/Season\s*(\d+)/i)
-    || folderName.match(/\bS(\d+)\b/i)
-    || folderName.match(/(\d+)(?:st|nd|rd|th)\s*Season/i)
+  const en =
+    folderName.match(/Season\s*(\d+)/i) ||
+    folderName.match(/\bS(\d+)\b/i) ||
+    folderName.match(/(\d+)(?:st|nd|rd|th)\s*Season/i)
   if (en) {
     const num = parseInt(en[1], 10)
     if (num > 0) return num
@@ -219,8 +239,12 @@ function mergeSimilarSeries(seriesList: SeriesInfo[]): SeriesInfo[] {
           // 优先保留有封面的
           coverPath: base.coverPath || other.coverPath,
           // 如果任一为 movie/ova，优先用非 tv 类型
-          seriesType: base.seriesType !== 'tv' ? base.seriesType
-            : other.seriesType !== 'tv' ? other.seriesType : 'tv'
+          seriesType:
+            base.seriesType !== 'tv'
+              ? base.seriesType
+              : other.seriesType !== 'tv'
+                ? other.seriesType
+                : 'tv',
         }
         used.add(other.folderPath)
       }
@@ -229,7 +253,12 @@ function mergeSimilarSeries(seriesList: SeriesInfo[]): SeriesInfo[] {
     // 去重并排序
     const seen = new Set<string>()
     base.episodes = base.episodes
-      .filter(e => { const k = e.filePath; if (seen.has(k)) return false; seen.add(k); return true })
+      .filter((e) => {
+        const k = e.filePath
+        if (seen.has(k)) return false
+        seen.add(k)
+        return true
+      })
       .sort((a, b) => a.epNumber - b.epNumber)
 
     merged.push(base)
@@ -242,7 +271,8 @@ function mergeSimilarSeries(seriesList: SeriesInfo[]): SeriesInfo[] {
  * 清理文件夹名中的追番状态前缀
  * "完结 已追 春夏秋冬代行者 春之舞" → "春夏秋冬代行者 春之舞"
  */
-const STATUS_PREFIXES = /^(?:完结|已?完结|已?追|未?追|在追|在播|未播|想追|想补|弃番|搁置|看过|已看|未看|没看|待看|补番)\s*/
+const STATUS_PREFIXES =
+  /^(?:完结|已?完结|已?追|未?追|在追|在播|未播|想追|想补|弃番|搁置|看过|已看|未看|没看|待看|补番)\s*/
 
 /** 数字编号前缀：1、 2、 1. 01- 等手动排序编号 */
 const NUMERIC_PREFIX = /^\d{1,2}[、，,.\-－]\s*/
@@ -286,12 +316,14 @@ function findCoverImage(dir: string, entries: string[]): string | undefined {
         return join(aniboxDir, entry)
       }
     }
-  } catch { /* .anibox/ 不存在或无权限 */ }
+  } catch {
+    /* .anibox/ 不存在或无权限 */
+  }
 
   // 回退：在根目录找命名匹配的
   for (const name of COVER_NAMES) {
     for (const ext of IMAGE_EXTS) {
-      const candidate = entries.find(e => {
+      const candidate = entries.find((e) => {
         const base = e.replace(/\.[^.]+$/, '').toLowerCase()
         return base === name.toLowerCase() && extname(e).toLowerCase() === ext
       })
@@ -329,7 +361,7 @@ export function scanSeries(rootPath: string): SeriesInfo[] {
 
     // 收集当前目录的视频文件
     const videoFiles: string[] = []
-    const seenInodes = new Set<number>()  // 去重符号链接/硬链接
+    const seenInodes = new Set<number>() // 去重符号链接/硬链接
 
     for (const entry of entries) {
       const fullPath = join(dir, entry)
@@ -351,7 +383,12 @@ export function scanSeries(rootPath: string): SeriesInfo[] {
 
       if (lst.isDirectory()) {
         // 跳过隐藏文件夹和系统文件夹
-        if (entry.startsWith('.') || entry === '$RECYCLE.BIN' || entry === 'System Volume Information') continue
+        if (
+          entry.startsWith('.') ||
+          entry === '$RECYCLE.BIN' ||
+          entry === 'System Volume Information'
+        )
+          continue
         // 跳过非番剧子目录（PV/menu/特典映像/SPs/CDs/Scans/Fonts 等）
         if (isNonSeriesDir(entry)) continue
         walk(fullPath, depth + 1)
@@ -410,9 +447,12 @@ export function scanSeries(rootPath: string): SeriesInfo[] {
           title,
           folderPath,
           season: inferSeason(rawTitle),
-          seriesType: inferSeriesType(rawTitle, videoFiles.map(f => basename(f))),
+          seriesType: inferSeriesType(
+            rawTitle,
+            videoFiles.map((f) => basename(f)),
+          ),
           episodes: [],
-          coverPath
+          coverPath,
         })
       }
 
@@ -427,10 +467,12 @@ export function scanSeries(rootPath: string): SeriesInfo[] {
         const epNumber = parseEpisodeNumber(fileName)
         const subtitleTracks = findSubtitles(filePath)
         // 避免重复添加
-        if (!series.episodes.some(e => e.filePath === filePath)) {
+        if (!series.episodes.some((e) => e.filePath === filePath)) {
           series.episodes.push({
-            fileName, filePath, epNumber,
-            subtitleTracks: subtitleTracks.length > 0 ? subtitleTracks : undefined
+            fileName,
+            filePath,
+            epNumber,
+            subtitleTracks: subtitleTracks.length > 0 ? subtitleTracks : undefined,
           })
         }
       }
@@ -460,16 +502,25 @@ export function scanSeries(rootPath: string): SeriesInfo[] {
 export function discoverAnimeRoots(basePath: string): string[] {
   const roots: string[] = []
   let entries: string[]
-  try { entries = readdirSync(basePath) } catch { return roots }
+  try {
+    entries = readdirSync(basePath)
+  } catch {
+    return roots
+  }
 
   for (const entry of entries) {
     // 跳过系统和隐藏目录
-    if (entry.startsWith('.') || entry === '$RECYCLE.BIN' || entry === 'System Volume Information') continue
-    if (entry === '种子备份') continue  // 常见的非番剧目录
+    if (entry.startsWith('.') || entry === '$RECYCLE.BIN' || entry === 'System Volume Information')
+      continue
+    if (entry === '种子备份') continue // 常见的非番剧目录
 
     const fullPath = join(basePath, entry)
     let lst
-    try { lst = lstatSync(fullPath) } catch { continue }
+    try {
+      lst = lstatSync(fullPath)
+    } catch {
+      continue
+    }
     if (lst.isSymbolicLink() || !lst.isDirectory()) continue
 
     // 快速探测：看这个目录下是否有番剧特征
@@ -494,7 +545,11 @@ function scoreAnimeDirectory(dir: string, depth: number = 0, maxDepth: number = 
   if (depth > maxDepth) return 0
 
   let entries: string[]
-  try { entries = readdirSync(dir) } catch { return 0 }
+  try {
+    entries = readdirSync(dir)
+  } catch {
+    return 0
+  }
 
   let score = 0
   let videoCount = 0
@@ -502,7 +557,8 @@ function scoreAnimeDirectory(dir: string, depth: number = 0, maxDepth: number = 
 
   for (const entry of entries) {
     const fullPath = join(dir, entry)
-    if (entry.startsWith('.') || entry === '$RECYCLE.BIN' || entry === 'System Volume Information') continue
+    if (entry.startsWith('.') || entry === '$RECYCLE.BIN' || entry === 'System Volume Information')
+      continue
     if (isNonSeriesDir(entry)) continue
 
     try {
@@ -517,7 +573,9 @@ function scoreAnimeDirectory(dir: string, depth: number = 0, maxDepth: number = 
           videoCount++
         }
       }
-    } catch { continue }
+    } catch {
+      continue
+    }
   }
 
   if (videoCount >= 5) score += 3
@@ -527,7 +585,7 @@ function scoreAnimeDirectory(dir: string, depth: number = 0, maxDepth: number = 
   else if (subWithVideos >= 1) score += 1
 
   // 子目录名是年份/季度的模式 → 很强的番剧信号
-  const yearSeasonCount = entries.filter(e => /\d{2}年\d{1,2}月新番/.test(e)).length
+  const yearSeasonCount = entries.filter((e) => /\d{2}年\d{1,2}月新番/.test(e)).length
   if (yearSeasonCount >= 2) score += 3
 
   return score

@@ -39,13 +39,16 @@ function getModelCacheDir(): string {
  */
 export async function loadModel(onProgress?: (msg: string) => void): Promise<boolean> {
   if (modelReady) return true
-  if (loadError) { onProgress?.(`模型加载失败: ${loadError}`); return false }
+  if (loadError) {
+    onProgress?.(`模型加载失败: ${loadError}`)
+    return false
+  }
   if (modelLoading) {
     // 等待加载完成
     for (let i = 0; i < 60; i++) {
       if (modelReady) return true
       if (loadError) return false
-      await new Promise(r => setTimeout(r, 1000))
+      await new Promise((r) => setTimeout(r, 1000))
     }
     return false
   }
@@ -77,7 +80,7 @@ export async function loadModel(onProgress?: (msg: string) => void): Promise<boo
         } else if (progress?.status === 'loading') {
           onProgress?.('加载模型中...')
         }
-      }
+      },
     })
 
     modelReady = true
@@ -115,7 +118,10 @@ export async function translateEnToZh(text: string): Promise<string> {
     const translated: string[] = []
 
     for (const seg of segments) {
-      if (!seg.trim()) { translated.push(seg); continue }
+      if (!seg.trim()) {
+        translated.push(seg)
+        continue
+      }
       // 如果段落已经大部分是中文，跳过
       const segCn = (seg.match(/[\u4e00-\u9fff]/g) || []).length
       if (segCn / seg.length > 0.5) {
@@ -170,7 +176,10 @@ function splitText(text: string, maxLen: number): string[] {
  * 获取翻译引擎状态
  */
 export function getTranslateStatus(): {
-  ready: boolean; loading: boolean; error: string | null; modelName: string
+  ready: boolean
+  loading: boolean
+  error: string | null
+  modelName: string
 } {
   return {
     ready: modelReady,

@@ -13,9 +13,13 @@ export function useAudio(filePath: string) {
   const compressorRef = useRef<DynamicsCompressorNode | null>(null)
 
   const audioDelayRef = useRef(0)
-  useEffect(() => { audioDelayRef.current = audioDelay }, [audioDelay])
+  useEffect(() => {
+    audioDelayRef.current = audioDelay
+  }, [audioDelay])
   const volumeNormRef = useRef(false)
-  useEffect(() => { volumeNormRef.current = volumeNormalization }, [volumeNormalization])
+  useEffect(() => {
+    volumeNormRef.current = volumeNormalization
+  }, [volumeNormalization])
 
   // —— 创建 AudioContext ——
   const ensureAudioContext = useCallback((video: HTMLVideoElement): AudioContext | null => {
@@ -39,8 +43,20 @@ export function useAudio(filePath: string) {
     const source = audioSourceRef.current
     if (!ctx || !source) return
 
-    if (delayNodeRef.current) { try { delayNodeRef.current.disconnect() } catch { /* ok */ } }
-    if (compressorRef.current) { try { compressorRef.current.disconnect() } catch { /* ok */ } }
+    if (delayNodeRef.current) {
+      try {
+        delayNodeRef.current.disconnect()
+      } catch {
+        /* ok */
+      }
+    }
+    if (compressorRef.current) {
+      try {
+        compressorRef.current.disconnect()
+      } catch {
+        /* ok */
+      }
+    }
     source.disconnect()
 
     let lastNode: AudioNode = source
@@ -82,7 +98,9 @@ export function useAudio(filePath: string) {
         if (compressorRef.current) compressorRef.current.disconnect()
         audioSourceRef.current?.disconnect()
         audioSourceRef.current?.connect(audioCtxRef.current.destination)
-      } catch { /* ok */ }
+      } catch {
+        /* ok */
+      }
     }
   }, [audioDelay, volumeNormalization, updateAudioChain])
 
@@ -101,7 +119,9 @@ export function useAudio(filePath: string) {
           if (compressorRef.current) compressorRef.current.disconnect()
           if (audioSourceRef.current) audioSourceRef.current.disconnect()
           audioCtxRef.current.close()
-        } catch { /* ok */ }
+        } catch {
+          /* ok */
+        }
         audioCtxRef.current = null
         audioSourceRef.current = null
         delayNodeRef.current = null
@@ -111,25 +131,41 @@ export function useAudio(filePath: string) {
   }, [filePath])
 
   // —— 外部可调用的延迟修改器 ——
-  const handleAudioDelayChange = useCallback((delayMs: number, video: HTMLVideoElement | null) => {
-    setAudioDelay(delayMs)
-    if (delayMs > 0 || volumeNormalization) {
-      if (video) ensureAudioContext(video)
-    }
-  }, [ensureAudioContext, volumeNormalization])
+  const handleAudioDelayChange = useCallback(
+    (delayMs: number, video: HTMLVideoElement | null) => {
+      setAudioDelay(delayMs)
+      if (delayMs > 0 || volumeNormalization) {
+        if (video) ensureAudioContext(video)
+      }
+    },
+    [ensureAudioContext, volumeNormalization],
+  )
 
-  const handleVolumeNormalizationToggle = useCallback((video: HTMLVideoElement | null) => {
-    setVolumeNormalization(prev => {
-      const next = !prev
-      if (next && video) ensureAudioContext(video)
-      return next
-    })
-  }, [ensureAudioContext])
+  const handleVolumeNormalizationToggle = useCallback(
+    (video: HTMLVideoElement | null) => {
+      setVolumeNormalization((prev) => {
+        const next = !prev
+        if (next && video) ensureAudioContext(video)
+        return next
+      })
+    },
+    [ensureAudioContext],
+  )
 
   return {
-    audioDelay, volumeNormalization, setAudioDelay, setVolumeNormalization,
-    audioCtxRef, audioSourceRef, delayNodeRef, compressorRef,
-    ensureAudioContext, updateAudioChain, handleAudioDelayChange,
-    handleVolumeNormalizationToggle, audioDelayRef, volumeNormRef
+    audioDelay,
+    volumeNormalization,
+    setAudioDelay,
+    setVolumeNormalization,
+    audioCtxRef,
+    audioSourceRef,
+    delayNodeRef,
+    compressorRef,
+    ensureAudioContext,
+    updateAudioChain,
+    handleAudioDelayChange,
+    handleVolumeNormalizationToggle,
+    audioDelayRef,
+    volumeNormRef,
   }
 }

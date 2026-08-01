@@ -8,83 +8,107 @@ import { hashPath } from './utils'
 const STORE_PATH = join(app.getPath('userData'), 'anibox-store.json')
 
 interface EpisodeRecord {
-  id: string          // hash(filePath)
-  seriesId: string    // hash(folderPath)
+  id: string // hash(filePath)
+  seriesId: string // hash(folderPath)
   epNumber: number
   fileName: string
   filePath: string
 }
 
 interface StoreData {
-  series: Record<string, {
-    id: string
-    title: string
-    folderPath: string
-    season: number
-    totalEps: number
-    status: string
-    addedAt: string
-    seriesType: string     // tv | ova | movie | special
-    coverPath?: string
-  }>
+  series: Record<
+    string,
+    {
+      id: string
+      title: string
+      folderPath: string
+      season: number
+      totalEps: number
+      status: string
+      addedAt: string
+      seriesType: string // tv | ova | movie | special
+      coverPath?: string
+    }
+  >
   episodes: Record<string, EpisodeRecord>
-  progress: Record<string, {
-    position: number
-    completed: number
-    updatedAt: string
-  }>
-  skipTimes: Record<string, {   // key = seriesId
-    opStart: number    // OP 开始时间（秒）
-    opEnd: number      // OP 结束时间（秒）
-    edStart: number    // ED 开始时间（秒）
-    edEnd: number      // ED 结束时间（秒）
-  }>
-  metadata: Record<string, {   // key = seriesId
-    title: string
-    titleCn: string
-    titleEn: string
-    synopsis: string
-    rating: number
-    genres: string[]
-    year: number
-    season: string
-    episodes: number
-    studio: string
-    staff: Array<{ role: string; name: string }>
-    coverUrl: string
-    anilistId: number
-    bangumiId: number
-  }>
+  progress: Record<
+    string,
+    {
+      position: number
+      completed: number
+      updatedAt: string
+    }
+  >
+  skipTimes: Record<
+    string,
+    {
+      // key = seriesId
+      opStart: number // OP 开始时间（秒）
+      opEnd: number // OP 结束时间（秒）
+      edStart: number // ED 开始时间（秒）
+      edEnd: number // ED 结束时间（秒）
+    }
+  >
+  metadata: Record<
+    string,
+    {
+      // key = seriesId
+      title: string
+      titleCn: string
+      titleEn: string
+      synopsis: string
+      rating: number
+      genres: string[]
+      year: number
+      season: string
+      episodes: number
+      studio: string
+      staff: Array<{ role: string; name: string }>
+      coverUrl: string
+      anilistId: number
+      bangumiId: number
+    }
+  >
   /** 音轨偏好：key = seriesId */
-  audioPrefs: Record<string, {
-    audioIndex: number       // 选择的音轨索引
-    audioDelay: number       // 音频延迟（毫秒）
-    language?: string        // 偏好音轨语言
-  }>
+  audioPrefs: Record<
+    string,
+    {
+      audioIndex: number // 选择的音轨索引
+      audioDelay: number // 音频延迟（毫秒）
+      language?: string // 偏好音轨语言
+    }
+  >
   /** 字幕样式设置（全局） */
   subtitleStyle: {
-    fontSize: number         // 字体大小(px)，默认 24
-    fontFamily: string       // 字体族
-    textColor: string        // 主字幕文字颜色 (#RRGGBB)
-    strokeColor: string      // 描边颜色
-    strokeWidth: number      // 描边宽度(px)
-    bgColor: string          // 背景颜色（带透明度）
-    position: 'bottom' | 'top'  // 字幕位置
-    secondaryFontSize: number   // 第二字幕字体大小
-    dualSubtitleGap: number     // 双语字幕间距(px)
+    fontSize: number // 字体大小(px)，默认 24
+    fontFamily: string // 字体族
+    textColor: string // 主字幕文字颜色 (#RRGGBB)
+    strokeColor: string // 描边颜色
+    strokeWidth: number // 描边宽度(px)
+    bgColor: string // 背景颜色（带透明度）
+    position: 'bottom' | 'top' // 字幕位置
+    secondaryFontSize: number // 第二字幕字体大小
+    dualSubtitleGap: number // 双语字幕间距(px)
   }
   /** 收藏的系列 ID 列表 */
   favorites: string[]
   /** 播放列表 */
   playlists: Array<{
-    id: string; name: string; seriesIds: string[]; createdAt: string
+    id: string
+    name: string
+    seriesIds: string[]
+    createdAt: string
   }>
   /** 扫描根目录列表（多根扫描） */
   scanRoots: string[]
 }
 
 let data: StoreData = {
-  series: {}, episodes: {}, progress: {}, skipTimes: {}, metadata: {},
+  series: {},
+  episodes: {},
+  progress: {},
+  skipTimes: {},
+  metadata: {},
   audioPrefs: {},
   subtitleStyle: {
     fontSize: 24,
@@ -95,11 +119,11 @@ let data: StoreData = {
     bgColor: 'rgba(0,0,0,0.5)',
     position: 'bottom',
     secondaryFontSize: 20,
-    dualSubtitleGap: 4
+    dualSubtitleGap: 4,
   },
   favorites: [],
   playlists: [],
-  scanRoots: []
+  scanRoots: [],
 }
 let loaded = false
 let storeReady = false
@@ -113,7 +137,10 @@ function rebuildSeriesEpIndex(): void {
   seriesEpIndex.clear()
   for (const [epId, ep] of Object.entries(data.episodes)) {
     let set = seriesEpIndex.get(ep.seriesId)
-    if (!set) { set = new Set(); seriesEpIndex.set(ep.seriesId, set) }
+    if (!set) {
+      set = new Set()
+      seriesEpIndex.set(ep.seriesId, set)
+    }
     set.add(epId)
   }
 }
@@ -145,16 +172,30 @@ function ensureReady(): void {
       const rawContent = readFileSync(STORE_PATH, 'utf-8')
       writeFileSync(backupPath, rawContent)
       console.warn('[AniBox] Corrupted store backed up to:', backupPath)
-    } catch { /* 连备份都失败就没办法了 */ }
+    } catch {
+      /* 连备份都失败就没办法了 */
+    }
     data = {
-      series: {}, episodes: {}, progress: {}, skipTimes: {}, metadata: {},
+      series: {},
+      episodes: {},
+      progress: {},
+      skipTimes: {},
+      metadata: {},
       audioPrefs: {},
       subtitleStyle: {
-        fontSize: 24, fontFamily: 'sans-serif', textColor: '#FFFFFF',
-        strokeColor: '#000000', strokeWidth: 2, bgColor: 'rgba(0,0,0,0.5)',
-        position: 'bottom', secondaryFontSize: 20, dualSubtitleGap: 4
+        fontSize: 24,
+        fontFamily: 'sans-serif',
+        textColor: '#FFFFFF',
+        strokeColor: '#000000',
+        strokeWidth: 2,
+        bgColor: 'rgba(0,0,0,0.5)',
+        position: 'bottom',
+        secondaryFontSize: 20,
+        dualSubtitleGap: 4,
       },
-      favorites: [], playlists: [], scanRoots: []
+      favorites: [],
+      playlists: [],
+      scanRoots: [],
     }
   }
   storeReady = true
@@ -171,7 +212,10 @@ function save(): void {
 
 /** 强制执行挂起的写入（供应用退出前调用） */
 export function flushStore(): void {
-  if (saveTimer) { clearTimeout(saveTimer); saveTimer = null }
+  if (saveTimer) {
+    clearTimeout(saveTimer)
+    saveTimer = null
+  }
   if (dirty) flushNow()
 }
 
@@ -201,7 +245,14 @@ function saveProgressNow(): void {
 
 // === Series ===
 
-export function upsertSeries(id: string, title: string, folderPath: string, season: number, seriesType?: string, coverPath?: string): void {
+export function upsertSeries(
+  id: string,
+  title: string,
+  folderPath: string,
+  season: number,
+  seriesType?: string,
+  coverPath?: string,
+): void {
   ensureReady()
   const existing = data.series[id]
   data.series[id] = {
@@ -213,7 +264,7 @@ export function upsertSeries(id: string, title: string, folderPath: string, seas
     status: existing?.status ?? 'watching',
     addedAt: existing?.addedAt ?? new Date().toISOString(),
     seriesType: seriesType || existing?.seriesType || 'tv',
-    coverPath: coverPath ?? existing?.coverPath
+    coverPath: coverPath ?? existing?.coverPath,
   }
   save()
 }
@@ -268,20 +319,26 @@ export function clearEpisodesForSeries(seriesId: string): void {
 }
 
 export function upsertEpisode(
-  id: string, seriesId: string, epNumber: number,
-  filePath: string, fileName: string
+  id: string,
+  seriesId: string,
+  epNumber: number,
+  filePath: string,
+  fileName: string,
 ): void {
   ensureReady()
   data.episodes[id] = { id, seriesId, epNumber, fileName, filePath }
   let set = seriesEpIndex.get(seriesId)
-  if (!set) { set = new Set(); seriesEpIndex.set(seriesId, set) }
+  if (!set) {
+    set = new Set()
+    seriesEpIndex.set(seriesId, set)
+  }
   set.add(id)
 }
 
 export function getEpisodesBySeries(seriesId: string): EpisodeRecord[] {
   ensureReady()
   return Object.values(data.episodes)
-    .filter(e => e.seriesId === seriesId)
+    .filter((e) => e.seriesId === seriesId)
     .sort((a, b) => a.epNumber - b.epNumber)
 }
 
@@ -293,7 +350,7 @@ export function saveProgress(filePath: string, position: number): void {
   data.progress[id] = {
     position,
     completed: position > 0 && data.progress[id]?.completed ? 1 : 0,
-    updatedAt: new Date().toISOString()
+    updatedAt: new Date().toISOString(),
   }
   saveProgressNow()
 }
@@ -346,8 +403,8 @@ export function getRecentProgress(limit: number = 10): Array<{
 
 export function getSeriesProgress(seriesId: string): { total: number; watched: number } {
   ensureReady()
-  const eps = Object.values(data.episodes).filter(e => e.seriesId === seriesId)
-  const watched = eps.filter(e => data.progress[e.id]?.completed === 1).length
+  const eps = Object.values(data.episodes).filter((e) => e.seriesId === seriesId)
+  const watched = eps.filter((e) => data.progress[e.id]?.completed === 1).length
   return { total: eps.length, watched }
 }
 
@@ -381,12 +438,25 @@ export function setSkipTimes(seriesId: string, times: SkipTimesData): void {
 
 // === Metadata ===
 
-export function setSeriesMetadata(seriesId: string, meta: {
-  title: string; titleCn: string; titleEn: string; synopsis: string
-  rating: number; genres: string[]; year: number; season: string
-  episodes: number; studio: string; staff: Array<{ role: string; name: string }>
-  coverUrl: string; anilistId: number; bangumiId: number
-}): void {
+export function setSeriesMetadata(
+  seriesId: string,
+  meta: {
+    title: string
+    titleCn: string
+    titleEn: string
+    synopsis: string
+    rating: number
+    genres: string[]
+    year: number
+    season: string
+    episodes: number
+    studio: string
+    staff: Array<{ role: string; name: string }>
+    coverUrl: string
+    anilistId: number
+    bangumiId: number
+  },
+): void {
   ensureReady()
   data.metadata[seriesId] = meta
   save()
@@ -404,7 +474,9 @@ export function loadDiskMetadata(folderPath: string): any | null {
     if (existsSync(metaFile)) {
       return JSON.parse(readFileSync(metaFile, 'utf-8'))
     }
-  } catch { /* file missing or corrupted */ }
+  } catch {
+    /* file missing or corrupted */
+  }
   return null
 }
 
@@ -444,7 +516,10 @@ export function getGlobalAudioPrefs(): { preferredLanguage: string } {
   let maxLang = 'ja'
   let maxCount = 0
   for (const [lang, count] of Object.entries(langCount)) {
-    if (count > maxCount) { maxCount = count; maxLang = lang }
+    if (count > maxCount) {
+      maxCount = count
+      maxLang = lang
+    }
   }
   return { preferredLanguage: maxLang }
 }
@@ -509,7 +584,10 @@ export function getPlaylists() {
 
 export function createPlaylist(name: string): string {
   ensureReady()
-  const id = createHash('md5').update(name + Date.now().toString()).digest('hex').substring(0, 8)
+  const id = createHash('md5')
+    .update(name + Date.now().toString())
+    .digest('hex')
+    .substring(0, 8)
   data.playlists.push({ id, name, seriesIds: [], createdAt: new Date().toISOString() })
   save()
   return id
@@ -517,13 +595,13 @@ export function createPlaylist(name: string): string {
 
 export function deletePlaylist(id: string): void {
   ensureReady()
-  data.playlists = data.playlists.filter(p => p.id !== id)
+  data.playlists = data.playlists.filter((p) => p.id !== id)
   save()
 }
 
 export function addToPlaylist(listId: string, seriesId: string): void {
   ensureReady()
-  const list = data.playlists.find(p => p.id === listId)
+  const list = data.playlists.find((p) => p.id === listId)
   if (list && !list.seriesIds.includes(seriesId)) {
     list.seriesIds.push(seriesId)
     save()
@@ -532,9 +610,9 @@ export function addToPlaylist(listId: string, seriesId: string): void {
 
 export function removeFromPlaylist(listId: string, seriesId: string): void {
   ensureReady()
-  const list = data.playlists.find(p => p.id === listId)
+  const list = data.playlists.find((p) => p.id === listId)
   if (list) {
-    list.seriesIds = list.seriesIds.filter(id => id !== seriesId)
+    list.seriesIds = list.seriesIds.filter((id) => id !== seriesId)
     save()
   }
 }
@@ -556,7 +634,7 @@ export function addScanRoot(root: string): void {
 
 export function removeScanRoot(root: string): void {
   ensureReady()
-  data.scanRoots = data.scanRoots.filter(r => r !== root)
+  data.scanRoots = data.scanRoots.filter((r) => r !== root)
   save()
 }
 
