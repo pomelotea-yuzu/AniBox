@@ -558,6 +558,35 @@ export default function Controls({
           </div>
         )}
 
+        {/* 弹幕开关 */}
+        <button
+          onClick={() => {
+            if (danmakuConfig?.enabled) {
+              onDanmakuConfigChange?.({ enabled: false })
+            } else if ((danmakuCount ?? 0) > 0) {
+              onDanmakuConfigChange?.({ enabled: true })
+            } else {
+              onDanmakuFetch?.()
+            }
+          }}
+          onContextMenu={(e) => {
+            e.preventDefault()
+            onDanmakuConfigChange?.({ enabled: false })
+          }}
+          className={`text-[10px] px-1 py-0.5 rounded transition-colors ${
+            danmakuConfig?.enabled ? 'text-anibox-accent' : 'text-white/25 hover:text-white/50'
+          }`}
+          title={
+            danmakuConfig?.enabled
+              ? `弹幕：开 (${danmakuCount ?? 0}条) · 右键关闭`
+              : (danmakuCount ?? 0) > 0
+                ? `弹幕：关 (${danmakuCount ?? 0}条)`
+                : '加载弹幕'
+          }
+        >
+          弹
+        </button>
+
         {/* 倍速选择 */}
         <div className="relative" ref={speedMenuRef}>
           <button
