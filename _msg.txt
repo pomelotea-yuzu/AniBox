@@ -1,3 +1,0 @@
-test: add Vitest unit tests
-
-27 tests passed

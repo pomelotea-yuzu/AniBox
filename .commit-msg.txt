@@ -1,7 +1,0 @@
-test: 引入 Vitest + 核心模块单元测试
-
-- Vitest 4.1: node 环境, v8 coverage
-- npm scripts: test / test:watch
-- utils 测试: 21 tests
-- store 测试: 6 tests
-- 27/27 passed
