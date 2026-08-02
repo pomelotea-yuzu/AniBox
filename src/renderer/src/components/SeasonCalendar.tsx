@@ -83,9 +83,6 @@ export default function SeasonCalendar({ onBack }: { onBack: () => void }) {
   // 详情弹窗状态
   const [detailAnime, setDetailAnime] = useState<AnimeDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
-  // 翻译状态
-  const [titlesTranslated, setTitlesTranslated] = useState(false)
-  const [translating, setTranslating] = useState(false)
 
   const fetchData = useCallback(async (force?: boolean) => {
     setLoading(true)
@@ -94,49 +91,19 @@ export default function SeasonCalendar({ onBack }: { onBack: () => void }) {
       const result = await window.electronAPI.seasonFetchTimeline(force)
       if (!result.ok) { setError(result.error || '加载失败'); return }
       setSeason(result.season || '')
-      // 初始标题用 native，后续异步翻译
       const raw = (result.anime || []).map((a: any) => ({
         ...a,
-        titleZh: a.title, // 初始值
+        titleZh: a.titleZh || a.title, // 优先 AI 翻译，兜底日文原名
       }))
       setAnime(raw)
       setFromCache(!!result.fromCache)
       setStale(!!result.stale)
-      setTitlesTranslated(false) // 重置翻��状态，触发新翻译
       if (force) setSelectedDay(-1)
     } catch (e: any) { setError(e.message || '网络错误') }
     finally { setLoading(false) }
   }, [])
 
   useEffect(() => { fetchData() }, [fetchData])
-
-  // 标题异步翻译
-  useEffect(() => {
-    if (anime.length === 0 || titlesTranslated) return
-    setTranslating(true)
-    ;(async () => {
-      try { await window.electronAPI.loadLocalModel() } catch {}
-      try { await window.electronAPI.translateJaModelLoad() } catch {}
-      const translated = await Promise.all(
-        anime.map(async (a) => {
-          let zh = ''
-          if (a.titleEnglish) {
-            try {
-              zh = await window.electronAPI.translateEnToZh(a.titleEnglish)
-              if (zh && zh !== a.titleEnglish) return { ...a, titleZh: zh }
-            } catch {}
-          }
-          try {
-            zh = await window.electronAPI.translateJaToZh(a.title)
-            if (zh && zh !== a.title) return { ...a, titleZh: zh }
-          } catch {}
-          return { ...a, titleZh: a.titleRomaji || a.titleEnglish || a.title }
-        })
-      )
-      setAnime(translated)
-      setTitlesTranslated(true)
-    })().finally(() => setTranslating(false))
-  }, [anime.length, titlesTranslated])
 
   // 按星期分组
   const groupedByDay = useMemo(() => {
@@ -166,14 +133,19 @@ export default function SeasonCalendar({ onBack }: { onBack: () => void }) {
       const r = await window.electronAPI.seasonFetchDetail(a.id)
       if (r.ok && r.detail) {
         const d = r.detail
-        // 翻译简介
+        console.log('[SeasonCalendar] detail raw desc:', d.description?.substring(0, 100))
+        // AI 翻译简介
         let descZh = d.description || ''
         if (descZh) {
           try {
-            descZh = await window.electronAPI.translateEnToZh(
-              descZh.replace(/<[^>]+>/g, '').substring(0, 800),
-            )
-          } catch { descZh = d.description || '' }
+            const cleaned = descZh.replace(/<[^>]+>/g, '').substring(0, 1000)
+            console.log('[SeasonCalendar] cleaned desc:', cleaned.substring(0, 100))
+            const aiResult = await window.electronAPI.aiTranslate(cleaned, 'auto', 'zh')
+            console.log('[SeasonCalendar] AI result:', aiResult?.substring(0, 100))
+            if (aiResult && aiResult !== cleaned) descZh = aiResult
+          } catch (e) { console.error('[SeasonCalendar] AI translate failed:', e); descZh = d.description || '' }
+        } else {
+          descZh = '暂无简介'
         }
         setDetailAnime({ ...d, descriptionZh: descZh })
       }

@@ -23,6 +23,7 @@ import {
 import { parseMP4Meta, detectAudioCodec } from './video-info'
 import { fetchMetadataForSeries, fetchMetadataBatch, validateBatchTitles } from './metadata-fetcher'
 import { loadModel, getTranslateStatus, loadJaModel, translateJaToZh, translateEnToZh } from './local-translate'
+import { configureAI, translateWithAI, getAIKey } from './ai-translate'
 import {
   setWhisperConfig,
   isWhisperAvailable,
@@ -971,6 +972,14 @@ function registerIpcHandlers(): void {
     return await translateEnToZh(text)
   })
 
+  // AI 翻译
+  ipcMain.handle('ai:configure', (_e, key: string) => { configureAI(key); return true })
+  ipcMain.handle('ai:getKey', () => getAIKey())
+  ipcMain.handle('ai:translate', async (_e, text: string, from: string, to: string) => {
+    try { return await translateWithAI(text, from, to) }
+    catch (e: any) { return text }
+  })
+
   // AniList 番剧详情
   ipcMain.handle('season:fetchDetail', async (_e, anilistId: number) => {
     try {
@@ -1065,24 +1074,23 @@ function registerIpcHandlers(): void {
         } : null,
       }))
 
-      // 同步翻译标题（主进程内完成，避免 N 次 IPC 往返）
-      try { await loadModel() } catch {}
-      try { await loadJaModel() } catch {}
-      for (const a of anime) {
-        // 先试 EN→ZH
-        if (a.titleEnglish) {
-          try {
-            const zh = await translateEnToZh(a.titleEnglish)
-            if (zh && zh !== a.titleEnglish) { a.titleZh = zh; continue }
-          } catch {}
+      // AI 标题翻译（并发批量，有 Key 时用 DeepSeek）
+      if (getAIKey()) {
+        console.log('[AniBox] Starting AI title translation for', anime.length, 'titles')
+        const BATCH = 10 // 并发数
+        let done = 0
+        for (let i = 0; i < anime.length; i += BATCH) {
+          const batch = anime.slice(i, i + BATCH)
+          await Promise.all(batch.map(async (a) => {
+            try {
+              const zh = await translateWithAI(a.title, 'ja', 'zh')
+              if (zh && zh !== a.title) { a.titleZh = zh }
+            } catch { a.titleZh = a.titleRomaji || a.titleEnglish || a.title }
+          }))
+          done += batch.length
+          console.log(`[AniBox] AI translate progress: ${done}/${anime.length}`)
         }
-        // 再试 JA→ZH
-        try {
-          const zh = await translateJaToZh(a.title)
-          if (zh && zh !== a.title) { a.titleZh = zh; continue }
-        } catch {}
-        // 兜底
-        a.titleZh = a.titleRomaji || a.titleEnglish || a.title
+        console.log('[AniBox] AI title translation done')
       }
 
       const payload = { season: seasonLabel, anime }

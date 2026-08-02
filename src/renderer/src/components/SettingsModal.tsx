@@ -38,7 +38,7 @@ const SHORTCUTS = [
   { key: '?', desc: '快捷键帮助' },
 ]
 
-type Tab = 'theme' | 'subtitle' | 'playback' | 'shortcuts' | 'about'
+type Tab = 'theme' | 'subtitle' | 'playback' | 'shortcuts' | 'api' | 'about'
 
 export default function SettingsModal({ visible, onClose }: SettingsModalProps) {
   const { theme, themeList, setTheme } = useTheme()
@@ -63,6 +63,10 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
   const [autoNextEp, setAutoNextEp] = useState(true)
   const [saveProgressInterval, setSaveProgressInterval] = useState(5)
 
+  // AI API
+  const [apiKey, setApiKey] = useState('')
+  const [apiKeySaved, setApiKeySaved] = useState(false)
+
   // 加载当前设置
   useEffect(() => {
     if (!visible) return
@@ -71,6 +75,10 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
       .then((s) => {
         if (s) setSubStyle((prev) => ({ ...prev, ...s }))
       })
+      .catch(() => {})
+    window.electronAPI
+      .getAIKey()
+      .then((k) => { if (k) setApiKey(k) })
       .catch(() => {})
   }, [visible])
 
@@ -101,6 +109,7 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
     { key: 'subtitle', label: '字幕' },
     { key: 'playback', label: '播放' },
     { key: 'shortcuts', label: '快捷键' },
+    { key: 'api', label: 'API' },
     { key: 'about', label: '关于' },
   ]
 
@@ -343,6 +352,45 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
                   <span className="text-[11px] text-anibox-text-muted">{s.desc}</span>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* === API === */}
+          {tab === 'api' && (
+            <div className="space-y-4">
+              <p className="text-xs text-anibox-text-muted">
+                配置 DeepSeek API Key 后，新番标题和番剧简介将使用 AI 翻译（日→中）。<br />
+                Key 仅存储在本地，不会上传。<br />
+                <a href="https://platform.deepseek.com/api_keys" target="_blank" className="text-anibox-accent hover:underline">获取 Key →</a>
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="password"
+                  value={apiKey}
+                  onChange={(e) => { setApiKey(e.target.value); setApiKeySaved(false) }}
+                  placeholder="sk-xxxxxxxxxxxxxxxx"
+                  className="flex-1 px-3 py-2 text-sm bg-anibox-bg border border-anibox-border rounded-lg text-anibox-text placeholder:text-anibox-text-muted/50 focus:outline-none focus:border-anibox-accent"
+                />
+                <button
+                  onClick={async () => {
+                    await window.electronAPI.configureAI(apiKey.trim())
+                    setApiKeySaved(true)
+                    setTimeout(() => setApiKeySaved(false), 2000)
+                  }}
+                  className={`px-4 py-2 text-sm rounded-lg transition-colors ${
+                    apiKeySaved
+                      ? 'bg-emerald-500/20 text-emerald-400'
+                      : 'bg-anibox-accent text-white hover:bg-anibox-accent/80'
+                  }`}
+                >
+                  {apiKeySaved ? '✓ 已保存' : '保存'}
+                </button>
+              </div>
+              {apiKey && (
+                <p className="text-[10px] text-anibox-text-muted">
+                  当前 Key: {apiKey.substring(0, 8)}...{apiKey.substring(apiKey.length - 4)}
+                </p>
+              )}
             </div>
           )}
 

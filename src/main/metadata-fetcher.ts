@@ -5,7 +5,7 @@ import type { IncomingMessage } from 'http'
 import { RequestOptions } from 'http'
 import { VIDEO_EXTS, extractTitleFromFilename, extractRomajiFromFolder, levenshtein } from './utils'
 import { translateLocal, translateSynopsisLocal, translateStaffRoles } from './anime-dict'
-import { translateEnToZh, loadModel, getTranslateStatus } from './local-translate'
+import { translateWithAI } from './ai-translate'
 
 const UA = 'AniBox/0.1 (https://github.com/anibox; local anime manager)'
 const TIMEOUT = 15000
@@ -535,21 +535,21 @@ export async function fetchMetadataForSeries(
       const localRatio = chineseRatio(metadata.synopsis)
       console.log(`[AniBox] Local dict: ${(localRatio * 100).toFixed(0)}% Chinese`)
 
-      // 第二步：使用翻译模型完成完整翻译
+      // 第二步：使用 AI 翻译模型完成完整翻译
       if (localRatio < 0.5) {
         try {
-          onStatus?.('加载翻译模型...')
-          console.log(`[AniBox] Starting model translation for: ${title}`)
-          const modelTranslated = await translateEnToZh(origSynopsis)
-          const modelRatio = chineseRatio(modelTranslated)
-          if (modelRatio > localRatio) {
-            console.log(`[AniBox] Model translation: ${(modelRatio * 100).toFixed(0)}% Chinese`)
-            metadata.synopsis = modelTranslated
+          onStatus?.('AI 翻译简介...')
+          console.log(`[AniBox] Starting AI synopsis translation for: ${title}`)
+          const aiTranslated = await translateWithAI(origSynopsis, 'en', 'zh')
+          const aiRatio = chineseRatio(aiTranslated)
+          if (aiRatio > localRatio) {
+            console.log(`[AniBox] AI translation: ${(aiRatio * 100).toFixed(0)}% Chinese`)
+            metadata.synopsis = aiTranslated
           } else {
-            console.log(`[AniBox] Model translation not better, keeping local result`)
+            metadata.synopsis = metadata.synopsis // keep local dict result
           }
         } catch (err: any) {
-          console.warn(`[AniBox] Model translation failed for ${title}:`, err?.message)
+          console.warn(`[AniBox] AI synopsis translation failed for ${title}:`, err?.message)
         }
       }
     }

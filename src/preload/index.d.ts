@@ -201,6 +201,10 @@ export interface ElectronAPI {
   translateJaModelLoad: () => Promise<boolean>
   translateJaToZh: (text: string) => Promise<string>
   translateEnToZh: (text: string) => Promise<string>
+  // AI 翻译
+  configureAI: (key: string) => Promise<boolean>
+  getAIKey: () => Promise<string | null>
+  aiTranslate: (text: string, from: string, to: string) => Promise<string>
   syncStatusToTracker: (
     anilistId: number,
     bangumiId: number,

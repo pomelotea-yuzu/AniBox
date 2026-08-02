@@ -404,6 +404,12 @@ const electronAPI = {
   translateJaToZh: (text: string): Promise<string> => ipcRenderer.invoke('translate:jaToZh', text),
   translateEnToZh: (text: string): Promise<string> => ipcRenderer.invoke('translate:enToZh', text),
 
+  // AI 翻译 (DeepSeek)
+  configureAI: (key: string): Promise<boolean> => ipcRenderer.invoke('ai:configure', key),
+  getAIKey: (): Promise<string | null> => ipcRenderer.invoke('ai:getKey'),
+  aiTranslate: (text: string, from: string, to: string): Promise<string> =>
+    ipcRenderer.invoke('ai:translate', text, from, to),
+
   // 追番同步
   syncStatusToTracker: (
     anilistId: number,
