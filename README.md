@@ -9,7 +9,8 @@
 - **智能发现** — 自动扫描常用位置的番剧文件夹，评分制筛选
 - **海报墙** — 封面展示、搜索筛选、类型过滤、多种排序
 - **元数据刮削** — AniList GraphQL + Bangumi v0 REST 双源，自动获取中文标题、简介、评分、Staff、类型标签
-- **本地翻译** — 内置 Helsinki-NLP/opus-mt-en-zh 模型（~114MB），离线 EN→ZH 翻译；搭配 200+ 动漫短语词典 + 130+ 句式模板
+- **新番时间表** — AniList 季度新番数据，按星期分组展示，评分/播出倒计时/类型标签，内嵌详情弹窗
+- **本地翻译** — 内置 opus-mt-en-zh + opus-mt-ja-en 双模型，链式 JA→EN→ZH 日语翻译；DirectML GPU 加速（RTX 3060+）
 - **标题校验** — AniList 在线校验文件夹标题，给出建议
 - **追番状态** — 在看/已追/弃番
 - **收藏 & 播放列表** — 收藏番剧，自定义播放列表
@@ -66,7 +67,8 @@
 | 存储 | JSON 文件（anibox-store.json，debounce 写入 + 原子保存） |
 | 扫描 | Node.js fs 递归 + 智能发现评分算法 |
 | 元数据 | AniList GraphQL + Bangumi v0 REST API |
-| 翻译模型 | Helsinki-NLP/opus-mt-en-zh（ONNX Runtime, @xenova/transformers） |
+| 翻译模型 | opus-mt-en-zh + opus-mt-ja-en（ONNX Runtime, @xenova/transformers, DirectML GPU） |
+| GPU 加速 | 需 onnxruntime-node@1.20.1（含 DirectML.dll），`package.json` overrides 强制统一版本 |
 | 配色主题 | React Context + CSS 变量桥接，5 套莫兰迪色系 |
 | 打包 | electron-builder |
 | 测试 | Vitest 4.1 |
@@ -105,8 +107,9 @@ F:/收藏/
 cd anibox
 npm install
 
-# 预下载翻译模型（可选，否则首次获取番剧信息时自动下载）
-node scripts/download-model.mjs
+# 预下载翻译模型（可选，否则首次使用翻译时自动下载）
+node scripts/download-model.mjs          # EN→ZH (~114MB)
+node scripts/download-ja-model.mjs       # JA→EN (~110MB)
 
 # 开发
 npm run dev
@@ -114,6 +117,16 @@ npm run dev
 # 打包
 npm run package
 ```
+
+### GPU 加速
+
+翻译模型可通过 DirectML 在 NVIDIA/AMD GPU 上加速推理。已通过 RTX 3060 测试。
+
+`npm install` 后确保：
+1. `onnxruntime-node@1.20.1` 被所有依赖使用（`package.json` overrides 已强制）
+2. 删除了 `node_modules/@xenova/transformers/node_modules/onnxruntime-node/`（旧版嵌套）
+
+> **提示**：若 `npm install` 报 safe-delete 错误，用 `npm install --prefer-offline` 重试。
 
 ### 自动化检查
 
@@ -130,4 +143,4 @@ npm run package
 
 ---
 
-*最后更新: 2026-08-01*
+*最后更新: 2026-08-02*
