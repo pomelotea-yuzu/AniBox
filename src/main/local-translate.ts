@@ -1,12 +1,6 @@
 /**
- * 本地翻译引擎 — 基于 Helsinki-NLP/opus-mt-en-zh 模型
- *
- * 使用 @xenova/transformers 在 Electron 主进程中运行 ONNX 推理
- * 模型约 300MB，缓存到项目目录下的 models/ 文件夹
- *
- * 策略：
- *   1. 句长 < 200 → 直接翻译
- *   2. 句长 > 200 → 分段翻译（按句号/换行拆分，保持上下文）
+ * 本地翻译引擎 — 基于 Helsinki-NLP/opus-mt 系列
+ * EN→ZH: Xenova/opus-mt-en-zh | JA→EN: Xenova/opus-mt-ja-en (链式 JA→EN→ZH)
  */
 
 import { app } from 'electron'
@@ -19,6 +13,12 @@ let modelReady = false
 let loadError: string | null = null
 
 const MODEL_NAME = 'Xenova/opus-mt-en-zh'
+const JA_MODEL_NAME = 'Xenova/opus-mt-ja-en'
+
+let jaPipeline: any = null
+let jaModelLoading = false
+let jaModelReady = false
+let jaLoadError: string | null = null
 
 function getModelCacheDir(): string {
   // 优先存到项目目录（便携），不可写时回退到 userData
@@ -59,6 +59,12 @@ export async function loadModel(onProgress?: (msg: string) => void): Promise<boo
   try {
     // 动态导入，避免未安装时的启动崩溃
     const { pipeline: pipe, env } = await import('@xenova/transformers')
+
+    // 诊断：确认 ONNX Runtime 后端和 GPU 支持
+    try {
+      const ort = await import('onnxruntime-node')
+      console.log('[AniBox] ONNX backends:', JSON.stringify(ort.listSupportedBackends?.()))
+    } catch {}
 
     // 设置模型缓存目录
     env.cacheDir = getModelCacheDir()
@@ -148,6 +154,57 @@ export async function translateEnToZh(text: string): Promise<string> {
   }
 }
 
+// ========= JA→EN 模型 =========
+
+export async function loadJaModel(onProgress?: (msg: string) => void): Promise<boolean> {
+  if (jaModelReady) return true
+  if (jaLoadError) { onProgress?.(`日文模型加载失败: ${jaLoadError}`); return false }
+  if (jaModelLoading) {
+    for (let i = 0; i < 60; i++) { if (jaModelReady) return true; if (jaLoadError) return false; await new Promise((r) => setTimeout(r, 1000)) }
+    return false
+  }
+  jaModelLoading = true
+  onProgress?.('正在加载日文翻译引擎...')
+  try {
+    const { pipeline: pipe, env } = await import('@xenova/transformers')
+    env.cacheDir = getModelCacheDir()
+    env.backends.onnx.executionProviders = ['dml', 'cpu']
+    env.remoteHost = 'https://hf-mirror.com'
+    env.allowLocalModels = false; env.useBrowserCache = false
+    onProgress?.('下载日文模型(首次约 300MB)...')
+    jaPipeline = await pipe('translation', JA_MODEL_NAME, {
+      progress_callback: (p: any) => {
+        if (p?.status === 'downloading') onProgress?.(`下载日文模型... ${Math.round(p.progress || 0)}%`)
+        else if (p?.status === 'loading') onProgress?.('加载日文模型中...')
+      },
+    })
+    jaModelReady = true; jaModelLoading = false
+    onProgress?.('日文引擎就绪')
+    return true
+  } catch (err: any) { jaModelLoading = false; jaLoadError = err?.message || String(err); return false }
+}
+
+export async function translateJaToEn(text: string): Promise<string> {
+  if (!text?.trim()) return text
+  if (!jaModelReady) { const ok = await loadJaModel(); if (!ok) return text }
+  try {
+    const segs = splitText(text, 400); const out: string[] = []
+    for (const s of segs) {
+      if (!s.trim()) { out.push(s); continue }
+      const r = await jaPipeline!(s, { max_new_tokens: Math.ceil(s.length * 2) })
+      out.push(Array.isArray(r) ? r[0]?.translation_text || s : r?.translation_text || s)
+    }
+    return out.join('')
+  } catch { return text }
+}
+
+export async function translateJaToZh(text: string): Promise<string> {
+  if (!text?.trim()) return text
+  const cn = (text.match(/[\u4e00-\u9fff]/g) || []).length
+  if (cn / text.length > 0.5) return text
+  try { return await translateEnToZh(await translateJaToEn(text)) } catch { return text }
+}
+
 /**
  * 按句子边界将文本拆分为不超过 maxLen 的段落
  */
@@ -176,15 +233,9 @@ function splitText(text: string, maxLen: number): string[] {
  * 获取翻译引擎状态
  */
 export function getTranslateStatus(): {
-  ready: boolean
-  loading: boolean
-  error: string | null
-  modelName: string
+  ready: boolean; loading: boolean; error: string | null; modelName: string
+  jaReady: boolean; jaLoading: boolean; jaError: string | null; jaModelName: string
 } {
-  return {
-    ready: modelReady,
-    loading: modelLoading,
-    error: loadError,
-    modelName: MODEL_NAME,
-  }
+  return { ready: modelReady, loading: modelLoading, error: loadError, modelName: MODEL_NAME,
+    jaReady: jaModelReady, jaLoading: jaModelLoading, jaError: jaLoadError, jaModelName: JA_MODEL_NAME }
 }

@@ -22,7 +22,7 @@ import {
 } from './online-subtitle'
 import { parseMP4Meta, detectAudioCodec } from './video-info'
 import { fetchMetadataForSeries, fetchMetadataBatch, validateBatchTitles } from './metadata-fetcher'
-import { loadModel, getTranslateStatus } from './local-translate'
+import { loadModel, getTranslateStatus, loadJaModel, translateJaToZh, translateEnToZh } from './local-translate'
 import {
   setWhisperConfig,
   isWhisperAvailable,
@@ -954,6 +954,150 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('translate:localStatus', () => {
     return getTranslateStatus()
+  })
+
+  ipcMain.handle('translate:jaModelLoad', async () => {
+    const onProgress = (msg: string) => {
+      mainWindow?.webContents.send('translate:localProgress', msg)
+    }
+    return await loadJaModel(onProgress)
+  })
+
+  ipcMain.handle('translate:jaToZh', async (_e, text: string) => {
+    return await translateJaToZh(text)
+  })
+
+  ipcMain.handle('translate:enToZh', async (_e, text: string) => {
+    return await translateEnToZh(text)
+  })
+
+  // AniList 番剧详情
+  ipcMain.handle('season:fetchDetail', async (_e, anilistId: number) => {
+    try {
+      const query = `
+        query ($id: Int!) {
+          Media(id: $id) {
+            id
+            title { native romaji english }
+            coverImage { large extraLarge }
+            bannerImage
+            description
+            episodes duration averageScore popularity
+            genres
+            studios { nodes { name } }
+            startDate { year month day }
+            endDate { year month day }
+            season seasonYear format status
+            nextAiringEpisode { airingAt episode timeUntilAiring }
+          }
+        }`
+      const resp = await fetch('https://graphql.anilist.co', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ query, variables: { id: anilistId } }),
+      })
+      const data = await resp.json()
+      return { ok: true, detail: data?.data?.Media || null }
+    } catch (err: any) {
+      return { ok: false, error: err.message, detail: null }
+    }
+  })
+
+  // AniList 新番时间表
+  ipcMain.handle('season:fetchTimeline', async (_e, forceRefresh?: boolean) => {
+    const cachePath = join(app.getPath('userData'), 'season-cache.json')
+    const CACHE_TTL = 3600000
+
+    if (!forceRefresh) {
+      try {
+        const cacheRaw = readFileSync(cachePath, 'utf-8')
+        const cache = JSON.parse(cacheRaw)
+        if (cache.timestamp && Date.now() - cache.timestamp < CACHE_TTL) {
+          return { ok: true, fromCache: true, season: cache.data.season, anime: cache.data.anime }
+        }
+      } catch {}
+    }
+
+    try {
+      const query = `
+        query ($season: MediaSeason!, $year: Int!) {
+          Page(page: 1, perPage: 70) {
+            media(season: $season, seasonYear: $year, type: ANIME, format: TV, sort: POPULARITY_DESC) {
+              id
+              title { native romaji english }
+              coverImage { large }
+              episodes averageScore
+              nextAiringEpisode { airingAt episode timeUntilAiring }
+              format status genres
+            }
+          }
+        }`
+      const now = new Date()
+      const m = now.getMonth() + 1
+      let se = 'WINTER'; if (m >= 4 && m <= 6) se = 'SPRING'; else if (m >= 7 && m <= 9) se = 'SUMMER'; else if (m >= 10 && m <= 12) se = 'FALL'
+      const variables = { season: se, year: now.getFullYear() }
+      const resp = await fetch('https://graphql.anilist.co', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ query, variables }),
+      })
+      const data = await resp.json()
+      if (!data?.data?.Page?.media) {
+        return { ok: false, error: 'API 返回异常', anime: [] }
+      }
+      const seasonLabel = `${se} ${now.getFullYear()}`
+      const anime = data.data.Page.media.map((m: any) => ({
+        id: m.id,
+        title: m.title?.native || m.title?.romaji || '',
+        titleRomaji: m.title?.romaji || '',
+        titleEnglish: m.title?.english || '',
+        titleZh: '',
+        cover: m.coverImage?.large || '',
+        episodes: m.episodes ?? null,
+        score: m.averageScore ?? null,
+        genres: m.genres || [],
+        format: m.format,
+        status: m.status,
+        nextAiring: m.nextAiringEpisode ? {
+          episode: m.nextAiringEpisode.episode,
+          airingAt: m.nextAiringEpisode.airingAt,
+          timeUntilAiring: m.nextAiringEpisode.timeUntilAiring,
+        } : null,
+      }))
+
+      // 同步翻译标题（主进程内完成，避免 N 次 IPC 往返）
+      try { await loadModel() } catch {}
+      try { await loadJaModel() } catch {}
+      for (const a of anime) {
+        // 先试 EN→ZH
+        if (a.titleEnglish) {
+          try {
+            const zh = await translateEnToZh(a.titleEnglish)
+            if (zh && zh !== a.titleEnglish) { a.titleZh = zh; continue }
+          } catch {}
+        }
+        // 再试 JA→ZH
+        try {
+          const zh = await translateJaToZh(a.title)
+          if (zh && zh !== a.title) { a.titleZh = zh; continue }
+        } catch {}
+        // 兜底
+        a.titleZh = a.titleRomaji || a.titleEnglish || a.title
+      }
+
+      const payload = { season: seasonLabel, anime }
+      try {
+        writeFileSync(cachePath, JSON.stringify({ timestamp: Date.now(), data: payload }, null, 2), 'utf-8')
+      } catch {}
+      return { ok: true, fromCache: false, ...payload }
+    } catch (err: any) {
+      console.error('[AniBox] season:fetchTimeline error:', err)
+      try {
+        const fb = JSON.parse(readFileSync(join(app.getPath('userData'), 'season-cache.json'), 'utf-8'))
+        return { ok: true, fromCache: true, stale: true, ...fb.data }
+      } catch {}
+      return { ok: false, error: err.message || '网络请求失败', anime: [] }
+    }
   })
 
   // AniList 标题校验

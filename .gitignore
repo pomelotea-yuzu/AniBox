@@ -1,60 +1,20 @@
-# Dependencies
-node_modules/
-
-# Build output
+﻿node_modules/
 out/
+out.bak/
 dist/
-*.tsbuildinfo
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# OS
+models/
+*.exe
+*.dll
+*.7z
+*.zip
 .DS_Store
 Thumbs.db
-
-# Logs
 *.log
-npm-debug.log*
 electron-stdout.txt
-
-# Electron / native binaries
-mpv.exe
-mpv-x86_64-*/
-mpv-x86_64-*.7z
-d3dcompiler_43.dll
-resources/ffmpeg.dll
-
-# AI models (large files)
-models/
-
-# Environment
-.env
-.env.local
-.env.*.local
-
-# Runtime data (user-specific)
-anibox-store.json
-*.db
-
-# Build cache / temp
-electron.vite.config.*.mjs
-out.bak/
-
-# Test artifacts
-coverage/
-test-results/
 test-output.txt
 test-store.json
 scan-test-result.txt
 ok.txt
-
-# Build tools (binaries)
-scripts/ffmpeg-extract/
+electron.vite.config.*.mjs
 scripts/ffmpeg-temp.zip
-
-# Personal docs
-F盘番剧库分析报告.md
+"F*

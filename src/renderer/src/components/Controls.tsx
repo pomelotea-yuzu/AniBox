@@ -561,27 +561,26 @@ export default function Controls({
         {/* 弹幕开关 */}
         <button
           onClick={() => {
-            if (danmakuConfig?.enabled) {
-              onDanmakuConfigChange?.({ enabled: false })
-            } else if ((danmakuCount ?? 0) > 0) {
-              onDanmakuConfigChange?.({ enabled: true })
-            } else {
-              onDanmakuFetch?.()
-            }
+            if ((danmakuCount ?? 0) === 0) return
+            onDanmakuConfigChange?.({ enabled: !danmakuConfig?.enabled })
           }}
           onContextMenu={(e) => {
             e.preventDefault()
             onDanmakuConfigChange?.({ enabled: false })
           }}
           className={`text-[10px] px-1 py-0.5 rounded transition-colors ${
-            danmakuConfig?.enabled ? 'text-anibox-accent' : 'text-white/25 hover:text-white/50'
+            (danmakuCount ?? 0) === 0
+              ? 'text-white/15 cursor-not-allowed'
+              : danmakuConfig?.enabled
+                ? 'text-anibox-accent'
+                : 'text-white/25 hover:text-white/50'
           }`}
           title={
-            danmakuConfig?.enabled
-              ? `弹幕：开 (${danmakuCount ?? 0}条) · 右键关闭`
-              : (danmakuCount ?? 0) > 0
-                ? `弹幕：关 (${danmakuCount ?? 0}条)`
-                : '加载弹幕'
+            (danmakuCount ?? 0) === 0
+              ? '弹幕 (未加载)'
+              : danmakuConfig?.enabled
+                ? `弹幕：开 (${danmakuCount}条) · 右键关闭`
+                : `弹幕：关 (${danmakuCount}条)`
           }
         >
           弹
@@ -1533,19 +1532,14 @@ export default function Controls({
         {onDanmakuFetch && (
           <div className="relative">
             <button
-              onClick={() => {
-                if (danmakuConfig?.enabled) {
-                  onDanmakuConfigChange?.({ enabled: false })
-                } else if ((danmakuCount ?? 0) > 0) {
-                  onDanmakuConfigChange?.({ enabled: true })
-                } else {
-                  onDanmakuFetch?.()
-                }
-              }}
+              onClick={() => onDanmakuFetch?.()}
+              disabled={isLoadingDanmaku}
               className={`transition-colors ${
-                danmakuConfig?.enabled ? 'text-anibox-accent' : 'text-white/50 hover:text-white'
+                isLoadingDanmaku
+                  ? 'text-white/30 cursor-not-allowed'
+                  : 'text-white/50 hover:text-white'
               }`}
-              title={(danmakuCount ?? 0) > 0 ? `弹幕 (${danmakuCount}条)` : '加载弹幕'}
+              title={(danmakuCount ?? 0) > 0 ? `加载弹幕 (当前${danmakuCount}条)` : '加载弹幕'}
             >
               {isLoadingDanmaku ? (
                 <div className="w-4 h-4 border border-white/30 border-t-white rounded-full animate-spin" />

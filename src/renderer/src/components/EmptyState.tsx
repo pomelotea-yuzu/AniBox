@@ -16,6 +16,7 @@ interface EmptyStateProps {
   onSmartDiscover: () => void
   onOpenFile: () => void
   onPlayRecent?: (folderPath: string, filePath: string, position: number) => void
+  onOpenSeason?: () => void
 }
 
 function relativeTime(iso: string): string {
@@ -36,6 +37,7 @@ export default function EmptyState({
   onSmartDiscover,
   onOpenFile,
   onPlayRecent,
+  onOpenSeason,
 }: EmptyStateProps) {
   const [recentItems, setRecentItems] = useState<RecentEntry[]>([])
 
@@ -131,6 +133,24 @@ export default function EmptyState({
           </svg>
           打开单个视频
         </button>
+
+        {onOpenSeason && (
+          <button
+            onClick={onOpenSeason}
+            className="px-5 py-2.5 bg-anibox-surface hover:bg-anibox-border text-anibox-text-muted hover:text-anibox-accent text-sm
+              rounded-lg transition-all flex items-center gap-2
+              border border-anibox-border hover:border-anibox-accent/40"
+            title="新番时间表"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+              <line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" />
+              <line x1="3" y1="10" x2="21" y2="10" />
+              <line x1="10" y1="14" x2="14" y2="14" /><line x1="12" y1="14" x2="12" y2="18" />
+            </svg>
+            新番时间表
+          </button>
+        )}
       </div>
 
       {/* 最近观看 */}

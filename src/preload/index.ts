@@ -396,6 +396,14 @@ const electronAPI = {
   playlistsRemoveSeries: (listId: string, seriesId: string): Promise<void> =>
     ipcRenderer.invoke('playlists:removeSeries', listId, seriesId),
 
+  seasonFetchTimeline: (forceRefresh?: boolean): Promise<any> =>
+    ipcRenderer.invoke('season:fetchTimeline', forceRefresh),
+  seasonFetchDetail: (anilistId: number): Promise<any> =>
+    ipcRenderer.invoke('season:fetchDetail', anilistId),
+  translateJaModelLoad: (): Promise<boolean> => ipcRenderer.invoke('translate:jaModelLoad'),
+  translateJaToZh: (text: string): Promise<string> => ipcRenderer.invoke('translate:jaToZh', text),
+  translateEnToZh: (text: string): Promise<string> => ipcRenderer.invoke('translate:enToZh', text),
+
   // 追番同步
   syncStatusToTracker: (
     anilistId: number,

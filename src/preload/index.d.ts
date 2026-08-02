@@ -196,6 +196,11 @@ export interface ElectronAPI {
   playlistsDelete: (id: string) => Promise<void>
   playlistsAddSeries: (listId: string, seriesId: string) => Promise<void>
   playlistsRemoveSeries: (listId: string, seriesId: string) => Promise<void>
+  seasonFetchTimeline: (forceRefresh?: boolean) => Promise<any>
+  seasonFetchDetail: (anilistId: number) => Promise<any>
+  translateJaModelLoad: () => Promise<boolean>
+  translateJaToZh: (text: string) => Promise<string>
+  translateEnToZh: (text: string) => Promise<string>
   syncStatusToTracker: (
     anilistId: number,
     bangumiId: number,

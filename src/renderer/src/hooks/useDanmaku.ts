@@ -47,7 +47,6 @@ export function useDanmaku(opts: UseDanmakuOptions) {
       const cleanTitle = await window.electronAPI.danmakuCleanTitle(folderName)
       const items = await window.electronAPI.danmakuFetch(cleanTitle, epNum)
       setDanmakuItems(items)
-      setDanmakuConfig((prev) => ({ ...prev, enabled: items.length > 0 }))
       showToast(`弹幕加载完成: ${items.length} 条`)
     } catch {
       showToast('弹幕加载失败')

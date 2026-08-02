@@ -83,8 +83,7 @@ export default function SeasonCalendar({ onBack }: { onBack: () => void }) {
   // 详情弹窗状态
   const [detailAnime, setDetailAnime] = useState<AnimeDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
-
-  // 标题翻译
+  // 翻译状态
   const [titlesTranslated, setTitlesTranslated] = useState(false)
   const [translating, setTranslating] = useState(false)
 
@@ -111,38 +110,32 @@ export default function SeasonCalendar({ onBack }: { onBack: () => void }) {
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  // 异步翻译标题为中文
+  // 标题异步翻译
   useEffect(() => {
     if (anime.length === 0 || titlesTranslated) return
     setTranslating(true)
     ;(async () => {
-      // 加载两个模型
       try { await window.electronAPI.loadLocalModel() } catch {}
       try { await window.electronAPI.translateJaModelLoad() } catch {}
-
       const translated = await Promise.all(
         anime.map(async (a) => {
           let zh = ''
-          // 1. 用 English 标题翻译
           if (a.titleEnglish) {
             try {
               zh = await window.electronAPI.translateEnToZh(a.titleEnglish)
               if (zh && zh !== a.titleEnglish) return { ...a, titleZh: zh }
             } catch {}
           }
-          // 2. JA→EN→ZH 链
           try {
             zh = await window.electronAPI.translateJaToZh(a.title)
             if (zh && zh !== a.title) return { ...a, titleZh: zh }
           } catch {}
-          // 3. 兜底
           return { ...a, titleZh: a.titleRomaji || a.titleEnglish || a.title }
-        }),
+        })
       )
       setAnime(translated)
       setTitlesTranslated(true)
-      setTranslating(false)
-    })()
+    })().finally(() => setTranslating(false))
   }, [anime.length, titlesTranslated])
 
   // 按星期分组
@@ -199,9 +192,8 @@ export default function SeasonCalendar({ onBack }: { onBack: () => void }) {
         {!loading && !error && (
           <span className="text-xs text-anibox-text-muted">
             {season} · {anime.length} 部
-            {translating && <span className="ml-1 text-amber-400/70 animate-pulse">翻译中...</span>}
-            {!translating && fromCache && !stale && <span className="ml-1 text-anibox-text-muted/50">缓存</span>}
-            {!translating && stale && <span className="ml-1 text-amber-400/70">过期缓存</span>}
+            {fromCache && !stale && <span className="ml-1 text-anibox-text-muted/50">缓存</span>}
+            {stale && <span className="ml-1 text-amber-400/70">过期缓存</span>}
           </span>
         )}
         <div className="flex-1" />
