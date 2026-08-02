@@ -1,0 +1,8 @@
+=== require electron ===
+type: string
+is string: true
+path: D:\AniBox\anibox\node_modules\electron\dist\electron.exe
+=== require electron/main ===
+ERROR: Cannot find module 'electron/main'
+Require stack:
+- D:\AniBox\anibox\test-electron.js
