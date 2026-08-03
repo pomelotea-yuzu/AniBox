@@ -1013,19 +1013,49 @@ function registerIpcHandlers(): void {
   })
 
   // AniList 新番时间表
+  // 策略：仅在季度首日（1.1 / 4.1 / 7.1 / 10.1）自动抓取，其余时间读缓存
+  // 用户可随时点"刷新"按钮强制重新抓取
   ipcMain.handle('season:fetchTimeline', async (_e, forceRefresh?: boolean) => {
     const cachePath = join(app.getPath('userData'), 'season-cache.json')
-    const CACHE_TTL = 3600000
+    const SEASON_STARTS = ['01-01', '04-01', '07-01', '10-01']
+
+    const now = new Date()
+    const todayStr = `${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    const isSeasonStart = SEASON_STARTS.includes(todayStr)
+
+    // 计算下一个季度首日，用于 UI 提示
+    const m = now.getMonth() + 1
+    let nextSeasonMonth = 1
+    if (m < 4) nextSeasonMonth = 4; else if (m < 7) nextSeasonMonth = 7; else if (m < 10) nextSeasonMonth = 10
+    const nextFetchYear = (m >= 10) ? now.getFullYear() + 1 : now.getFullYear()
+    const nextFetchDate = `${nextFetchYear}-${String(nextSeasonMonth).padStart(2, '0')}-01`
 
     if (!forceRefresh) {
       try {
         const cacheRaw = readFileSync(cachePath, 'utf-8')
         const cache = JSON.parse(cacheRaw)
-        if (cache.timestamp && Date.now() - cache.timestamp < CACHE_TTL) {
-          return { ok: true, fromCache: true, season: cache.data.season, anime: cache.data.anime }
+        if (cache.timestamp && cache.data?.anime?.length) {
+          // 季度首日且缓存是之前的 → 重新抓取
+          if (isSeasonStart) {
+            const cacheDate = new Date(cache.timestamp).toDateString()
+            const todayDate = now.toDateString()
+            if (cacheDate !== todayDate) {
+              console.log('[AniBox] 季度首日，缓存过期，重新抓取新番数据')
+            } else {
+              // 今天已经抓过了，直接用缓存
+              return { ok: true, fromCache: true, nextFetchDate, season: cache.data.season, anime: cache.data.anime }
+            }
+          } else {
+            // 非季度首日，直接用缓存
+            return { ok: true, fromCache: true, nextFetchDate, season: cache.data.season, anime: cache.data.anime }
+          }
         }
       } catch {}
     }
+
+    // 需要抓取：无缓存 / 季度首日 / 强制刷新
+    let se = 'WINTER'; if (m >= 4 && m <= 6) se = 'SPRING'; else if (m >= 7 && m <= 9) se = 'SUMMER'; else if (m >= 10 && m <= 12) se = 'FALL'
+    const currentSeason = `${se} ${now.getFullYear()}`
 
     try {
       const query = `
@@ -1041,9 +1071,6 @@ function registerIpcHandlers(): void {
             }
           }
         }`
-      const now = new Date()
-      const m = now.getMonth() + 1
-      let se = 'WINTER'; if (m >= 4 && m <= 6) se = 'SPRING'; else if (m >= 7 && m <= 9) se = 'SUMMER'; else if (m >= 10 && m <= 12) se = 'FALL'
       const variables = { season: se, year: now.getFullYear() }
       const resp = await fetch('https://graphql.anilist.co', {
         method: 'POST',
@@ -1054,7 +1081,6 @@ function registerIpcHandlers(): void {
       if (!data?.data?.Page?.media) {
         return { ok: false, error: 'API 返回异常', anime: [] }
       }
-      const seasonLabel = `${se} ${now.getFullYear()}`
       const anime = data.data.Page.media.map((m: any) => ({
         id: m.id,
         title: m.title?.native || m.title?.romaji || '',
@@ -1093,16 +1119,16 @@ function registerIpcHandlers(): void {
         console.log('[AniBox] AI title translation done')
       }
 
-      const payload = { season: seasonLabel, anime }
+      const payload = { season: currentSeason, anime }
       try {
         writeFileSync(cachePath, JSON.stringify({ timestamp: Date.now(), data: payload }, null, 2), 'utf-8')
       } catch {}
-      return { ok: true, fromCache: false, ...payload }
+      return { ok: true, fromCache: false, nextFetchDate, ...payload }
     } catch (err: any) {
       console.error('[AniBox] season:fetchTimeline error:', err)
       try {
         const fb = JSON.parse(readFileSync(join(app.getPath('userData'), 'season-cache.json'), 'utf-8'))
-        return { ok: true, fromCache: true, stale: true, ...fb.data }
+        return { ok: true, fromCache: true, stale: true, nextFetchDate, ...fb.data }
       } catch {}
       return { ok: false, error: err.message || '网络请求失败', anime: [] }
     }

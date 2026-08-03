@@ -79,6 +79,7 @@ export default function SeasonCalendar({ onBack }: { onBack: () => void }) {
   const [selectedDay, setSelectedDay] = useState<number>(-1)
   const [fromCache, setFromCache] = useState(false)
   const [stale, setStale] = useState(false)
+  const [nextFetchDate, setNextFetchDate] = useState('')
 
   // 详情弹窗状态
   const [detailAnime, setDetailAnime] = useState<AnimeDetail | null>(null)
@@ -98,6 +99,7 @@ export default function SeasonCalendar({ onBack }: { onBack: () => void }) {
       setAnime(raw)
       setFromCache(!!result.fromCache)
       setStale(!!result.stale)
+      setNextFetchDate(result.nextFetchDate || '')
       if (force) setSelectedDay(-1)
     } catch (e: any) { setError(e.message || '网络错误') }
     finally { setLoading(false) }
@@ -164,8 +166,11 @@ export default function SeasonCalendar({ onBack }: { onBack: () => void }) {
         {!loading && !error && (
           <span className="text-xs text-anibox-text-muted">
             {season} · {anime.length} 部
-            {fromCache && !stale && <span className="ml-1 text-anibox-text-muted/50">缓存</span>}
-            {stale && <span className="ml-1 text-amber-400/70">过期缓存</span>}
+            {nextFetchDate && (
+              <span className="ml-1 text-anibox-text-muted/50" title="每季度首日（1.1/4.1/7.1/10.1）自动更新">
+                · 下次更新 {nextFetchDate}
+              </span>
+            )}
           </span>
         )}
         <div className="flex-1" />

@@ -17,4 +17,6 @@ scan-test-result.txt
 ok.txt
 electron.vite.config.*.mjs
 scripts/ffmpeg-temp.zip
-"F*
+mpv-*/
+test-gpu.js
+F*
