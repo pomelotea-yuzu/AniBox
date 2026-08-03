@@ -78,7 +78,7 @@ const THEMES: Record<string, ThemeColors> = {
 
   'almond-cream': {
     name: 'almond-cream',
-    label: '杏仁',
+    label: '暖杏仁',
     description: '杏仁奶白 + 暖驼色，温润甜暖',
     bg: '#F6F1E8',
     surface: '#EDE6DA',
@@ -96,7 +96,7 @@ const THEMES: Record<string, ThemeColors> = {
 
   sakura: {
     name: 'sakura',
-    label: '樱',
+    label: '樱花粉',
     description: '淡樱粉 + 灰绿，温柔清新',
     bg: '#F5EEF0',
     surface: '#EDE2E5',

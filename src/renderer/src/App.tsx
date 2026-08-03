@@ -296,9 +296,9 @@ export default function App() {
               )}
               <button
                 onClick={handleSmartDiscover}
-                className="px-3 py-1.5 text-xs bg-anibox-accent/15 hover:bg-anibox-accent/25 text-anibox-accent
-                  rounded-lg transition-all flex items-center gap-1.5
-                  border border-anibox-accent/40 hover:border-anibox-accent/70"
+                className="px-2.5 py-1.5 text-xs text-anibox-text-muted hover:text-anibox-accent hover:bg-anibox-border/30
+                  border border-anibox-border hover:border-anibox-accent/40 rounded-lg transition-all duration-150 active:scale-95
+                  flex items-center gap-1.5"
                 title="自动扫描常用目录，智能发现番剧"
               >
                 <svg
@@ -316,9 +316,9 @@ export default function App() {
               </button>
               <button
                 onClick={handleAddRoot}
-                className="px-2.5 py-1.5 text-xs text-anibox-text-muted hover:text-anibox-text
-                  border border-anibox-border hover:border-anibox-text-muted rounded-lg transition-all
-                  flex items-center gap-1"
+                className="px-2.5 py-1.5 text-xs text-anibox-text-muted hover:text-anibox-text hover:bg-anibox-border/30
+                  border border-anibox-border hover:border-anibox-text-muted rounded-lg transition-all duration-150 active:scale-95
+                  flex items-center gap-1.5"
                 title="手动选择番剧目录"
               >
                 <svg
@@ -335,9 +335,9 @@ export default function App() {
               </button>
               <button
                 onClick={() => setView('season')}
-                className="px-2.5 py-1.5 text-xs text-anibox-text-muted hover:text-anibox-accent
-                  border border-anibox-border hover:border-anibox-accent/40 rounded-lg transition-all
-                  flex items-center gap-1"
+                className="px-2.5 py-1.5 text-xs text-anibox-text-muted hover:text-anibox-accent hover:bg-anibox-border/30
+                  border border-anibox-border hover:border-anibox-accent/40 rounded-lg transition-all duration-150 active:scale-95
+                  flex items-center gap-1.5"
                 title="新番时间表"
               >
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -347,6 +347,19 @@ export default function App() {
                   <line x1="10" y1="14" x2="14" y2="14" /><line x1="12" y1="14" x2="12" y2="18" />
                 </svg>
                 新番
+              </button>
+              <button
+                onClick={() => setShowSettings(true)}
+                className="px-2.5 py-1.5 text-xs text-anibox-text-muted hover:text-anibox-text hover:bg-anibox-border/30
+                  border border-anibox-border hover:border-anibox-text-muted rounded-lg transition-all duration-150 active:scale-95
+                  flex items-center gap-1.5"
+                title="设置"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                </svg>
+                设置
               </button>
             </div>
           )}
@@ -412,7 +425,6 @@ export default function App() {
               onRemoveRoot={handleRemoveRoot}
               onSmartDiscover={handleSmartDiscover}
               onRefresh={handleRefresh}
-              onOpenSettings={() => setShowSettings(true)}
             />
           </div>
         )}

@@ -77,9 +77,9 @@ export default function EmptyState({
       <div className="flex gap-3 mt-3">
         <button
           onClick={onOpenFolder}
-          className="px-6 py-2.5 bg-anibox-accent hover:bg-anibox-accent-hover text-white text-sm
-            rounded-lg transition-all shadow-md shadow-anibox-accent/20
-            flex items-center gap-2 border border-anibox-accent/60"
+          className="px-5 py-2.5 text-anibox-text-muted hover:text-anibox-accent hover:bg-anibox-border/30 text-sm
+            rounded-lg transition-all duration-150 active:scale-95 flex items-center gap-2
+            border border-anibox-border hover:border-anibox-accent/40"
         >
           <svg
             width="16"
@@ -96,9 +96,9 @@ export default function EmptyState({
 
         <button
           onClick={onSmartDiscover}
-          className="px-6 py-2.5 bg-anibox-accent/15 hover:bg-anibox-accent/25 text-anibox-accent text-sm
-            rounded-lg transition-all flex items-center gap-2
-            border border-anibox-accent/40 hover:border-anibox-accent/70"
+          className="px-5 py-2.5 text-anibox-text-muted hover:text-anibox-accent hover:bg-anibox-border/30 text-sm
+            rounded-lg transition-all duration-150 active:scale-95 flex items-center gap-2
+            border border-anibox-border hover:border-anibox-accent/40"
           title="智能扫描常用目录，自动发现番剧文件夹"
         >
           <svg
@@ -117,9 +117,9 @@ export default function EmptyState({
 
         <button
           onClick={onOpenFile}
-          className="px-6 py-2.5 bg-anibox-surface hover:bg-anibox-border text-anibox-text text-sm
-            rounded-lg transition-all flex items-center gap-2
-            border border-anibox-border hover:border-anibox-text-muted"
+          className="px-5 py-2.5 text-anibox-text-muted hover:text-anibox-accent hover:bg-anibox-border/30 text-sm
+            rounded-lg transition-all duration-150 active:scale-95 flex items-center gap-2
+            border border-anibox-border hover:border-anibox-accent/40"
         >
           <svg
             width="16"
@@ -137,8 +137,8 @@ export default function EmptyState({
         {onOpenSeason && (
           <button
             onClick={onOpenSeason}
-            className="px-5 py-2.5 bg-anibox-surface hover:bg-anibox-border text-anibox-text-muted hover:text-anibox-accent text-sm
-              rounded-lg transition-all flex items-center gap-2
+            className="px-5 py-2.5 text-anibox-text-muted hover:text-anibox-accent hover:bg-anibox-border/30 text-sm
+              rounded-lg transition-all duration-150 active:scale-95 flex items-center gap-2
               border border-anibox-border hover:border-anibox-accent/40"
             title="新番时间表"
           >
@@ -162,7 +162,7 @@ export default function EmptyState({
               <button
                 key={item.episodeId}
                 onClick={() => onPlayRecent(item.folderPath, item.filePath, item.position)}
-                className="w-full text-left px-3 py-2 bg-anibox-surface hover:bg-anibox-border/60 border border-anibox-border/50 rounded-lg transition-colors"
+                className="w-full text-left px-3 py-2 bg-anibox-surface hover:bg-anibox-border/60 border border-anibox-border/50 rounded-lg transition-all duration-150 active:scale-[0.99]"
               >
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-anibox-text truncate font-medium">

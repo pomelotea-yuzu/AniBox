@@ -17,34 +17,23 @@ interface AnimeItem {
   titleEnglish: string
   titleZh: string
   cover: string
-  episodes: number | null
-  score: number | null
-  genres: string[]
-  format: string
-  status: string
-  nextAiring: NextAiring | null
-}
-
-interface AnimeDetail {
-  id: number
-  title: { native: string; romaji: string; english: string }
-  coverImage: { large: string; extraLarge: string }
+  coverExtra: string
   bannerImage: string
   description: string
   descriptionZh: string
-  episodes: number
-  duration: number
-  averageScore: number
-  popularity: number
+  episodes: number | null
+  duration: number | null
+  score: number | null
+  popularity: number | null
   genres: string[]
-  studios: { nodes: { name: string }[] }
-  startDate: { year: number; month: number; day: number }
-  endDate: { year: number; month: number; day: number }
+  studios: string[]
+  startDate: { year: number; month: number; day: number } | null
+  endDate: { year: number; month: number; day: number } | null
   season: string
   seasonYear: number
   format: string
   status: string
-  nextAiringEpisode: { airingAt: number; episode: number; timeUntilAiring: number } | null
+  nextAiring: NextAiring | null
 }
 
 const DAY_LABELS = ['日', '一', '二', '三', '四', '五', '六']
@@ -79,11 +68,11 @@ export default function SeasonCalendar({ onBack }: { onBack: () => void }) {
   const [selectedDay, setSelectedDay] = useState<number>(-1)
   const [fromCache, setFromCache] = useState(false)
   const [stale, setStale] = useState(false)
-  const [nextFetchDate, setNextFetchDate] = useState('')
 
   // 详情弹窗状态
-  const [detailAnime, setDetailAnime] = useState<AnimeDetail | null>(null)
-  const [detailLoading, setDetailLoading] = useState(false)
+  const [detailAnime, setDetailAnime] = useState<AnimeItem | null>(null)
+
+  const openDetail = useCallback((a: AnimeItem) => { setDetailAnime(a) }, [])
 
   const fetchData = useCallback(async (force?: boolean) => {
     setLoading(true)
@@ -99,7 +88,6 @@ export default function SeasonCalendar({ onBack }: { onBack: () => void }) {
       setAnime(raw)
       setFromCache(!!result.fromCache)
       setStale(!!result.stale)
-      setNextFetchDate(result.nextFetchDate || '')
       if (force) setSelectedDay(-1)
     } catch (e: any) { setError(e.message || '网络错误') }
     finally { setLoading(false) }
@@ -127,62 +115,31 @@ export default function SeasonCalendar({ onBack }: { onBack: () => void }) {
 
   const today = new Date().getDay()
 
-  // 打开详情弹窗
-  const openDetail = useCallback(async (a: AnimeItem) => {
-    setDetailLoading(true)
-    setDetailAnime(null)
-    try {
-      const r = await window.electronAPI.seasonFetchDetail(a.id)
-      if (r.ok && r.detail) {
-        const d = r.detail
-        console.log('[SeasonCalendar] detail raw desc:', d.description?.substring(0, 100))
-        // AI 翻译简介
-        let descZh = d.description || ''
-        if (descZh) {
-          try {
-            const cleaned = descZh.replace(/<[^>]+>/g, '').substring(0, 1000)
-            console.log('[SeasonCalendar] cleaned desc:', cleaned.substring(0, 100))
-            const aiResult = await window.electronAPI.aiTranslate(cleaned, 'auto', 'zh')
-            console.log('[SeasonCalendar] AI result:', aiResult?.substring(0, 100))
-            if (aiResult && aiResult !== cleaned) descZh = aiResult
-          } catch (e) { console.error('[SeasonCalendar] AI translate failed:', e); descZh = d.description || '' }
-        } else {
-          descZh = '暂无简介'
-        }
-        setDetailAnime({ ...d, descriptionZh: descZh })
-      }
-    } catch { /* ignore */ }
-    finally { setDetailLoading(false) }
-  }, [])
-
+  // 打开详情弹窗 — 数据已在抓取时预取，直接展示
   const closeDetail = () => setDetailAnime(null)
 
   return (
     <div className="w-full h-full flex flex-col bg-anibox-bg">
       {/* 头部 */}
       <div className="flex items-center gap-3 px-4 py-3 bg-anibox-surface border-b border-anibox-border shrink-0">
-        <button onClick={onBack} className="px-2 py-0.5 text-xs text-anibox-text-muted hover:text-anibox-text border border-anibox-border rounded hover:border-anibox-text-muted transition-colors">← 返回</button>
+        <button onClick={onBack} className="px-2.5 py-1.5 text-xs text-anibox-text-muted hover:text-anibox-text hover:bg-anibox-border/30 border border-anibox-border rounded-lg transition-all duration-150 active:scale-95">← 返回</button>
         <h2 className="text-sm font-semibold text-anibox-text">新番时间表</h2>
         {!loading && !error && (
           <span className="text-xs text-anibox-text-muted">
             {season} · {anime.length} 部
-            {nextFetchDate && (
-              <span className="ml-1 text-anibox-text-muted/50" title="每季度首日（1.1/4.1/7.1/10.1）自动更新">
-                · 下次更新 {nextFetchDate}
-              </span>
-            )}
+            {fromCache && <span className="ml-1 text-anibox-text-muted/50">· 缓存数据</span>}
           </span>
         )}
         <div className="flex-1" />
         {!loading && !error && anime.length > 0 && (
           <div className="flex items-center gap-1">
-            <button onClick={() => setSelectedDay(-1)} className={`px-2 py-0.5 text-xs rounded transition-colors ${selectedDay === -1 ? 'bg-anibox-accent/20 text-anibox-accent' : 'text-anibox-text-muted hover:text-anibox-text'}`}>全部</button>
+            <button onClick={() => setSelectedDay(-1)} className={`px-2 py-0.5 text-xs rounded transition-all duration-150 active:scale-95 ${selectedDay === -1 ? 'bg-anibox-accent/20 text-anibox-accent' : 'text-anibox-text-muted hover:text-anibox-text hover:bg-anibox-border/30'}`}>全部</button>
             {groupedByDay.groups.map((g, i) => (
-              <button key={i} onClick={() => setSelectedDay(i)} className={`w-7 h-7 text-xs rounded-full flex items-center justify-center transition-colors ${selectedDay === i ? 'bg-anibox-accent text-white font-medium' : i === today ? 'text-anibox-accent border border-anibox-accent/40' : 'text-anibox-text-muted hover:text-anibox-text'}`} title={`周${DAY_LABELS[i]} · ${g.items.length}部`}>{DAY_LABELS[i]}</button>
+              <button key={i} onClick={() => setSelectedDay(i)} className={`w-7 h-7 text-xs rounded-full flex items-center justify-center transition-all duration-150 active:scale-95 ${selectedDay === i ? 'bg-anibox-accent text-white font-medium' : i === today ? 'text-anibox-accent border border-anibox-accent/40 hover:bg-anibox-accent/10' : 'text-anibox-text-muted hover:text-anibox-text hover:bg-anibox-border/30'}`} title={`周${DAY_LABELS[i]} · ${g.items.length}部`}>{DAY_LABELS[i]}</button>
             ))}
           </div>
         )}
-        <button onClick={() => fetchData(true)} disabled={loading} className="px-2 py-0.5 text-xs text-anibox-text-muted hover:text-anibox-text border border-anibox-border rounded transition-colors ml-2 disabled:opacity-40" title="强制刷新">{loading ? '...' : '↻'}</button>
+        <button onClick={() => fetchData(true)} disabled={loading} className="px-2.5 py-1.5 text-xs text-anibox-text-muted hover:text-anibox-text hover:bg-anibox-border/30 border border-anibox-border rounded-lg transition-all duration-150 active:scale-95 ml-2 disabled:opacity-40 disabled:active:scale-100" title="强制刷新">{loading ? '...' : '↻'}</button>
       </div>
 
       {/* 内容区 */}
@@ -199,7 +156,7 @@ export default function SeasonCalendar({ onBack }: { onBack: () => void }) {
           <div className="w-full h-full flex items-center justify-center">
             <div className="text-center">
               <p className="text-sm text-red-400 mb-2">{error}</p>
-              <button onClick={() => fetchData(true)} className="px-3 py-1 text-xs bg-anibox-accent text-white rounded hover:bg-anibox-accent/80 transition-colors">重试</button>
+              <button onClick={() => fetchData(true)} className="px-3 py-1 text-xs bg-anibox-accent text-white rounded transition-all duration-150 active:scale-95 hover:bg-anibox-accent/80">重试</button>
             </div>
           </div>
         )}
@@ -234,103 +191,95 @@ export default function SeasonCalendar({ onBack }: { onBack: () => void }) {
       </div>
 
       {/* 详情弹窗 */}
-      {(detailAnime || detailLoading) && (
+      {detailAnime && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={closeDetail}>
           <div className="bg-anibox-surface border border-anibox-border rounded-xl max-w-2xl w-full max-h-[85vh] overflow-y-auto shadow-2xl mx-4" onClick={(e) => e.stopPropagation()}>
-            {detailLoading ? (
-              <div className="flex items-center justify-center py-20">
-                <div className="w-8 h-8 border-2 border-anibox-accent border-t-transparent rounded-full animate-spin" />
-              </div>
-            ) : detailAnime ? (
-              <div>
-                {/* Banner */}
-                {detailAnime.bannerImage && (
-                  <div className="h-36 bg-cover bg-center relative" style={{ backgroundImage: `url(${detailAnime.bannerImage})` }}>
-                    <div className="absolute inset-0 bg-gradient-to-t from-anibox-surface via-anibox-surface/60 to-transparent" />
+            <div>
+              {/* Banner */}
+              {detailAnime.bannerImage && (
+                <div className="h-36 bg-cover bg-center relative" style={{ backgroundImage: `url(${detailAnime.bannerImage})` }}>
+                  <div className="absolute inset-0 bg-gradient-to-t from-anibox-surface via-anibox-surface/60 to-transparent" />
+                </div>
+              )}
+              <div className={`px-6 ${detailAnime.bannerImage ? '-mt-12' : 'pt-6'} pb-6`}>
+                {/* 关闭按钮 */}
+                <button onClick={closeDetail} className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center rounded-full text-anibox-text-muted hover:text-anibox-text hover:bg-anibox-border/40 transition-all duration-150 active:scale-90 z-10">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+
+                <div className="flex gap-5">
+                  {/* 封面 */}
+                  <div className="shrink-0 w-28 relative z-10">
+                    <img src={detailAnime.cover || detailAnime.coverExtra} alt="" className="w-full rounded-lg shadow-lg" />
+                    {detailAnime.score && (
+                      <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-amber-500 text-white text-xs font-bold rounded-full">
+                        ★ {(detailAnime.score / 10).toFixed(1)}
+                      </div>
+                    )}
                   </div>
-                )}
-                <div className={`px-6 ${detailAnime.bannerImage ? '-mt-12' : 'pt-6'} pb-6`}>
-                  {/* 关闭按钮 */}
-                  <button onClick={closeDetail} className="absolute top-3 right-3 text-anibox-text-muted hover:text-white transition-colors z-10">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                  </button>
 
-                  <div className="flex gap-5">
-                    {/* 封面 */}
-                    <div className="shrink-0 w-28 relative z-10">
-                      <img src={detailAnime.coverImage.large} alt="" className="w-full rounded-lg shadow-lg" />
-                      {detailAnime.averageScore && (
-                        <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-amber-500 text-white text-xs font-bold rounded-full">
-                          ★ {(detailAnime.averageScore / 10).toFixed(1)}
-                        </div>
-                      )}
-                    </div>
+                  {/* 信息 */}
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-base font-bold text-anibox-text mb-1">
+                      {detailAnime.titleZh || detailAnime.title}
+                    </h3>
+                    {detailAnime.titleEnglish && detailAnime.titleEnglish !== detailAnime.title && (
+                      <p className="text-xs text-anibox-text-muted mb-2">{detailAnime.titleEnglish}</p>
+                    )}
 
-                    {/* 信息 */}
-                    <div className="min-w-0 flex-1">
-                      <h3 className="text-base font-bold text-anibox-text mb-1">
-                        {detailAnime.title.native || detailAnime.title.romaji}
-                      </h3>
-                      {detailAnime.title.english && detailAnime.title.english !== detailAnime.title.native && (
-                        <p className="text-xs text-anibox-text-muted mb-2">{detailAnime.title.english}</p>
-                      )}
-
-                      <div className="flex flex-wrap gap-1.5 mb-2">
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-anibox-accent/15 text-anibox-accent">{STATUS_NAMES[detailAnime.status] || detailAnime.status}</span>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-anibox-border/50 text-anibox-text-muted">{detailAnime.format}</span>
-                        {detailAnime.episodes && <span className="text-[10px] px-1.5 py-0.5 rounded bg-anibox-border/50 text-anibox-text-muted">{detailAnime.episodes}话</span>}
-                        {detailAnime.duration && <span className="text-[10px] px-1.5 py-0.5 rounded bg-anibox-border/50 text-anibox-text-muted">{detailAnime.duration}分钟</span>}
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-anibox-border/50 text-anibox-text-muted">
-                          {SEASON_NAMES[detailAnime.season] || detailAnime.season} {detailAnime.seasonYear}
-                        </span>
-                      </div>
-
-                      {/* 播出时间 */}
-                      <div className="flex items-center gap-2 text-xs text-anibox-text-muted mb-2">
-                        <span>📅 {formatDate(detailAnime.startDate.year, detailAnime.startDate.month, detailAnime.startDate.day)}</span>
-                        {detailAnime.endDate.year && <span>→ {formatDate(detailAnime.endDate.year, detailAnime.endDate.month, detailAnime.endDate.day)}</span>}
-                        {detailAnime.nextAiringEpisode && (
-                          <span className="text-anibox-accent">
-                            下集: 第{detailAnime.nextAiringEpisode.episode}话 {formatTimeUntil(detailAnime.nextAiringEpisode.timeUntilAiring)}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* 制作公司 */}
-                      {detailAnime.studios?.nodes?.length > 0 && (
-                        <div className="text-xs text-anibox-text-muted mb-2">
-                          制作: {detailAnime.studios.nodes.map((s) => s.name).join(' / ')}
-                        </div>
-                      )}
-
-                      {/* 类型 */}
-                      {detailAnime.genres.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mb-3">
-                          {detailAnime.genres.map((g) => (
-                            <span key={g} className="text-[10px] px-1.5 py-0.5 rounded bg-anibox-accent/10 text-anibox-accent/80">{g}</span>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* 人气 */}
-                      <span className="text-[10px] text-anibox-text-muted/50">
-                        👥 {detailAnime.popularity?.toLocaleString() || 0} 人关注
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-anibox-accent/15 text-anibox-accent">{STATUS_NAMES[detailAnime.status] || detailAnime.status}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-anibox-border/50 text-anibox-text-muted">{detailAnime.format}</span>
+                      {detailAnime.episodes && <span className="text-[10px] px-1.5 py-0.5 rounded bg-anibox-border/50 text-anibox-text-muted">{detailAnime.episodes}话</span>}
+                      {detailAnime.duration && <span className="text-[10px] px-1.5 py-0.5 rounded bg-anibox-border/50 text-anibox-text-muted">{detailAnime.duration}分钟</span>}
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-anibox-border/50 text-anibox-text-muted">
+                        {SEASON_NAMES[detailAnime.season] || detailAnime.season} {detailAnime.seasonYear}
                       </span>
                     </div>
-                  </div>
 
-                  {/* 简介 */}
-                  {detailAnime.descriptionZh && (
-                    <div className="mt-4 p-3 bg-anibox-bg rounded-lg border border-anibox-border">
-                      <h4 className="text-xs font-semibold text-anibox-text mb-1">简介</h4>
-                      <p className="text-xs text-anibox-text-muted leading-relaxed whitespace-pre-line">{detailAnime.descriptionZh}</p>
+                    {/* 播出时间 */}
+                    <div className="flex items-center gap-2 text-xs text-anibox-text-muted mb-2">
+                      {detailAnime.startDate && <span>📅 {formatDate(detailAnime.startDate.year, detailAnime.startDate.month, detailAnime.startDate.day)}</span>}
+                      {detailAnime.endDate?.year && <span>→ {formatDate(detailAnime.endDate.year, detailAnime.endDate.month, detailAnime.endDate.day)}</span>}
+                      {detailAnime.nextAiring && (
+                        <span className="text-anibox-accent">
+                          下集: 第{detailAnime.nextAiring.episode}话 {formatTimeUntil(detailAnime.nextAiring.timeUntilAiring)}
+                        </span>
+                      )}
                     </div>
-                  )}
+
+                    {/* 制作公司 */}
+                    {detailAnime.studios?.length > 0 && (
+                      <div className="text-xs text-anibox-text-muted mb-2">
+                        制作: {detailAnime.studios.join(' / ')}
+                      </div>
+                    )}
+
+                    {/* 类型 */}
+                    {detailAnime.genres.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mb-3">
+                        {detailAnime.genres.map((g) => (
+                          <span key={g} className={`text-[10px] px-1.5 py-0.5 rounded ${genreColor(g)}`}>{g}</span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* 人气 */}
+                    <span className="text-[10px] text-anibox-text-muted/50">
+                      👥 {detailAnime.popularity?.toLocaleString() || 0} 人关注
+                    </span>
+                  </div>
                 </div>
+
+                {/* 简介 */}
+                {(detailAnime.descriptionZh || detailAnime.description) && (
+                  <div className="mt-4 p-3 bg-anibox-bg rounded-lg border border-anibox-border">
+                    <h4 className="text-xs font-semibold text-anibox-text mb-1">简介</h4>
+                    <p className="text-xs text-anibox-text-muted leading-relaxed whitespace-pre-line">{detailAnime.descriptionZh || detailAnime.description || '暂无简介'}</p>
+                  </div>
+                )}
               </div>
-            ) : (
-              <div className="text-center py-12 text-sm text-anibox-text-muted">加载详情失败</div>
-            )}
+            </div>
           </div>
         </div>
       )}
@@ -343,7 +292,7 @@ function AnimeCard({ a, onClick }: { a: AnimeItem; onClick: () => void }) {
   return (
     <div
       onClick={onClick}
-      className="group relative bg-anibox-surface rounded-lg overflow-hidden border border-anibox-border hover:border-anibox-accent/40 transition-all hover:shadow-lg hover:shadow-anibox-accent/5 cursor-pointer"
+      className="group relative bg-anibox-surface rounded-lg overflow-hidden border border-anibox-border hover:border-anibox-accent/40 transition-all duration-200 active:scale-[0.98] hover:shadow-lg hover:shadow-anibox-accent/5 cursor-pointer"
     >
       <div className="aspect-[3/4] bg-anibox-border/30 overflow-hidden relative">
         {a.cover ? (
@@ -380,7 +329,7 @@ function AnimeCard({ a, onClick }: { a: AnimeItem; onClick: () => void }) {
         {a.genres.length > 0 && (
           <div className="flex flex-wrap gap-0.5 mt-1">
             {a.genres.slice(0, 2).map((g) => (
-              <span key={g} className={`text-[8px] px-1 rounded ${GENRE_COLORS[g] || 'bg-neutral-500/20 text-neutral-400'}`}>{g}</span>
+              <span key={g} className={`text-[8px] px-1 rounded ${genreColor(g)}`}>{g}</span>
             ))}
           </div>
         )}
@@ -390,11 +339,40 @@ function AnimeCard({ a, onClick }: { a: AnimeItem; onClick: () => void }) {
 }
 
 const GENRE_COLORS: Record<string, string> = {
-  Action: 'bg-red-400/20 text-red-300', Adventure: 'bg-amber-400/20 text-amber-300',
-  Comedy: 'bg-yellow-400/20 text-yellow-300', Drama: 'bg-purple-400/20 text-purple-300',
-  Fantasy: 'bg-indigo-400/20 text-indigo-300', 'Sci-Fi': 'bg-cyan-400/20 text-cyan-300',
-  Romance: 'bg-pink-400/20 text-pink-300', Horror: 'bg-orange-400/20 text-orange-300',
-  Mystery: 'bg-emerald-400/20 text-emerald-300', Thriller: 'bg-rose-400/20 text-rose-300',
-  'Slice of Life': 'bg-green-400/20 text-green-300', Mecha: 'bg-slate-400/20 text-slate-300',
-  Sports: 'bg-lime-400/20 text-lime-300', Supernatural: 'bg-violet-400/20 text-violet-300',
+  动作: 'bg-red-400/20 text-red-400', 冒险: 'bg-amber-400/20 text-amber-400',
+  喜剧: 'bg-yellow-400/20 text-yellow-400', 剧情: 'bg-purple-400/20 text-purple-400',
+  奇幻: 'bg-indigo-400/20 text-indigo-400', 科幻: 'bg-cyan-400/20 text-cyan-400',
+  恋爱: 'bg-pink-400/20 text-pink-400', 恐怖: 'bg-orange-400/20 text-orange-400',
+  悬疑: 'bg-emerald-400/20 text-emerald-400', 惊悚: 'bg-rose-400/20 text-rose-400',
+  日常: 'bg-green-400/20 text-green-400', 机甲: 'bg-slate-400/20 text-slate-400',
+  运动: 'bg-lime-400/20 text-lime-400', 超自然: 'bg-violet-400/20 text-violet-400',
+  音乐: 'bg-sky-400/20 text-sky-400', 校园: 'bg-teal-400/20 text-teal-400',
+  魔法: 'bg-fuchsia-400/20 text-fuchsia-400', 异世界: 'bg-blue-400/20 text-blue-400',
+  后宫: 'bg-rose-400/20 text-rose-400', 美食: 'bg-amber-400/20 text-amber-400',
+  耽美: 'bg-pink-400/20 text-pink-400', 百合: 'bg-fuchsia-400/20 text-fuchsia-400',
+  军事: 'bg-stone-400/20 text-stone-400', 历史: 'bg-yellow-600/20 text-yellow-600',
+  心理: 'bg-indigo-400/20 text-indigo-400', 转生: 'bg-purple-400/20 text-purple-400',
+  侦探: 'bg-amber-500/20 text-amber-500', 末世: 'bg-red-500/20 text-red-500',
+  超能力: 'bg-blue-400/20 text-blue-400', 恶搞: 'bg-orange-400/20 text-orange-400',
+  治愈: 'bg-green-400/20 text-green-400', 电竞: 'bg-cyan-400/20 text-cyan-400',
+  丧尸: 'bg-lime-500/20 text-lime-500', 复仇: 'bg-red-500/20 text-red-500',
+}
+
+const GENRE_PALETTE = [
+  'bg-red-400/20 text-red-400', 'bg-amber-400/20 text-amber-400',
+  'bg-yellow-400/20 text-yellow-400', 'bg-green-400/20 text-green-400',
+  'bg-emerald-400/20 text-emerald-400', 'bg-teal-400/20 text-teal-400',
+  'bg-cyan-400/20 text-cyan-400', 'bg-sky-400/20 text-sky-400',
+  'bg-blue-400/20 text-blue-400', 'bg-indigo-400/20 text-indigo-400',
+  'bg-purple-400/20 text-purple-400', 'bg-fuchsia-400/20 text-fuchsia-400',
+  'bg-pink-400/20 text-pink-400', 'bg-rose-400/20 text-rose-400',
+  'bg-orange-400/20 text-orange-400', 'bg-lime-400/20 text-lime-400',
+  'bg-violet-400/20 text-violet-400', 'bg-stone-400/20 text-stone-400',
+]
+
+function genreColor(g: string): string {
+  if (GENRE_COLORS[g]) return GENRE_COLORS[g]
+  let hash = 0
+  for (let i = 0; i < g.length; i++) hash = ((hash << 5) - hash) + g.charCodeAt(i)
+  return GENRE_PALETTE[Math.abs(hash) % GENRE_PALETTE.length]
 }

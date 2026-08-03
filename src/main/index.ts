@@ -5,7 +5,7 @@ delete (process.env as any).ELECTRON_RUN_AS_NODE
 
 import { app, BrowserWindow, protocol, ipcMain, dialog, Menu } from 'electron'
 import { join } from 'path'
-import { createReadStream, statSync, existsSync, writeFileSync } from 'fs'
+import { createReadStream, statSync, existsSync, writeFileSync, readFileSync } from 'fs'
 import { spawn, ChildProcess } from 'child_process'
 import { createConnection, Socket } from 'net'
 import { Readable } from 'stream'
@@ -24,6 +24,7 @@ import { parseMP4Meta, detectAudioCodec } from './video-info'
 import { fetchMetadataForSeries, fetchMetadataBatch, validateBatchTitles } from './metadata-fetcher'
 import { loadModel, getTranslateStatus, loadJaModel, translateJaToZh, translateEnToZh } from './local-translate'
 import { configureAI, translateWithAI, getAIKey } from './ai-translate'
+import { translateLocal } from './anime-dict'
 import {
   setWhisperConfig,
   isWhisperAvailable,
@@ -1013,49 +1014,29 @@ function registerIpcHandlers(): void {
   })
 
   // AniList 新番时间表
-  // 策略：仅在季度首日（1.1 / 4.1 / 7.1 / 10.1）自动抓取，其余时间读缓存
-  // 用户可随时点"刷新"按钮强制重新抓取
+  // 策略：有缓存且缓存季度 = 当前季度 → 直接复用；换季或强制刷新 → 重新抓取翻译
   ipcMain.handle('season:fetchTimeline', async (_e, forceRefresh?: boolean) => {
     const cachePath = join(app.getPath('userData'), 'season-cache.json')
-    const SEASON_STARTS = ['01-01', '04-01', '07-01', '10-01']
-
     const now = new Date()
-    const todayStr = `${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-    const isSeasonStart = SEASON_STARTS.includes(todayStr)
-
-    // 计算下一个季度首日，用于 UI 提示
     const m = now.getMonth() + 1
-    let nextSeasonMonth = 1
-    if (m < 4) nextSeasonMonth = 4; else if (m < 7) nextSeasonMonth = 7; else if (m < 10) nextSeasonMonth = 10
-    const nextFetchYear = (m >= 10) ? now.getFullYear() + 1 : now.getFullYear()
-    const nextFetchDate = `${nextFetchYear}-${String(nextSeasonMonth).padStart(2, '0')}-01`
+    let se = 'WINTER'; if (m >= 4 && m <= 6) se = 'SPRING'; else if (m >= 7 && m <= 9) se = 'SUMMER'; else if (m >= 10 && m <= 12) se = 'FALL'
+    const currentSeason = `${se} ${now.getFullYear()}`
 
     if (!forceRefresh) {
       try {
         const cacheRaw = readFileSync(cachePath, 'utf-8')
         const cache = JSON.parse(cacheRaw)
-        if (cache.timestamp && cache.data?.anime?.length) {
-          // 季度首日且缓存是之前的 → 重新抓取
-          if (isSeasonStart) {
-            const cacheDate = new Date(cache.timestamp).toDateString()
-            const todayDate = now.toDateString()
-            if (cacheDate !== todayDate) {
-              console.log('[AniBox] 季度首日，缓存过期，重新抓取新番数据')
-            } else {
-              // 今天已经抓过了，直接用缓存
-              return { ok: true, fromCache: true, nextFetchDate, season: cache.data.season, anime: cache.data.anime }
-            }
-          } else {
-            // 非季度首日，直接用缓存
-            return { ok: true, fromCache: true, nextFetchDate, season: cache.data.season, anime: cache.data.anime }
+        if (cache.data?.season && cache.data?.anime?.length) {
+          if (cache.data.season === currentSeason) {
+            console.log('[AniBox] 缓存命中，季度匹配，直接复用')
+            return { ok: true, fromCache: true, season: cache.data.season, anime: cache.data.anime }
           }
+          console.log(`[AniBox] 缓存季度(${cache.data.season})与当前(${currentSeason})不匹配，重新抓取`)
         }
-      } catch {}
+      } catch (e: any) {
+        console.log('[AniBox] 缓存读取失败:', e.message)
+      }
     }
-
-    // 需要抓取：无缓存 / 季度首日 / 强制刷新
-    let se = 'WINTER'; if (m >= 4 && m <= 6) se = 'SPRING'; else if (m >= 7 && m <= 9) se = 'SUMMER'; else if (m >= 10 && m <= 12) se = 'FALL'
-    const currentSeason = `${se} ${now.getFullYear()}`
 
     try {
       const query = `
@@ -1064,10 +1045,16 @@ function registerIpcHandlers(): void {
             media(season: $season, seasonYear: $year, type: ANIME, format: TV, sort: POPULARITY_DESC) {
               id
               title { native romaji english }
-              coverImage { large }
-              episodes averageScore
+              coverImage { large extraLarge }
+              bannerImage
+              description
+              episodes duration averageScore popularity
+              genres
+              studios { nodes { name } }
+              startDate { year month day }
+              endDate { year month day }
+              season seasonYear format status
               nextAiringEpisode { airingAt episode timeUntilAiring }
-              format status genres
             }
           }
         }`
@@ -1088,9 +1075,20 @@ function registerIpcHandlers(): void {
         titleEnglish: m.title?.english || '',
         titleZh: '',
         cover: m.coverImage?.large || '',
+        coverExtra: m.coverImage?.extraLarge || '',
+        bannerImage: m.bannerImage || '',
+        description: (m.description || '').replace(/<[^>]+>/g, '').substring(0, 1000),
+        descriptionZh: '',
         episodes: m.episodes ?? null,
+        duration: m.duration ?? null,
         score: m.averageScore ?? null,
-        genres: m.genres || [],
+        popularity: m.popularity ?? null,
+        genres: (m.genres || []).map((g: string) => translateLocal(g) || g),
+        studios: (m.studios?.nodes || []).map((s: any) => s.name),
+        startDate: m.startDate || null,
+        endDate: m.endDate || null,
+        season: m.season || '',
+        seasonYear: m.seasonYear || 0,
         format: m.format,
         status: m.status,
         nextAiring: m.nextAiringEpisode ? {
@@ -1117,18 +1115,37 @@ function registerIpcHandlers(): void {
           console.log(`[AniBox] AI translate progress: ${done}/${anime.length}`)
         }
         console.log('[AniBox] AI title translation done')
+
+        // AI 简介翻译
+        const withDesc = anime.filter(a => a.description && a.description.length > 10)
+        if (withDesc.length > 0) {
+          console.log('[AniBox] Starting AI description translation for', withDesc.length, 'anime')
+          let descDone = 0
+          for (let i = 0; i < withDesc.length; i += BATCH) {
+            const batch = withDesc.slice(i, i + BATCH)
+            await Promise.all(batch.map(async (a) => {
+              try {
+                const zh = await translateWithAI(a.description, 'auto', 'zh')
+                if (zh && zh !== a.description) { a.descriptionZh = zh }
+              } catch { a.descriptionZh = a.description }
+            }))
+            descDone += batch.length
+            console.log(`[AniBox] AI desc translate progress: ${descDone}/${withDesc.length}`)
+          }
+          console.log('[AniBox] AI description translation done')
+        }
       }
 
       const payload = { season: currentSeason, anime }
       try {
         writeFileSync(cachePath, JSON.stringify({ timestamp: Date.now(), data: payload }, null, 2), 'utf-8')
       } catch {}
-      return { ok: true, fromCache: false, nextFetchDate, ...payload }
+      return { ok: true, fromCache: false, ...payload }
     } catch (err: any) {
       console.error('[AniBox] season:fetchTimeline error:', err)
       try {
         const fb = JSON.parse(readFileSync(join(app.getPath('userData'), 'season-cache.json'), 'utf-8'))
-        return { ok: true, fromCache: true, stale: true, nextFetchDate, ...fb.data }
+        return { ok: true, fromCache: true, stale: true, ...fb.data }
       } catch {}
       return { ok: false, error: err.message || '网络请求失败', anime: [] }
     }
