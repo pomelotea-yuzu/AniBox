@@ -4,7 +4,7 @@ delete process.env.ELECTRON_RUN_AS_NODE
 delete (process.env as any).ELECTRON_RUN_AS_NODE
 
 import { app, BrowserWindow, protocol, ipcMain, dialog, Menu } from 'electron'
-import { join } from 'path'
+import { join, dirname } from 'path'
 import { createReadStream, statSync, existsSync, writeFileSync, readFileSync } from 'fs'
 import { spawn, ChildProcess } from 'child_process'
 import { createConnection, Socket } from 'net'
@@ -313,9 +313,15 @@ function mpvKill(): void {
 }
 
 function getMpvPath(): string {
-  // 打包后 mpv.exe 在 extraResources 中，通过 process.resourcesPath 访问
   if (app.isPackaged) {
-    return join(process.resourcesPath, 'mpv.exe')
+    // 标准布局：resources/mpv.exe（electron-builder extraResources from: mpv.exe, to: .）
+    const standard = join(process.resourcesPath, 'mpv.exe')
+    if (existsSync(standard)) return standard
+    // 便携版布局：mpv.exe 在应用根目录（与 AniBox.exe 同级）
+    const portable = join(dirname(process.resourcesPath), 'mpv.exe')
+    if (existsSync(portable)) return portable
+    // 兜底返回标准路径，让 spawn 报明确错误
+    return standard
   }
   // 开发时在项目根目录
   return join(__dirname, '../../mpv.exe')
@@ -359,7 +365,31 @@ function mpvLaunch(fp: string): Promise<void> {
             if (!line.trim()) continue
             try {
               const msg = JSON.parse(line)
-              if (msg.event) mainWindow?.webContents.send('mpv:event', msg)
+              if (msg.event) {
+                mainWindow?.webContents.send('mpv:event', msg)
+                // 文件加载完成后查询字幕/音轨列表
+                if (msg.event === 'file-loaded') {
+                  sock.write(
+                    JSON.stringify({ command: ['get_property', 'track-list'], request_id: 9999 }) +
+                      '\n',
+                  )
+                }
+              }
+              // track-list 查询结果
+              if (msg.request_id === 9999 && msg.data !== undefined) {
+                const tracks = (msg.data || []) as any[]
+                mainWindow?.webContents.send('mpv:event', {
+                  event: 'tracks',
+                  data: tracks.map((t: any) => ({
+                    id: t.id,
+                    type: t.type,
+                    lang: t.lang || '',
+                    title: t.title || '',
+                    codec: t.codec || '',
+                    selected: !!t.selected,
+                  })),
+                })
+              }
             } catch {
               /* ignore malformed */
             }
@@ -384,6 +414,119 @@ function mpvLaunch(fp: string): Promise<void> {
     setTimeout(tryConnect, 800)
   }).then(() => {
     mainWindow?.webContents.send('mpv:event', { event: 'ready' })
+  })
+}
+
+// === 通过 mpv 检测内封字幕轨道（解决 Chromium 不暴露 ASS/SSA/PGS 字幕的问题）===
+interface EmbeddedSubTrack {
+  label: string
+  language: string
+  codec: string
+  index: number
+}
+
+function detectSubtitlesViaMpv(filePath: string): Promise<EmbeddedSubTrack[]> {
+  return new Promise((resolve) => {
+    const exe = getMpvPath()
+    console.log('[AniBox] detectSubtitlesViaMpv: exe path =', exe)
+    if (!existsSync(exe)) {
+      console.warn('[AniBox] mpv.exe not found at', exe, ', skip embedded subtitle detection')
+      resolve([])
+      return
+    }
+
+    const pipeName = `\\\\.\\pipe\\anibox-detect-${Date.now()}`
+    let sock: Socket | null = null
+    let buf = ''
+    let trackList: any[] | null = null
+    let resolved = false
+
+    const cleanup = () => {
+      clearTimeout(timeout)
+      if (sock) {
+        try { sock.destroy() } catch { /* ok */ }
+        sock = null
+      }
+      if (!proc.killed) {
+        try { proc.kill() } catch { /* ok */ }
+      }
+    }
+
+    const finish = (result: EmbeddedSubTrack[]) => {
+      if (resolved) return
+      resolved = true
+      cleanup()
+      resolve(result)
+    }
+
+    const proc = spawn(exe, [
+      `--input-ipc-server=${pipeName}`,
+      '--idle=yes',
+      '--vo=null',
+      '--ao=null',
+      '--no-config',
+      '--no-video',
+    ], { stdio: 'ignore' })
+
+    proc.on('error', () => finish([]))
+
+    // 给 mpv 启动和创建管道的时间
+    setTimeout(() => {
+      if (resolved) return
+      sock = createConnection(pipeName)
+
+      sock.once('connect', () => {
+        // 加载文件，track-list 在文件加载后填充
+        sock!.write(JSON.stringify({ command: ['loadfile', filePath, 'replace'] }) + '\n')
+      })
+
+      sock.on('data', (d: Buffer) => {
+        if (resolved) return
+        buf += d.toString()
+        const lines = buf.split('\n')
+        buf = lines.pop() || ''
+        for (const line of lines) {
+          if (!line.trim()) continue
+          try {
+            const msg = JSON.parse(line)
+
+            if (msg.event === 'file-loaded' && trackList === null) {
+              // 文件加载完毕，查询轨道列表
+              sock!.write(JSON.stringify({
+                command: ['get_property', 'track-list'],
+                request_id: 1,
+              }) + '\n')
+            } else if (msg.request_id === 1 && msg.data !== undefined) {
+              // 收到轨道列表
+              trackList = msg.data || []
+              sock!.write(JSON.stringify({ command: ['quit'] }) + '\n')
+            }
+          } catch { /* ignore malformed JSON */ }
+        }
+      })
+
+      sock.on('error', () => finish([]))
+
+      sock.on('close', () => {
+        if (trackList) {
+          const subs = trackList
+            .filter((t: any) => t.type === 'sub')
+            .map((t: any, i: number) => ({
+              label: t.title || t.lang || `内封字幕 ${i + 1}`,
+              language: t.lang || '',
+              codec: t.codec || '',
+              index: i,
+            }))
+          console.log('[AniBox] detectSubtitlesViaMpv: found', subs.length, 'embedded subtitle tracks')
+          finish(subs)
+        } else {
+          console.log('[AniBox] detectSubtitlesViaMpv: no track-list received (timeout or mpv failed)')
+          finish([])
+        }
+      })
+    }, 500)
+
+    const timeout = setTimeout(() => finish([]), 10000)
   })
 }
 
@@ -443,6 +586,11 @@ function registerIpcHandlers(): void {
     } catch {
       return { codec: 'unknown', supported: true }
     }
+  })
+
+  // 通过 mpv 检测内封字幕（解决 Chromium 不暴露 ASS/SSA/PGS 字幕轨道的问题）
+  ipcMain.handle('video:detectEmbeddedSubtitles', (_e, p: string) => {
+    return detectSubtitlesViaMpv(p)
   })
 
   ipcMain.handle('playback:savePosition', (_e, filePath: string, position: number) => {
@@ -597,6 +745,17 @@ function registerIpcHandlers(): void {
   ipcMain.handle('mpv:quit', () => {
     mpvKill()
     mainWindow?.focus()
+  })
+
+  // 向运行中的 mpv 发送 JSON IPC 命令（字幕切换、音轨切换等）
+  ipcMain.handle('mpv:command', (_e, cmd: any[]) => {
+    if (!mpvSock) return false
+    try {
+      mpvSock.write(JSON.stringify({ command: cmd }) + '\n')
+      return true
+    } catch {
+      return false
+    }
   })
 
   ipcMain.handle('window:toggleFullscreen', () => {

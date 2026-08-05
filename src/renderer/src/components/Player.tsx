@@ -245,9 +245,32 @@ export default function Player({
         label: t.label,
         language: t.language,
         type: 'embedded' as const,
+        codec: (t as any).codec as string | undefined,
       })),
     ],
     [subs.subtitleDisplayTracks, playback.embeddedTextTracks],
+  )
+
+  // —— 字幕切换包装：mpv 检测到的内封字幕（ASS/PGS 等）需要切到 mpv 播放 ——
+  const handleSubtitleChangeWrapped = useCallback(
+    (idx: number) => {
+      // 检查选中的字幕是否需要 mpv
+      if (idx >= 0 && idx < allSubtitleTracksForControls.length) {
+        const track = allSubtitleTracksForControls[idx]
+        if (
+          track.type === 'embedded' &&
+          (track as any).codec &&
+          (track as any).codec !== 'browser'
+        ) {
+          // 浏览器不支持的格式（ASS/SSA/PGS/DVB 等），切到 mpv 回退
+          console.log('[AniBox] Embedded subtitle needs mpv, triggering fallback:', track.label)
+          onFallback?.()
+          return
+        }
+      }
+      subs.handleSubtitleChange(idx)
+    },
+    [allSubtitleTracksForControls, subs, onFallback],
   )
 
   // ============ 有副字幕的 ref ============
@@ -769,7 +792,7 @@ export default function Player({
           onVolumeChange={playback.handleVolumeChange}
           onSpeedChange={playback.handleSpeedChange}
           onToggleFullscreen={playback.toggleFullscreen}
-          onSubtitleChange={subs.handleSubtitleChange}
+          onSubtitleChange={handleSubtitleChangeWrapped}
           onSecondarySubtitleChange={subs.handleSecondarySubtitleChange}
           onAudioChange={playback.handleAudioChange}
           onAspectCycle={extras.cycleAspectRatio}

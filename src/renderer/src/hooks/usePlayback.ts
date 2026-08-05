@@ -70,7 +70,7 @@ export function usePlayback(opts: UsePlaybackOptions) {
 
   // 内嵌轨道
   const [embeddedTextTracks, setEmbeddedTextTracks] = useState<
-    { label: string; language: string; index: number }[]
+    { label: string; language: string; index: number; codec?: string }[]
   >([])
   const [audioTracks, setAudioTracks] = useState<
     { label: string; language: string; index: number }[]
@@ -138,26 +138,107 @@ export function usePlayback(opts: UsePlaybackOptions) {
     window.electronAPI.toggleFullscreen()
   }, [])
 
-  // —— 内嵌字幕轨道检测 ——
+  // —— 内嵌字幕轨道检测（textTracks + mpv 双重检测） ——
   const detectEmbeddedTracks = useCallback(() => {
     const v = videoRef.current
-    if (!v || !v.textTracks) return
-    const check = () => {
+    console.log('[AniBox] detectEmbeddedTracks called, filePath:', filePath)
+
+    // 方法1: 浏览器 textTracks API（Chromium 支持的格式：SRT/WebVTT 内封）
+    const fromTextTracks = (): { label: string; language: string; index: number; codec?: string }[] => {
+      if (!v || !v.textTracks) {
+        console.log('[AniBox] textTracks: video element or textTracks not available')
+        return []
+      }
       const tracks = v.textTracks
-      if (!tracks || tracks.length === 0) return
-      const embedded: { label: string; language: string; index: number }[] = []
+      if (!tracks || tracks.length === 0) {
+        console.log('[AniBox] textTracks: 0 tracks')
+        return []
+      }
+      const embedded: { label: string; language: string; index: number; codec?: string }[] = []
       for (let i = 0; i < tracks.length; i++) {
         const t = tracks[i]
+        console.log(`[AniBox] textTrack[${i}]: kind=${t.kind} label="${t.label}" lang="${t.language}"`)
         if (t.kind === 'subtitles' || t.kind === 'captions') {
-          embedded.push({ label: t.label || `轨道 ${i + 1}`, language: t.language || '', index: i })
+          embedded.push({
+            label: t.label || `轨道 ${i + 1}`,
+            language: t.language || '',
+            index: i,
+            codec: 'browser',
+          })
         }
       }
-      if (embedded.length > 0) setEmbeddedTextTracks(embedded)
+      return embedded
     }
-    check()
-    const timer = setTimeout(check, 500)
+
+    // 方法2: mpv JSON IPC 检测（支持 ASS/SSA/PGS 等 Chromium 不暴露的格式）
+    const fromMpv = async (): Promise<{ label: string; language: string; index: number; codec?: string }[]> => {
+      try {
+        console.log('[AniBox] Calling detectEmbeddedSubtitles IPC...')
+        const mpvTracks = await window.electronAPI.detectEmbeddedSubtitles(filePath)
+        console.log('[AniBox] mpv detection returned', mpvTracks.length, 'tracks:', mpvTracks)
+        return mpvTracks
+      } catch (e) {
+        console.error('[AniBox] mpv detection error:', e)
+        return []
+      }
+    }
+
+    // 合并去重 + 自动回退
+    const mergeAndSet = (textTracks: typeof result, mpvTracks: Awaited<ReturnType<typeof fromMpv>>) => {
+      const seen = new Set<string>()
+      const merged: { label: string; language: string; index: number; codec?: string }[] = []
+
+      // mpv 检测到的优先（覆盖更多格式）
+      for (const t of mpvTracks) {
+        const key = `${t.language}|${t.label}`
+        if (!seen.has(key)) {
+          seen.add(key)
+          merged.push(t)
+        }
+      }
+      // textTracks 补充（可能检测到 mpv 漏掉的）
+      for (const t of textTracks) {
+        const key = `${t.language}|${t.label}`
+        if (!seen.has(key)) {
+          seen.add(key)
+          merged.push(t)
+        }
+      }
+
+      console.log('[AniBox] Merged embedded tracks:', merged.length, merged.map(t => `${t.label}(${t.codec})`))
+      if (merged.length > 0) {
+        setEmbeddedTextTracks(merged)
+
+        // 自动回退：浏览器不识别的内封字幕（ASS/SSA/PGS 等）→ 直接切 mpv
+        const needsMpv = mpvTracks.length > 0 && textTracks.length === 0
+        if (needsMpv && onFallback) {
+          console.log('[AniBox] Auto mpv fallback: embedded subtitles not supported by browser')
+          // 小延迟，等 UI 状态更新
+          setTimeout(() => onFallback(), 200)
+        }
+      }
+    }
+
+    // 先同步检测 textTracks
+    const textResult = fromTextTracks()
+    console.log('[AniBox] textTracks result:', textResult.length, 'tracks')
+    // 异步调用 mpv 检测，结果合并
+    fromMpv().then((mpvResult) => mergeAndSet(textResult, mpvResult))
+    // 延迟再检测一次 textTracks（某些格式加载较慢）
+    const timer = setTimeout(() => {
+      const lateResult = fromTextTracks()
+      if (lateResult.length > 0) {
+        setEmbeddedTextTracks((prev) => {
+          const seen = new Set(prev.map((t) => `${t.language}|${t.label}`))
+          const newTracks = lateResult.filter(
+            (t) => !seen.has(`${t.language}|${t.label}`),
+          )
+          return newTracks.length > 0 ? [...prev, ...newTracks] : prev
+        })
+      }
+    }, 500)
     return () => clearTimeout(timer)
-  }, [])
+  }, [filePath, onFallback])
 
   // —— 音轨检测与偏好恢复 ——
   const detectAudioTracks = useCallback(() => {

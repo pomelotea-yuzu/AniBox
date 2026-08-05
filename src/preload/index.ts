@@ -15,6 +15,11 @@ const electronAPI = {
   checkAudio: (filePath: string): Promise<{ codec: string; supported: boolean }> =>
     ipcRenderer.invoke('video:checkAudio', filePath),
 
+  detectEmbeddedSubtitles: (
+    filePath: string,
+  ): Promise<Array<{ label: string; language: string; codec: string; index: number }>> =>
+    ipcRenderer.invoke('video:detectEmbeddedSubtitles', filePath),
+
   savePosition: (filePath: string, position: number): Promise<void> =>
     ipcRenderer.invoke('playback:savePosition', filePath, position),
 
@@ -155,6 +160,7 @@ const electronAPI = {
   // mpv 兜底
   mpvPlay: (filePath: string): Promise<void> => ipcRenderer.invoke('mpv:play', filePath),
   mpvQuit: (): Promise<void> => ipcRenderer.invoke('mpv:quit'),
+  mpvCommand: (cmd: any[]): Promise<boolean> => ipcRenderer.invoke('mpv:command', cmd),
   mpvOnEvent: (cb: (event: Record<string, unknown>) => void): (() => void) => {
     const handler = (_e: Electron.IpcRendererEvent, event: Record<string, unknown>) => cb(event)
     ipcRenderer.on('mpv:event', handler)

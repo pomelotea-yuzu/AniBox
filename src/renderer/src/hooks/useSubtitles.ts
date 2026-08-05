@@ -18,7 +18,7 @@ export function useSubtitles(opts: UseSubtitlesOptions) {
   const [subtitleDisplayTracks, setSubtitleDisplayTracks] = useState<SubtitleTrackInfo[]>([])
   const [selectedSubtitleIdx, setSelectedSubtitleIdx] = useState(-1)
   const [embeddedTextTracks, setEmbeddedTextTracks] = useState<
-    { label: string; language: string; index: number }[]
+    { label: string; language: string; index: number; codec?: string }[]
   >([])
   const blobUrlsRef = useRef<string[]>([])
 

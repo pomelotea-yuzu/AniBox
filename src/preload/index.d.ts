@@ -14,6 +14,9 @@ export interface ElectronAPI {
     } | null
   } | null>
   checkAudio: (filePath: string) => Promise<{ codec: string; supported: boolean }>
+  detectEmbeddedSubtitles: (
+    filePath: string,
+  ) => Promise<Array<{ label: string; language: string; codec: string; index: number }>>
   savePosition: (filePath: string, position: number) => Promise<void>
   getPosition: (filePath: string) => Promise<number>
   getMediaUrl: (filePath: string) => string
@@ -66,6 +69,7 @@ export interface ElectronAPI {
   ) => () => void
   mpvPlay: (filePath: string) => Promise<void>
   mpvQuit: () => Promise<void>
+  mpvCommand: (cmd: any[]) => Promise<boolean>
   mpvOnEvent: (cb: (event: Record<string, unknown>) => void) => () => void
   subtitleReadVtt: (filePath: string) => Promise<string>
   subtitleGetUrl: (filePath: string) => string
