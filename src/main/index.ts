@@ -47,6 +47,7 @@ import {
 import { startWatching, stopWatching, getWatcherStatus } from './file-watcher'
 import {
   searchAnimeGarden,
+  listTeams,
   getQbConfig,
   setQbConfig,
   qbTestConnection,
@@ -1152,6 +1153,9 @@ function registerIpcHandlers(): void {
 
   // AnimeGarden 资源搜索
   ipcMain.handle('animegarden:search', (_e, params: any) => searchAnimeGarden(params || {}))
+
+  // 字幕组列表（GET /teams，1h 缓存）
+  ipcMain.handle('animegarden:teams', () => listTeams())
 
   // 本地 RSS 订阅代理
   ipcMain.handle('animegarden:createFeed', (_e, cfg: any) => createRssFeed(cfg || {}))

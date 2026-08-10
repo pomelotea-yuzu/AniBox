@@ -88,6 +88,43 @@ export async function searchAnimeGarden(
   }
 }
 
+export interface AGTeam {
+  id: number
+  name: string
+  avatar?: string | null
+  providers?: Record<string, { providerId?: string; avatar?: string | null }>
+}
+
+/** 字幕组列表缓存（1 小时 TTL） */
+let teamsCache: { data: AGTeam[]; ts: number } | null = null
+const TEAMS_TTL = 60 * 60 * 1000
+
+/**
+ * 获取全部字幕组列表（GET /teams）
+ * 带 1 小时内存缓存；请求失败时回退旧缓存
+ */
+export async function listTeams(
+  force = false,
+): Promise<{ ok: true; teams: AGTeam[]; stale?: boolean } | { ok: false; error: string }> {
+  try {
+    if (!force && teamsCache && Date.now() - teamsCache.ts < TEAMS_TTL) {
+      return { ok: true, teams: teamsCache.data }
+    }
+    const resp = await fetchWithRetry(`${AG_API}/teams`, {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(15000),
+    })
+    if (!resp.ok) return { ok: false, error: `AnimeGarden API 错误 HTTP ${resp.status}` }
+    const data = await resp.json()
+    const teams: AGTeam[] = data?.teams || []
+    teamsCache = { data: teams, ts: Date.now() }
+    return { ok: true, teams }
+  } catch (e: any) {
+    if (teamsCache) return { ok: true, teams: teamsCache.data, stale: true }
+    return { ok: false, error: e.name === 'TimeoutError' ? '请求超时' : e.message || '网络错误' }
+  }
+}
+
 // ==== 本地 RSS 代理 ====
 // 镜像站 feed.xml 的 filter 参数不生效，这里由 AniBox 起本地 HTTP 服务，
 // 收到 qBittorrent 拉取请求时实时调 /resources API（search 生效），

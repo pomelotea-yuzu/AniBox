@@ -415,6 +415,9 @@ const electronAPI = {
   animegardenSearch: (params: any): Promise<any> =>
     ipcRenderer.invoke('animegarden:search', params),
 
+  // 字幕组列表（GET /teams，主进程 1h 缓存）
+  animegardenTeams: (): Promise<any> => ipcRenderer.invoke('animegarden:teams'),
+
   // 本地 RSS 订阅代理（AnimeGarden 镜像站 feed.xml 不可用，由 AniBox 本地生成）
   animegardenCreateFeed: (cfg: any): Promise<{ ok: boolean; url: string; id: string }> =>
     ipcRenderer.invoke('animegarden:createFeed', cfg),

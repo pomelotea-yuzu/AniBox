@@ -67,6 +67,10 @@ export default function AnimeGardenPanel({ titles, onClose, onOpenSettings }: Pr
   const [qbConfigured, setQbConfigured] = useState(false)
   const [notice, setNotice] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
+  // 字幕组筛选
+  const [teams, setTeams] = useState<Array<{ id: number; name: string; avatar?: string | null }>>([])
+  const [selectedFansub, setSelectedFansub] = useState<{ id: number; name: string } | null>(null)
+  const [teamsError, setTeamsError] = useState('')
   // 追番路径对话框
   const [pathDialog, setPathDialog] = useState<{
     label: string
@@ -88,20 +92,36 @@ export default function AnimeGardenPanel({ titles, onClose, onOpenSettings }: Pr
     window.electronAPI.qbGetConfig().then((c) => setQbConfigured(!!c)).catch(() => {})
   }, [])
 
+  // 加载字幕组列表（1h 缓存，失败静默，仅显示提示）
+  useEffect(() => {
+    window.electronAPI
+      .animegardenTeams()
+      .then((r: any) => {
+        if (r?.ok && r.teams?.length) {
+          setTeams(r.teams)
+        } else {
+          setTeamsError(r?.error || '字幕组列表加载失败')
+        }
+      })
+      .catch(() => setTeamsError('字幕组列表加载失败'))
+  }, [])
+
   const search = useCallback(async (kw?: string) => {
     const q = (kw ?? keyword).trim()
     if (!q) { setError('请输入搜索关键词'); return }
     setLoading(true)
     setError('')
+    // 选中字幕组时加大拉取量，避免目标字幕组不在默认分页内导致 0 结果
     const r = await window.electronAPI.animegardenSearch({
       search: q,
       type: '动画',
-      pageSize: 30,
+      pageSize: selectedFansub ? 200 : 30,
+      fansubId: selectedFansub?.id,
     })
     setLoading(false)
     if (!r.ok) { setError(r.error || '搜索失败'); setResults([]); return }
     setResults(r.resources || [])
-  }, [keyword])
+  }, [keyword, selectedFansub])
 
   // 打开时自动搜索（useState 初始值已是中文名，无需重复 setKeyword）
   useEffect(() => {
@@ -131,24 +151,27 @@ export default function AnimeGardenPanel({ titles, onClose, onOpenSettings }: Pr
   }, [qbConfigured, showNotice, onOpenSettings])
 
   // 创建本地 RSS 订阅（镜像站 feed.xml 的 filter 不生效，由 AniBox 本地生成）
+  // 未显式指定字幕组时，默认带上全局筛选的字幕组
   const makeFeed = useCallback(
     async (opts: { fansubId?: number; fansubName?: string } = {}) => {
       const kw = keyword.trim()
       if (!kw) { showNotice('请先输入关键词'); return null }
-      const name = opts.fansubName
-        ? `${kw} · ${opts.fansubName}`
+      const fid = opts.fansubId ?? selectedFansub?.id
+      const fname = opts.fansubName ?? selectedFansub?.name
+      const name = fname
+        ? `${kw} · ${fname}`
         : `${kw} · 全部字幕组`
       const r = await window.electronAPI.animegardenCreateFeed({
         name,
         search: kw,
-        fansubId: opts.fansubId,
-        fansubName: opts.fansubName,
+        fansubId: fid,
+        fansubName: fname,
         type: '动画',
       })
       if (!r.ok) { showNotice('创建订阅失败'); return null }
       return r.url
     },
-    [keyword, showNotice],
+    [keyword, selectedFansub, showNotice],
   )
 
   const copyRss = useCallback(async () => {
@@ -315,6 +338,12 @@ export default function AnimeGardenPanel({ titles, onClose, onOpenSettings }: Pr
             </button>
           </div>
           <div className="flex items-center gap-2 mt-2 flex-wrap">
+            <FansubPicker
+              teams={teams}
+              value={selectedFansub}
+              onChange={setSelectedFansub}
+              error={teamsError}
+            />
             <button onClick={copyRss} className="px-2.5 py-1 text-[11px] rounded-lg border border-anibox-border text-anibox-text-muted hover:text-anibox-text hover:border-anibox-accent/40 transition-colors">
               📡 复制 RSS 订阅链接
             </button>
@@ -351,7 +380,12 @@ export default function AnimeGardenPanel({ titles, onClose, onOpenSettings }: Pr
           )}
           {!loading && !error && results.length > 0 && (
             <div className="space-y-2">
-              <p className="text-[11px] text-anibox-text-muted">找到 {results.length} 个资源</p>
+              <p className="text-[11px] text-anibox-text-muted">
+                找到 {results.length} 个资源
+                {selectedFansub && (
+                  <span className="ml-1.5 px-1.5 py-0.5 rounded bg-anibox-accent/10 text-anibox-accent">字幕组: {selectedFansub.name}</span>
+                )}
+              </p>
               {results.map((r) => (
                 <div
                   key={r.id}
@@ -417,8 +451,7 @@ export default function AnimeGardenPanel({ titles, onClose, onOpenSettings }: Pr
       </div>
 
       {/* 追番路径对话框：为该番指定保存文件夹 */}
-      {pathDialog && (
-        <div
+      {pathDialog && (        <div
           className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50"
           onClick={() => !submitting && setPathDialog(null)}
         >
@@ -493,5 +526,91 @@ export default function AnimeGardenPanel({ titles, onClose, onOpenSettings }: Pr
         </div>
       )}
     </>
+  )
+}
+
+/** 字幕组筛选器：输入过滤下拉（827+ 字幕组，支持按名称搜索） */
+function FansubPicker({
+  teams,
+  value,
+  onChange,
+  error,
+}: {
+  teams: Array<{ id: number; name: string; avatar?: string | null }>
+  value: { id: number; name: string } | null
+  onChange: (v: { id: number; name: string } | null) => void
+  error?: string
+}) {
+  const [q, setQ] = useState('')
+  const [open, setOpen] = useState(false)
+  const boxRef = useRef<HTMLDivElement>(null)
+
+  // 点击外部关闭
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const kw = q.trim().toLowerCase()
+  const filtered = kw
+    ? teams.filter((t) => (t.name || '').toLowerCase().includes(kw)).slice(0, 50)
+    : teams.slice(0, 50)
+
+  return (
+    <div ref={boxRef} className="relative">
+      <div className="flex items-center gap-1.5">
+        <span className="text-[11px] text-anibox-text-muted">字幕组:</span>
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onFocus={() => setOpen(true)}
+          placeholder={value ? `✓ ${value.name}` : '不限'}
+          title={value ? `当前筛选: ${value.name}（输入可换，✕ 清除）` : '输入字幕组名过滤，或不限'}
+          className="w-36 px-2 py-1 text-[11px] bg-anibox-bg border border-anibox-border rounded-lg text-anibox-text placeholder:text-anibox-text-muted/50 focus:outline-none focus:border-anibox-accent"
+        />
+        {value && (
+          <button
+            onClick={() => { onChange(null); setQ('') }}
+            className="w-4 h-4 flex items-center justify-center text-[10px] text-anibox-text-muted hover:text-red-400 transition-colors"
+            title="清除字幕组筛选"
+          >
+            ✕
+          </button>
+        )}
+        {!value && !teams.length && !error && (
+          <span className="text-[10px] text-anibox-text-muted/50 animate-pulse">加载中…</span>
+        )}
+        {error && !teams.length && (
+          <span className="text-[10px] text-amber-500/70" title={error}>⚠ 列表加载失败</span>
+        )}
+      </div>
+      {open && (
+        <div className="absolute left-0 top-full mt-1 z-20 w-64 max-h-64 overflow-y-auto bg-anibox-surface border border-anibox-border rounded-lg shadow-xl p-1">
+          <button
+            onClick={() => { onChange(null); setQ(''); setOpen(false) }}
+            className={`w-full text-left px-2 py-1.5 text-[11px] rounded transition-colors ${value ? 'text-anibox-text-muted hover:bg-anibox-border/40' : 'bg-anibox-accent/10 text-anibox-accent font-medium'}`}
+          >
+            不限字幕组
+          </button>
+          {filtered.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => { onChange({ id: t.id, name: t.name }); setQ(''); setOpen(false) }}
+              className={`w-full flex items-center gap-1.5 text-left px-2 py-1.5 text-[11px] rounded transition-colors truncate ${value?.id === t.id ? 'bg-anibox-accent/10 text-anibox-accent font-medium' : 'text-anibox-text hover:bg-anibox-border/40'}`}
+              title={t.name}
+            >
+              {t.avatar && <img src={t.avatar} alt="" className="w-3.5 h-3.5 rounded-full object-cover shrink-0" loading="lazy" />}
+              <span className="truncate">{t.name}</span>
+            </button>
+          ))}
+          {filtered.length === 0 && (
+            <p className="px-2 py-1.5 text-[10px] text-anibox-text-muted/60">无匹配字幕组（共 {teams.length} 个）</p>
+          )}
+        </div>
+      )}
+    </div>
   )
 }

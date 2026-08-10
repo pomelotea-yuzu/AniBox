@@ -220,6 +220,13 @@ export interface ElectronAPI {
     page?: number
     pageSize?: number
   }) => Promise<{ ok: boolean; resources?: any[]; complete?: boolean; error?: string }>
+  // 字幕组列表（GET /teams，主进程 1h 缓存）
+  animegardenTeams: () => Promise<{
+    ok: boolean
+    teams?: Array<{ id: number; name: string; avatar?: string | null }>
+    stale?: boolean
+    error?: string
+  }>
   // 本地 RSS 订阅代理（镜像站 feed.xml 不可用，AniBox 本地生成）
   animegardenCreateFeed: (cfg: {
     name: string
