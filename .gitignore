@@ -22,6 +22,7 @@ test-gpu.js
 F*
 # ASAR 打包/验证临时文件
 _asar_stage/
+_stage_v2/
 _check_asar.js
 _verify_asar.js
 _test_mpv_tracks.js
