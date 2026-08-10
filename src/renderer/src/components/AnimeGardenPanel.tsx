@@ -7,7 +7,7 @@
  * - 一键发送到 qBittorrent 下载（通过 WebUI API）
  * - 生成该番的 RSS 订阅链接（可复制，或直接添加到 qBittorrent 自动追番）
  */
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 
 export interface AGCandidate {
   id: number
@@ -92,8 +92,9 @@ export default function AnimeGardenPanel({ titles, onClose, onOpenSettings }: Pr
     window.electronAPI.qbGetConfig().then((c) => setQbConfigured(!!c)).catch(() => {})
   }, [])
 
-  // 加载字幕组列表（1h 缓存，失败静默，仅显示提示）
-  useEffect(() => {
+  // 加载字幕组列表（内存/磁盘缓存兜底，失败仅显示提示，可重试）
+  const loadTeams = useCallback(() => {
+    setTeamsError('')
     window.electronAPI
       .animegardenTeams()
       .then((r: any) => {
@@ -105,6 +106,20 @@ export default function AnimeGardenPanel({ titles, onClose, onOpenSettings }: Pr
       })
       .catch(() => setTeamsError('字幕组列表加载失败'))
   }, [])
+
+  useEffect(() => { loadTeams() }, [loadTeams])
+
+  // 候选字幕组 = 在线列表 ∪ 搜索结果中出现的字幕组（列表加载失败时仍可筛选）
+  const fansubCandidates = useMemo(() => {
+    const map = new Map<number, { id: number; name: string; avatar?: string | null }>()
+    for (const t of teams) map.set(t.id, t)
+    for (const r of results) {
+      if (r.fansub?.id && !map.has(r.fansub.id)) {
+        map.set(r.fansub.id, { id: r.fansub.id, name: r.fansub.name, avatar: null })
+      }
+    }
+    return [...map.values()]
+  }, [teams, results])
 
   const search = useCallback(async (kw?: string) => {
     const q = (kw ?? keyword).trim()
@@ -339,10 +354,11 @@ export default function AnimeGardenPanel({ titles, onClose, onOpenSettings }: Pr
           </div>
           <div className="flex items-center gap-2 mt-2 flex-wrap">
             <FansubPicker
-              teams={teams}
+              teams={fansubCandidates}
               value={selectedFansub}
               onChange={setSelectedFansub}
               error={teamsError}
+              onRetry={loadTeams}
             />
             <button onClick={copyRss} className="px-2.5 py-1 text-[11px] rounded-lg border border-anibox-border text-anibox-text-muted hover:text-anibox-text hover:border-anibox-accent/40 transition-colors">
               📡 复制 RSS 订阅链接
@@ -529,17 +545,19 @@ export default function AnimeGardenPanel({ titles, onClose, onOpenSettings }: Pr
   )
 }
 
-/** 字幕组筛选器：输入过滤下拉（827+ 字幕组，支持按名称搜索） */
+/** 字幕组筛选器：输入过滤下拉（支持按名称搜索；列表加载失败可重试） */
 function FansubPicker({
   teams,
   value,
   onChange,
   error,
+  onRetry,
 }: {
   teams: Array<{ id: number; name: string; avatar?: string | null }>
   value: { id: number; name: string } | null
   onChange: (v: { id: number; name: string } | null) => void
   error?: string
+  onRetry?: () => void
 }) {
   const [q, setQ] = useState('')
   const [open, setOpen] = useState(false)
@@ -584,7 +602,18 @@ function FansubPicker({
           <span className="text-[10px] text-anibox-text-muted/50 animate-pulse">加载中…</span>
         )}
         {error && !teams.length && (
-          <span className="text-[10px] text-amber-500/70" title={error}>⚠ 列表加载失败</span>
+          <span className="flex items-center gap-1 text-[10px] text-amber-500/80" title={error}>
+            ⚠ 列表加载失败
+            {onRetry && (
+              <button
+                onClick={onRetry}
+                className="px-1.5 py-0.5 rounded border border-amber-500/40 text-amber-500 hover:bg-amber-500/10 transition-colors"
+                title="重新加载字幕组列表"
+              >
+                重试
+              </button>
+            )}
+          </span>
         )}
       </div>
       {open && (

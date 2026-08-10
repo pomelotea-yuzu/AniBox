@@ -84,7 +84,7 @@ export async function searchAnimeGarden(
       complete: !!data?.complete,
     }
   } catch (e: any) {
-    return { ok: false, error: e.name === 'TimeoutError' ? '请求超时' : e.message || '网络错误' }
+    return { ok: false, error: describeFetchError(e) }
   }
 }
 
@@ -95,33 +95,103 @@ export interface AGTeam {
   providers?: Record<string, { providerId?: string; avatar?: string | null }>
 }
 
-/** 字幕组列表缓存（1 小时 TTL） */
+/** 字幕组列表缓存：内存 1h TTL + 磁盘持久化兜底（24h 在线刷新，30 天离线回退） */
 let teamsCache: { data: AGTeam[]; ts: number } | null = null
-const TEAMS_TTL = 60 * 60 * 1000
+const TEAMS_TTL = 60 * 60 * 1000 // 内存缓存 1h
+const TEAMS_DISK_TTL = 24 * 60 * 60 * 1000 // 磁盘缓存 24h 内优先用
+const TEAMS_DISK_FALLBACK_TTL = 30 * 24 * 60 * 60 * 1000 // 磁盘缓存 30 天内做离线兜底
+const TEAMS_CACHE_PATH = join(app.getPath('userData'), 'teams-cache.json')
+
+function loadTeamsDisk(): { teams: AGTeam[]; ts: number } | null {
+  try {
+    if (existsSync(TEAMS_CACHE_PATH)) {
+      const raw = JSON.parse(readFileSync(TEAMS_CACHE_PATH, 'utf-8'))
+      if (Array.isArray(raw?.teams) && raw.teams.length) {
+        return { teams: raw.teams, ts: raw.ts || 0 }
+      }
+    }
+  } catch {}
+  return null
+}
+
+function saveTeamsDisk(teams: AGTeam[]) {
+  try {
+    writeFileSync(TEAMS_CACHE_PATH, JSON.stringify({ ts: Date.now(), teams }, null, 1), 'utf-8')
+  } catch {}
+}
+
+/** 把 undici 的 "fetch failed" 转成可读中文错误（含底层原因码） */
+function describeFetchError(e: any): string {
+  if (e?.name === 'TimeoutError' || e?.name === 'AbortError') return '请求超时，请检查网络'
+  const code = e?.cause?.code || e?.cause?.cause?.code
+  if (code) {
+    const map: Record<string, string> = {
+      ENOTFOUND: '无法解析域名，请检查网络/DNS',
+      ECONNREFUSED: '连接被拒绝',
+      ECONNRESET: '连接被重置（站点可能不稳定）',
+      ETIMEDOUT: '连接超时',
+      CERT_HAS_EXPIRED: 'SSL 证书过期',
+      'UND_ERR_CONNECT_TIMEOUT': '连接超时',
+    }
+    return `网络错误（${map[code] || code}）`
+  }
+  return e?.message && e.message !== 'fetch failed' ? e.message : '网络错误，请稍后重试'
+}
 
 /**
  * 获取全部字幕组列表（GET /teams）
- * 带 1 小时内存缓存；请求失败时回退旧缓存
+ * 缓存优先级：内存(1h) → 磁盘(24h 在线/30 天离线兜底) → 在线请求
  */
 export async function listTeams(
   force = false,
 ): Promise<{ ok: true; teams: AGTeam[]; stale?: boolean } | { ok: false; error: string }> {
   try {
+    // 内存缓存
     if (!force && teamsCache && Date.now() - teamsCache.ts < TEAMS_TTL) {
       return { ok: true, teams: teamsCache.data }
     }
+    // 磁盘缓存（24h 内直接用，避免频繁请求不稳定的 /teams）
+    const disk = loadTeamsDisk()
+    const diskAge = disk ? Date.now() - disk.ts : Infinity
+    if (!force && disk && diskAge < TEAMS_DISK_TTL) {
+      teamsCache = { data: disk.teams, ts: Date.now() }
+      return { ok: true, teams: disk.teams, stale: true }
+    }
+
     const resp = await fetchWithRetry(`${AG_API}/teams`, {
       headers: { Accept: 'application/json' },
       signal: AbortSignal.timeout(15000),
     })
-    if (!resp.ok) return { ok: false, error: `AnimeGarden API 错误 HTTP ${resp.status}` }
+    if (!resp.ok) {
+      // 在线失败，回退磁盘缓存（30 天内）
+      if (disk && diskAge < TEAMS_DISK_FALLBACK_TTL) {
+        teamsCache = { data: disk.teams, ts: Date.now() }
+        return { ok: true, teams: disk.teams, stale: true }
+      }
+      return { ok: false, error: `AnimeGarden API 错误 HTTP ${resp.status}` }
+    }
     const data = await resp.json()
     const teams: AGTeam[] = data?.teams || []
-    teamsCache = { data: teams, ts: Date.now() }
-    return { ok: true, teams }
+    if (teams.length) {
+      teamsCache = { data: teams, ts: Date.now() }
+      saveTeamsDisk(teams)
+      return { ok: true, teams }
+    }
+    // 返回空列表：回退磁盘
+    if (disk) {
+      teamsCache = { data: disk.teams, ts: Date.now() }
+      return { ok: true, teams: disk.teams, stale: true }
+    }
+    return { ok: false, error: '字幕组列表为空' }
   } catch (e: any) {
+    // 网络失败：内存 → 磁盘（30 天内）逐级回退
     if (teamsCache) return { ok: true, teams: teamsCache.data, stale: true }
-    return { ok: false, error: e.name === 'TimeoutError' ? '请求超时' : e.message || '网络错误' }
+    const disk = loadTeamsDisk()
+    if (disk && Date.now() - disk.ts < TEAMS_DISK_FALLBACK_TTL) {
+      teamsCache = { data: disk.teams, ts: Date.now() }
+      return { ok: true, teams: disk.teams, stale: true }
+    }
+    return { ok: false, error: describeFetchError(e) }
   }
 }
 
