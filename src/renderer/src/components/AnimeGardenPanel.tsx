@@ -212,10 +212,26 @@ export default function AnimeGardenPanel({ titles, onClose, onOpenSettings }: Pr
         ? `✓ 订阅已添加${scope}，规则「${ruleNameOf(label)}${subChoice !== '不限' ? `-${subChoice}` : ''}」${subTxt}匹配即自动下载${savepath ? ` → ${savepath}` : '（qBittorrent 默认目录）'}`
         : `✓ 订阅已添加${scope}，但规则创建失败（${rule.message}）`)
       setPathDialog(null)
+
+      // 追番成功：把封面与简介写入该番保存目录（.anibox/cover.jpg + metadata.json），
+      // 之后把该目录加入番剧库扫描，海报墙即可直接显示封面与简介
+      if (savepath) {
+        const metaTitle = keyword.trim()
+        window.electronAPI
+          .fetchMetadata(metaTitle, savepath)
+          .then((res: any) => {
+            if (res?.metadata) {
+              showNotice(`✓ 封面与简介已写入 ${savepath}\\.anibox\\（刷新番剧库即可显示）`)
+            } else {
+              showNotice('⚠ 订阅已添加，但封面/简介获取失败，可稍后在番剧库手动刮削')
+            }
+          })
+          .catch(() => {})
+      }
     } finally {
       setSubmitting(false)
     }
-  }, [pathDialog, submitting, pathValue, subChoice, makeFeed, addRuleAfterFeed, showNotice])
+  }, [pathDialog, submitting, pathValue, subChoice, makeFeed, addRuleAfterFeed, showNotice, keyword])
 
   // 顶部「➕ 添加到 qBittorrent 订阅」：先弹路径框
   const addRssToQb = useCallback(async () => {
