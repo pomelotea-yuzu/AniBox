@@ -25,6 +25,11 @@ export default defineConfig({
       outDir: 'out/renderer',
       emptyOutDir: false
     },
-    plugins: [react()]
+    plugins: [react()],
+    server: {
+      // 5173 落在 Windows Hyper-V/Docker 保留端口段(5141-5340)导致 EACCES，改到保留段之外
+      port: 5350,
+      strictPort: false
+    }
   }
 })

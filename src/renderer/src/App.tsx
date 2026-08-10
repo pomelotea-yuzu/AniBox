@@ -444,7 +444,10 @@ export default function App() {
         {/* 新番时间表 */}
         {view === 'season' && (
           <div className="w-full h-full">
-            <SeasonCalendar onBack={() => setView('wall')} />
+            <SeasonCalendar
+              onBack={() => setView('wall')}
+              onOpenSettings={() => setShowSettings(true)}
+            />
           </div>
         )}
         {/* 播放器：保持 key 重挂载，无筛选状态需保留 */}

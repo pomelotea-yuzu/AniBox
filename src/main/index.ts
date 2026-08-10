@@ -45,6 +45,20 @@ import {
   exportDanmakuToXML,
 } from './danmaku-fetcher'
 import { startWatching, stopWatching, getWatcherStatus } from './file-watcher'
+import {
+  searchAnimeGarden,
+  getQbConfig,
+  setQbConfig,
+  qbTestConnection,
+  qbAddTorrent,
+  qbAddRssFeed,
+  qbAddRssRule,
+  qbRemoveRssRule,
+  createRssFeed,
+  listRssFeeds,
+  deleteRssFeed,
+  startRssServer,
+} from './animegarden'
 
 // === 硬件加速 & GPU 配置 ===
 // Windows 系统级 HEVC 硬解码（Media Foundation）
@@ -1135,6 +1149,23 @@ function registerIpcHandlers(): void {
   // AI 翻译
   ipcMain.handle('ai:configure', (_e, key: string) => { configureAI(key); return true })
   ipcMain.handle('ai:getKey', () => getAIKey())
+
+  // AnimeGarden 资源搜索
+  ipcMain.handle('animegarden:search', (_e, params: any) => searchAnimeGarden(params || {}))
+
+  // 本地 RSS 订阅代理
+  ipcMain.handle('animegarden:createFeed', (_e, cfg: any) => createRssFeed(cfg || {}))
+  ipcMain.handle('animegarden:listFeeds', () => listRssFeeds())
+  ipcMain.handle('animegarden:deleteFeed', (_e, id: string) => { deleteRssFeed(id); return true })
+
+  // qBittorrent 联动
+  ipcMain.handle('qb:getConfig', () => getQbConfig())
+  ipcMain.handle('qb:setConfig', (_e, cfg: any) => { setQbConfig(cfg); return true })
+  ipcMain.handle('qb:test', (_e, cfg?: any) => qbTestConnection(cfg || {}))
+  ipcMain.handle('qb:addTorrent', (_e, magnet: string, savepath?: string) => qbAddTorrent(magnet, savepath))
+  ipcMain.handle('qb:addRss', (_e, feedUrl: string, path?: string) => qbAddRssFeed(feedUrl, path))
+  ipcMain.handle('qb:addRule', (_e, ruleName: string, opts: any) => qbAddRssRule(ruleName, opts || {}))
+  ipcMain.handle('qb:removeRule', (_e, ruleName: string) => qbRemoveRssRule(ruleName))
   ipcMain.handle('ai:translate', async (_e, text: string, from: string, to: string) => {
     try { return await translateWithAI(text, from, to) }
     catch (e: any) { return text }
@@ -1394,6 +1425,7 @@ app.whenReady().then(async () => {
 
   registerProtocol()
   registerIpcHandlers()
+  startRssServer()
   createWindow()
 
   app.on('activate', () => {

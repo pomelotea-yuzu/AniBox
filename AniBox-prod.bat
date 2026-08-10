@@ -3,8 +3,10 @@ chcp 65001 >nul
 title AniBox
 cd /d "%~dp0"
 
-REM 清除 ELECTRON_RUN_AS_NODE（修复 Electron-in-Electron 嵌套问题）
+REM clear ELECTRON_RUN_AS_NODE (fix Electron-in-Electron nesting issue)
 set ELECTRON_RUN_AS_NODE=
+
+set PATH=C:\Users\28145\.workbuddy\binaries\node\versions\22.22.2;%PATH%
 
 if not exist "out\main\index.js" (
     echo [ERROR] Build output not found. Run: npm run build

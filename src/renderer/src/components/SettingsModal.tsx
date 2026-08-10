@@ -38,7 +38,7 @@ const SHORTCUTS = [
   { key: '?', desc: '快捷键帮助' },
 ]
 
-type Tab = 'theme' | 'subtitle' | 'playback' | 'shortcuts' | 'api' | 'about'
+type Tab = 'theme' | 'subtitle' | 'playback' | 'shortcuts' | 'api' | 'download' | 'about'
 
 export default function SettingsModal({ visible, onClose }: SettingsModalProps) {
   const { theme, themeList, setTheme } = useTheme()
@@ -67,6 +67,15 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
   const [apiKey, setApiKey] = useState('')
   const [apiKeySaved, setApiKeySaved] = useState(false)
 
+  // qBittorrent
+  const [qbHost, setQbHost] = useState('127.0.0.1')
+  const [qbPort, setQbPort] = useState(8080)
+  const [qbUser, setQbUser] = useState('admin')
+  const [qbPass, setQbPass] = useState('')
+  const [qbSavepath, setQbSavepath] = useState('')
+  const [qbStatus, setQbStatus] = useState('')
+  const [qbSaved, setQbSaved] = useState(false)
+
   // 加载当前设置
   useEffect(() => {
     if (!visible) return
@@ -79,6 +88,19 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
     window.electronAPI
       .getAIKey()
       .then((k) => { if (k) setApiKey(k) })
+      .catch(() => {})
+    window.electronAPI
+      .qbGetConfig()
+      .then((c) => {
+        if (c) {
+          setQbHost(c.host || '127.0.0.1')
+          setQbPort(c.port || 8080)
+          setQbUser(c.username || 'admin')
+          setQbSavepath(c.savepath || '')
+          // getConfig 返回时密码会被打码，保持为空让用户决定是否重填
+          setQbPass('')
+        }
+      })
       .catch(() => {})
   }, [visible])
 
@@ -110,6 +132,7 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
     { key: 'playback', label: '播放' },
     { key: 'shortcuts', label: '快捷键' },
     { key: 'api', label: 'API' },
+    { key: 'download', label: '下载' },
     { key: 'about', label: '关于' },
   ]
 
@@ -391,6 +414,111 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
                   当前 Key: {apiKey.substring(0, 8)}...{apiKey.substring(apiKey.length - 4)}
                 </p>
               )}
+            </div>
+          )}
+
+          {/* === 下载 (qBittorrent) === */}
+          {tab === 'download' && (
+            <div className="space-y-4">
+              <p className="text-xs text-anibox-text-muted">
+                配置 qBittorrent WebUI 后，可在<b className="text-anibox-text">新番时间表 → 获取资源</b>中一键发送磁力下载或添加 RSS 订阅。
+                <br />
+                需在 qBittorrent 中开启 <b className="text-anibox-accent">工具 → 选项 → Web UI</b>（默认端口 8080，用户名 admin）。
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-anibox-text-muted block mb-1">WebUI 地址</label>
+                  <input
+                    value={qbHost}
+                    onChange={(e) => setQbHost(e.target.value)}
+                    placeholder="127.0.0.1"
+                    className="w-full px-3 py-2 text-sm bg-anibox-bg border border-anibox-border rounded-lg text-anibox-text placeholder:text-anibox-text-muted/50 focus:outline-none focus:border-anibox-accent"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-anibox-text-muted block mb-1">端口</label>
+                  <input
+                    type="number"
+                    value={qbPort}
+                    onChange={(e) => setQbPort(Number(e.target.value))}
+                    placeholder="8080"
+                    className="w-full px-3 py-2 text-sm bg-anibox-bg border border-anibox-border rounded-lg text-anibox-text placeholder:text-anibox-text-muted/50 focus:outline-none focus:border-anibox-accent"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-anibox-text-muted block mb-1">用户名</label>
+                  <input
+                    value={qbUser}
+                    onChange={(e) => setQbUser(e.target.value)}
+                    placeholder="admin"
+                    className="w-full px-3 py-2 text-sm bg-anibox-bg border border-anibox-border rounded-lg text-anibox-text placeholder:text-anibox-text-muted/50 focus:outline-none focus:border-anibox-accent"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-anibox-text-muted block mb-1">密码</label>
+                  <input
+                    type="password"
+                    value={qbPass}
+                    onChange={(e) => setQbPass(e.target.value)}
+                    placeholder="留空则保留已保存的密码"
+                    className="w-full px-3 py-2 text-sm bg-anibox-bg border border-anibox-border rounded-lg text-anibox-text placeholder:text-anibox-text-muted/50 focus:outline-none focus:border-anibox-accent"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-anibox-text-muted block mb-1">默认保存路径（可选）</label>
+                <input
+                  value={qbSavepath}
+                  onChange={(e) => setQbSavepath(e.target.value)}
+                  placeholder="如 D:\Downloads（留空使用 qBittorrent 默认）"
+                  className="w-full px-3 py-2 text-sm bg-anibox-bg border border-anibox-border rounded-lg text-anibox-text placeholder:text-anibox-text-muted/50 focus:outline-none focus:border-anibox-accent"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={async () => {
+                    setQbStatus('测试中…')
+                    const cfg = { host: qbHost.trim(), port: qbPort, username: qbUser.trim(), password: qbPass }
+                    const r = await window.electronAPI.qbTest(cfg)
+                    setQbStatus(r.ok ? `✓ ${r.message}${r.version ? ` (v${r.version})` : ''}` : `✗ ${r.message}`)
+                  }}
+                  className="px-4 py-2 text-sm rounded-lg border border-anibox-border text-anibox-text-muted hover:text-anibox-text hover:border-anibox-accent/40 transition-colors"
+                >
+                  测试连接
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!qbHost.trim()) { setQbStatus('✗ 请填写地址'); return }
+                    await window.electronAPI.qbSetConfig({
+                      host: qbHost.trim(),
+                      port: qbPort,
+                      username: qbUser.trim(),
+                      password: qbPass,
+                      savepath: qbSavepath.trim(),
+                    })
+                    setQbSaved(true)
+                    setQbStatus('✓ 配置已保存')
+                    setTimeout(() => setQbSaved(false), 2000)
+                  }}
+                  className={`px-4 py-2 text-sm rounded-lg transition-colors ${
+                    qbSaved
+                      ? 'bg-emerald-500/20 text-emerald-400'
+                      : 'bg-anibox-accent text-white hover:bg-anibox-accent/80'
+                  }`}
+                >
+                  {qbSaved ? '✓ 已保存' : '保存配置'}
+                </button>
+              </div>
+              {qbStatus && (
+                <p className={`text-xs ${qbStatus.startsWith('✓') ? 'text-emerald-500' : 'text-red-400'}`}>{qbStatus}</p>
+              )}
+              <p className="text-[10px] text-anibox-text-muted/60">
+                配置仅存储在本地 (qb-config.json)。RSS 订阅由 AniBox 本地生成（镜像站 feed.xml 不可用），
+                <b className="text-anibox-accent">添加订阅后需保持 AniBox 运行</b>；
+                自动下载还需在 qBittorrent 中为该订阅设置下载规则。
+              </p>
             </div>
           )}
 

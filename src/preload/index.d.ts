@@ -202,6 +202,65 @@ export interface ElectronAPI {
   playlistsRemoveSeries: (listId: string, seriesId: string) => Promise<void>
   seasonFetchTimeline: (forceRefresh?: boolean) => Promise<any>
   seasonFetchDetail: (anilistId: number) => Promise<any>
+  // AnimeGarden 资源搜索
+  animegardenSearch: (params: {
+    search?: string
+    include?: string[]
+    keywords?: string[]
+    exclude?: string[]
+    type?: string
+    provider?: string
+    fansubId?: number
+    page?: number
+    pageSize?: number
+  }) => Promise<{ ok: boolean; resources?: any[]; complete?: boolean; error?: string }>
+  // 本地 RSS 订阅代理（镜像站 feed.xml 不可用，AniBox 本地生成）
+  animegardenCreateFeed: (cfg: {
+    name: string
+    search?: string
+    include?: string[]
+    fansubId?: number
+    fansubName?: string
+    type?: string
+  }) => Promise<{ ok: boolean; url: string; id: string }>
+  animegardenListFeeds: () => Promise<
+    Array<{ id: string; name: string; search?: string; fansubName?: string; createdAt: number }>
+  >
+  animegardenDeleteFeed: (id: string) => Promise<boolean>
+  // qBittorrent 联动
+  qbGetConfig: () => Promise<{
+    host: string
+    port: number
+    username: string
+    password: string
+    savepath?: string
+  } | null>
+  qbSetConfig: (cfg: {
+    host: string
+    port: number
+    username: string
+    password: string
+    savepath?: string
+  }) => Promise<boolean>
+  qbTest: (cfg?: {
+    host: string
+    port: number
+    username: string
+    password: string
+  }) => Promise<{ ok: boolean; message: string; version?: string }>
+  qbAddTorrent: (
+    magnet: string,
+    savepath?: string,
+  ) => Promise<{ ok: boolean; message: string }>
+  qbAddRss: (
+    feedUrl: string,
+    path?: string,
+  ) => Promise<{ ok: boolean; message: string; path?: string }>
+  qbAddRule: (
+    ruleName: string,
+    opts: { mustContain: string; savepath?: string; affectedFeeds?: string[]; addPaused?: boolean; useRegex?: boolean },
+  ) => Promise<{ ok: boolean; message: string }>
+  qbRemoveRule: (ruleName: string) => Promise<{ ok: boolean; message: string }>
   translateJaModelLoad: () => Promise<boolean>
   translateJaToZh: (text: string) => Promise<string>
   translateEnToZh: (text: string) => Promise<string>

@@ -3,7 +3,7 @@ chcp 65001 >nul
 title AniBox
 cd /d "%~dp0"
 
-REM 清除 ELECTRON_RUN_AS_NODE（修复 Electron-in-Electron 嵌套问题）
+REM clear ELECTRON_RUN_AS_NODE (fix Electron-in-Electron nesting issue)
 set ELECTRON_RUN_AS_NODE=
 
 set PATH=C:\Users\28145\.workbuddy\binaries\node\versions\22.22.2;%PATH%
@@ -18,7 +18,19 @@ if not exist "node_modules\" (
 echo ====================================
 echo   AniBox v0.1.0
 echo ====================================
-echo Starting...
+echo Starting... (full log: anibox-dev.log)
 echo.
-npm run dev
+
+REM redirect output to log file so errors survive window close
+call npm run dev > anibox-dev.log 2>&1
+set EXITCODE=%errorlevel%
+
+echo.
+echo [EXIT] npm run dev exit code: %EXITCODE%
+if not "%EXITCODE%"=="0" (
+    echo [FAILED] Startup failed. Full log:
+    echo ----------------------------------------
+    type anibox-dev.log
+    echo ----------------------------------------
+)
 pause

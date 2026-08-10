@@ -406,6 +406,33 @@ const electronAPI = {
     ipcRenderer.invoke('season:fetchTimeline', forceRefresh),
   seasonFetchDetail: (anilistId: number): Promise<any> =>
     ipcRenderer.invoke('season:fetchDetail', anilistId),
+
+  // AnimeGarden 资源搜索
+  animegardenSearch: (params: any): Promise<any> =>
+    ipcRenderer.invoke('animegarden:search', params),
+
+  // 本地 RSS 订阅代理（AnimeGarden 镜像站 feed.xml 不可用，由 AniBox 本地生成）
+  animegardenCreateFeed: (cfg: any): Promise<{ ok: boolean; url: string; id: string }> =>
+    ipcRenderer.invoke('animegarden:createFeed', cfg),
+  animegardenListFeeds: (): Promise<any[]> => ipcRenderer.invoke('animegarden:listFeeds'),
+  animegardenDeleteFeed: (id: string): Promise<boolean> =>
+    ipcRenderer.invoke('animegarden:deleteFeed', id),
+
+  // qBittorrent 联动
+  qbGetConfig: (): Promise<any> => ipcRenderer.invoke('qb:getConfig'),
+  qbSetConfig: (cfg: any): Promise<boolean> => ipcRenderer.invoke('qb:setConfig', cfg),
+  qbTest: (cfg?: any): Promise<{ ok: boolean; message: string; version?: string }> =>
+    ipcRenderer.invoke('qb:test', cfg),
+  qbAddTorrent: (magnet: string, savepath?: string): Promise<{ ok: boolean; message: string }> =>
+    ipcRenderer.invoke('qb:addTorrent', magnet, savepath),
+  qbAddRss: (feedUrl: string, path?: string): Promise<{ ok: boolean; message: string; path?: string }> =>
+    ipcRenderer.invoke('qb:addRss', feedUrl, path),
+  qbAddRule: (
+    ruleName: string,
+    opts: { mustContain: string; savepath?: string; affectedFeeds?: string[]; addPaused?: boolean; useRegex?: boolean },
+  ): Promise<{ ok: boolean; message: string }> => ipcRenderer.invoke('qb:addRule', ruleName, opts),
+  qbRemoveRule: (ruleName: string): Promise<{ ok: boolean; message: string }> =>
+    ipcRenderer.invoke('qb:removeRule', ruleName),
   translateJaModelLoad: (): Promise<boolean> => ipcRenderer.invoke('translate:jaModelLoad'),
   translateJaToZh: (text: string): Promise<string> => ipcRenderer.invoke('translate:jaToZh', text),
   translateEnToZh: (text: string): Promise<string> => ipcRenderer.invoke('translate:enToZh', text),

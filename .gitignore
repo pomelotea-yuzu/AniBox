@@ -20,3 +20,10 @@ scripts/ffmpeg-temp.zip
 mpv-*/
 test-gpu.js
 F*
+# ASAR 打包/验证临时文件
+_asar_stage/
+_check_asar.js
+_verify_asar.js
+_test_mpv_tracks.js
+test-out.asar
+anibox-dev.log

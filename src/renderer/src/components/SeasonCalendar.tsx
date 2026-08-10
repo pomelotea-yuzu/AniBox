@@ -3,6 +3,7 @@
  * 按星期排列、中文标题翻译、内嵌详情弹窗
  */
 import { useEffect, useState, useMemo, useCallback } from 'react'
+import AnimeGardenPanel from './AnimeGardenPanel'
 
 interface NextAiring {
   episode: number
@@ -60,7 +61,7 @@ function formatDate(y: number, m: number, d: number): string {
   return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
 }
 
-export default function SeasonCalendar({ onBack }: { onBack: () => void }) {
+export default function SeasonCalendar({ onBack, onOpenSettings }: { onBack: () => void; onOpenSettings?: () => void }) {
   const [season, setSeason] = useState('')
   const [anime, setAnime] = useState<AnimeItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -71,6 +72,9 @@ export default function SeasonCalendar({ onBack }: { onBack: () => void }) {
 
   // 详情弹窗状态
   const [detailAnime, setDetailAnime] = useState<AnimeItem | null>(null)
+
+  // 资源获取弹窗状态
+  const [resourceAnime, setResourceAnime] = useState<AnimeItem | null>(null)
 
   const openDetail = useCallback((a: AnimeItem) => { setDetailAnime(a) }, [])
 
@@ -265,9 +269,18 @@ export default function SeasonCalendar({ onBack }: { onBack: () => void }) {
                     )}
 
                     {/* 人气 */}
-                    <span className="text-[10px] text-anibox-text-muted/50">
-                      👥 {detailAnime.popularity?.toLocaleString() || 0} 人关注
-                    </span>
+                    <div className="flex items-center gap-3 mt-1">
+                      <span className="text-[10px] text-anibox-text-muted/50">
+                        👥 {detailAnime.popularity?.toLocaleString() || 0} 人关注
+                      </span>
+                      <button
+                        onClick={() => { setResourceAnime(detailAnime); setDetailAnime(null) }}
+                        className="px-2.5 py-1 text-[11px] rounded-lg bg-anibox-accent/10 text-anibox-accent border border-anibox-accent/30 hover:bg-anibox-accent/20 transition-colors"
+                        title="在 AnimeGarden 搜索该番剧的 BT 资源，可发送到 qBittorrent 下载"
+                      >
+                        🔗 获取资源
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -282,6 +295,19 @@ export default function SeasonCalendar({ onBack }: { onBack: () => void }) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* AnimeGarden 资源获取弹窗 */}
+      {resourceAnime && (
+        <AnimeGardenPanel
+          titles={{
+            zh: resourceAnime.titleZh || resourceAnime.title || '',
+            romaji: resourceAnime.titleRomaji || '',
+            english: resourceAnime.titleEnglish || '',
+          }}
+          onClose={() => setResourceAnime(null)}
+          onOpenSettings={onOpenSettings}
+        />
       )}
     </div>
   )
