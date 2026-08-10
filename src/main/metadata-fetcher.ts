@@ -312,11 +312,15 @@ interface BangumiSubject {
   staff: Array<{ name: string; jobs: string[]; role_name?: string }>
 }
 
-async function searchBangumiMeta(query: string): Promise<BangumiSubject[]> {
+export async function searchBangumiMeta(query: string): Promise<BangumiSubject[]> {
   try {
-    const url = `https://api.bgm.tv/v0/search/subjects?keyword=${encodeURIComponent(query)}&type=2&limit=5`
-    console.log(`[AniBox] Bangumi search: ${url}`)
-    const json = await fetchGetJson(url)
+    // v0 search/subjects 是 POST 接口（GET 会 404），keyword 走 body，type 走 filter
+    const url = `https://api.bgm.tv/v0/search/subjects?limit=5`
+    console.log(`[AniBox] Bangumi search: ${url} keyword=${query}`)
+    const json = await httpsPostJson(
+      url,
+      JSON.stringify({ keyword: query, sort: 'match', filter: { type: [2] } }),
+    )
     if (!json?.data?.length) {
       console.log(`[AniBox] Bangumi search: no results for "${query}"`)
       return []

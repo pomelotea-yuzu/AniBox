@@ -21,7 +21,7 @@ import {
   setOpenSubtitlesConfig,
 } from './online-subtitle'
 import { parseMP4Meta, detectAudioCodec } from './video-info'
-import { fetchMetadataForSeries, fetchMetadataBatch, validateBatchTitles } from './metadata-fetcher'
+import { fetchMetadataForSeries, fetchMetadataBatch, validateBatchTitles, searchBangumiMeta } from './metadata-fetcher'
 import { loadModel, getTranslateStatus, loadJaModel, translateJaToZh, translateEnToZh } from './local-translate'
 import { configureAI, translateWithAI, getAIKey } from './ai-translate'
 import { translateLocal } from './anime-dict'
@@ -1203,6 +1203,113 @@ function registerIpcHandlers(): void {
     }
   })
 
+  // AniList 番剧搜索（搜索番剧功能：搜番 → 详情 → 获取资源下载）
+  ipcMain.handle('anime:search', async (_e, query: string, pageSize?: number) => {
+    const q = (query || '').trim()
+    if (!q) return { ok: false, error: '请输入搜索关键词', anime: [] }
+    try {
+      const searchQuery = `
+        query ($search: String, $page: Int, $perPage: Int) {
+          Page(page: $page, perPage: $perPage) {
+            media(search: $search, type: ANIME, format_not: MUSIC, sort: SEARCH_MATCH) {
+              id
+              title { native romaji english }
+              coverImage { large extraLarge }
+              bannerImage
+              description
+              episodes duration averageScore popularity
+              genres
+              studios { nodes { name } }
+              startDate { year month day }
+              endDate { year month day }
+              season seasonYear format status
+            }
+          }
+        }`
+      const searchAniList = async (kw: string) => {
+        const resp = await fetch('https://graphql.anilist.co', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({
+            query: searchQuery,
+            variables: { search: kw, page: 1, perPage: pageSize || 24 },
+          }),
+        })
+        const data = await resp.json()
+        return data?.data?.Page?.media || []
+      }
+
+      let media = await searchAniList(q)
+
+      // 中文关键词兜底：AniList 对中文支持差，经 Bangumi 查到日文原名再搜
+      if (!media.length) {
+        try {
+          const bg = await searchBangumiMeta(q)
+          const jpName = bg?.[0]?.name
+          if (jpName && jpName !== q) {
+            console.log(`[AniBox] AniList 中文搜索为空，经 Bangumi 转原名 "${jpName}" 重试`)
+            media = await searchAniList(jpName)
+          }
+        } catch {
+          /* Bangumi 兜底失败则保持空结果 */
+        }
+      }
+      if (!media.length) return { ok: true, anime: [] }
+
+      const anime = media.map((m: any) => ({
+        id: m.id,
+        title: m.title?.native || m.title?.romaji || '',
+        titleRomaji: m.title?.romaji || '',
+        titleEnglish: m.title?.english || '',
+        titleZh: '',
+        cover: m.coverImage?.large || '',
+        coverExtra: m.coverImage?.extraLarge || '',
+        bannerImage: m.bannerImage || '',
+        description: (m.description || '').replace(/<[^>]+>/g, '').substring(0, 1000),
+        descriptionZh: '',
+        episodes: m.episodes ?? null,
+        duration: m.duration ?? null,
+        score: m.averageScore ?? null,
+        popularity: m.popularity ?? null,
+        genres: (m.genres || []).map((g: string) => translateLocal(g) || g),
+        studios: (m.studios?.nodes || []).map((s: any) => s.name),
+        startDate: m.startDate || null,
+        endDate: m.endDate || null,
+        season: m.season || '',
+        seasonYear: m.seasonYear || 0,
+        format: m.format,
+        status: m.status,
+        nextAiring: null,
+      }))
+
+      // AI 标题翻译（有 Key 时并发批量，让中文用户一眼认出番名）
+      if (getAIKey()) {
+        console.log('[AniBox] Starting AI title translation for search results:', anime.length)
+        const BATCH = 8
+        await Promise.all(
+          Array.from({ length: Math.ceil(anime.length / BATCH) }, (_, i) =>
+            Promise.all(
+              anime.slice(i * BATCH, (i + 1) * BATCH).map(async (a: any) => {
+                try {
+                  const zh = await translateWithAI(a.title, 'ja', 'zh')
+                  if (zh && zh !== a.title) a.titleZh = zh
+                } catch {
+                  a.titleZh = a.titleRomaji || a.titleEnglish || a.title
+                }
+              }),
+            ),
+          ),
+        )
+        console.log('[AniBox] AI title translation done')
+      }
+
+      return { ok: true, anime }
+    } catch (err: any) {
+      console.error('[AniBox] anime:search error:', err)
+      return { ok: false, error: err.message || '搜索失败', anime: [] }
+    }
+  })
+
   // AniList 新番时间表
   // 策略：有缓存且缓存季度 = 当前季度 → 直接复用；换季或强制刷新 → 重新抓取翻译
   ipcMain.handle('season:fetchTimeline', async (_e, forceRefresh?: boolean) => {
@@ -1295,7 +1402,7 @@ function registerIpcHandlers(): void {
         let done = 0
         for (let i = 0; i < anime.length; i += BATCH) {
           const batch = anime.slice(i, i + BATCH)
-          await Promise.all(batch.map(async (a) => {
+          await Promise.all(batch.map(async (a: any) => {
             try {
               const zh = await translateWithAI(a.title, 'ja', 'zh')
               if (zh && zh !== a.title) { a.titleZh = zh }
@@ -1307,13 +1414,13 @@ function registerIpcHandlers(): void {
         console.log('[AniBox] AI title translation done')
 
         // AI 简介翻译
-        const withDesc = anime.filter(a => a.description && a.description.length > 10)
+        const withDesc = anime.filter((a: any) => a.description && a.description.length > 10)
         if (withDesc.length > 0) {
           console.log('[AniBox] Starting AI description translation for', withDesc.length, 'anime')
           let descDone = 0
           for (let i = 0; i < withDesc.length; i += BATCH) {
             const batch = withDesc.slice(i, i + BATCH)
-            await Promise.all(batch.map(async (a) => {
+            await Promise.all(batch.map(async (a: any) => {
               try {
                 const zh = await translateWithAI(a.description, 'auto', 'zh')
                 if (zh && zh !== a.description) { a.descriptionZh = zh }

@@ -407,6 +407,10 @@ const electronAPI = {
   seasonFetchDetail: (anilistId: number): Promise<any> =>
     ipcRenderer.invoke('season:fetchDetail', anilistId),
 
+  // 番剧搜索（AniList 搜索番剧）
+  animeSearch: (query: string, pageSize?: number): Promise<any> =>
+    ipcRenderer.invoke('anime:search', query, pageSize),
+
   // AnimeGarden 资源搜索
   animegardenSearch: (params: any): Promise<any> =>
     ipcRenderer.invoke('animegarden:search', params),

@@ -13,7 +13,7 @@ interface RecentEntry {
 
 interface EmptyStateProps {
   onOpenFolder: () => void
-  onSmartDiscover: () => void
+  onSearchAnime: () => void
   onOpenFile: () => void
   onPlayRecent?: (folderPath: string, filePath: string, position: number) => void
   onOpenSeason?: () => void
@@ -34,7 +34,7 @@ function relativeTime(iso: string): string {
 
 export default function EmptyState({
   onOpenFolder,
-  onSmartDiscover,
+  onSearchAnime,
   onOpenFile,
   onPlayRecent,
   onOpenSeason,
@@ -95,11 +95,11 @@ export default function EmptyState({
         </button>
 
         <button
-          onClick={onSmartDiscover}
+          onClick={onSearchAnime}
           className="px-5 py-2.5 text-anibox-text-muted hover:text-anibox-accent hover:bg-anibox-border/30 text-sm
             rounded-lg transition-all duration-150 active:scale-95 flex items-center gap-2
             border border-anibox-border hover:border-anibox-accent/40"
-          title="智能扫描常用目录，自动发现番剧文件夹"
+          title="搜索想要的番剧，获取资源并下载"
         >
           <svg
             width="16"
@@ -112,7 +112,7 @@ export default function EmptyState({
             <circle cx="11" cy="11" r="8" />
             <path d="M21 21l-4.3-4.3" />
           </svg>
-          智能发现
+          搜索番剧
         </button>
 
         <button

@@ -11,7 +11,6 @@ interface SeriesWallProps {
   scanRoots: string[]
   onAddRoot: () => void
   onRemoveRoot: (root: string) => void
-  onSmartDiscover: () => void
   onRefresh: () => Promise<void>
 }
 
@@ -28,7 +27,6 @@ export default function SeriesWall({
   scanRoots,
   onAddRoot,
   onRemoveRoot,
-  onSmartDiscover,
   onRefresh,
 }: SeriesWallProps) {
   const [progressMap, setProgressMap] = useState<Record<string, number>>({})

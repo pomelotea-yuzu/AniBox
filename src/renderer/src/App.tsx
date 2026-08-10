@@ -8,8 +8,9 @@ import EmptyState from './components/EmptyState'
 import ErrorBoundary from './components/ErrorBoundary'
 import SettingsModal from './components/SettingsModal'
 import SeasonCalendar from './components/SeasonCalendar'
+import SearchAnimePage from './components/SearchAnimePage'
 
-type View = 'empty' | 'loading' | 'wall' | 'episodes' | 'player' | 'season'
+type View = 'empty' | 'loading' | 'wall' | 'episodes' | 'player' | 'season' | 'search'
 type PlayMode = 'sequential' | 'loop-one' | 'loop-all' | 'shuffle'
 
 export default function App() {
@@ -86,28 +87,6 @@ export default function App() {
     },
     [scanAll],
   )
-
-  // 智能发现（替换模式）
-  const handleSmartDiscover = useCallback(async () => {
-    const folder = await window.electronAPI.openFolder()
-    if (!folder) return
-    setView('loading')
-    try {
-      const discovered = await window.electronAPI.discoverScan(folder)
-      if (discovered.length === 0) {
-        alert('未发现番剧目录，请尝试选择更上层的目录（如 F:\\）')
-        setView(scanRoots.length > 0 ? 'wall' : 'empty')
-        return
-      }
-      // 直接替换旧根目录，不再合并
-      await window.electronAPI.scanRootsSetAll(discovered)
-      setScanRoots(discovered)
-      await scanAll(discovered)
-    } catch (err) {
-      console.error('[AniBox] Discover error:', err)
-      setView(scanRoots.length > 0 ? 'wall' : 'empty')
-    }
-  }, [scanAll])
 
   // 刷新当前
   const handleRefresh = useCallback(async () => {
@@ -295,11 +274,11 @@ export default function App() {
                 </button>
               )}
               <button
-                onClick={handleSmartDiscover}
+                onClick={() => setView('search')}
                 className="px-2.5 py-1.5 text-xs text-anibox-text-muted hover:text-anibox-accent hover:bg-anibox-border/30
                   border border-anibox-border hover:border-anibox-accent/40 rounded-lg transition-all duration-150 active:scale-95
                   flex items-center gap-1.5"
-                title="自动扫描常用目录，智能发现番剧"
+                title="搜索想要的番剧，获取资源并下载"
               >
                 <svg
                   width="13"
@@ -312,7 +291,7 @@ export default function App() {
                   <circle cx="11" cy="11" r="8" />
                   <path d="M21 21l-4.3-4.3" />
                 </svg>
-                智能发现
+                搜索番剧
               </button>
               <button
                 onClick={handleAddRoot}
@@ -372,7 +351,7 @@ export default function App() {
         <div style={{ display: view === 'empty' ? 'block' : 'none' }} className="w-full h-full">
           <EmptyState
             onOpenFolder={handleAddRoot}
-            onSmartDiscover={handleSmartDiscover}
+            onSearchAnime={() => setView('search')}
             onOpenFile={async () => {
               const r = await window.electronAPI.openFile()
               if (!r) return
@@ -423,7 +402,6 @@ export default function App() {
               scanRoots={scanRoots}
               onAddRoot={handleAddRoot}
               onRemoveRoot={handleRemoveRoot}
-              onSmartDiscover={handleSmartDiscover}
               onRefresh={handleRefresh}
             />
           </div>
@@ -446,6 +424,15 @@ export default function App() {
           <div className="w-full h-full">
             <SeasonCalendar
               onBack={() => setView('wall')}
+              onOpenSettings={() => setShowSettings(true)}
+            />
+          </div>
+        )}
+        {/* 搜索番剧 */}
+        {view === 'search' && (
+          <div className="w-full h-full">
+            <SearchAnimePage
+              onBack={() => setView(scanRoots.length > 0 ? 'wall' : 'empty')}
               onOpenSettings={() => setShowSettings(true)}
             />
           </div>

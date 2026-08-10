@@ -202,6 +202,12 @@ export interface ElectronAPI {
   playlistsRemoveSeries: (listId: string, seriesId: string) => Promise<void>
   seasonFetchTimeline: (forceRefresh?: boolean) => Promise<any>
   seasonFetchDetail: (anilistId: number) => Promise<any>
+  // 番剧搜索（AniList 搜索番剧）
+  animeSearch: (query: string, pageSize?: number) => Promise<{
+    ok: boolean
+    anime?: any[]
+    error?: string
+  }>
   // AnimeGarden 资源搜索
   animegardenSearch: (params: {
     search?: string
