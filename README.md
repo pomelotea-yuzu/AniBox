@@ -9,12 +9,26 @@
 - **智能发现** — 自动扫描常用位置的番剧文件夹，评分制筛选
 - **海报墙** — 封面展示、搜索筛选、类型过滤、多种排序
 - **元数据刮削** — AniList GraphQL + Bangumi v0 REST 双源，自动获取中文标题、简介、评分、Staff、类型标签
-- **新番时间表** — AniList 季度新番数据，按星期分组展示，评分/播出倒计时/类型标签，内嵌详情弹窗
-- **本地翻译** — 内置 opus-mt-en-zh + opus-mt-ja-en 双模型，链式 JA→EN→ZH 日语翻译；DirectML GPU 加速（RTX 3060+）
+- **本地翻译** — 内置 Helsinki-NLP/opus-mt-en-zh 模型（~114MB），离线 EN→ZH 翻译；搭配 200+ 动漫短语词典 + 130+ 句式模板
 - **标题校验** — AniList 在线校验文件夹标题，给出建议
 - **追番状态** — 在看/已追/弃番
 - **收藏 & 播放列表** — 收藏番剧，自定义播放列表
 - **最近观看** — 首页展示最近观看历史，点击续播
+
+### 新番时间表
+- **AniList 按季拉取** — 当前季度日本 TV 动画（按人气排序），缓存复用不重复请求
+- **AI 标题翻译** — DeepSeek 批量日→中翻译标题与简介（有 API Key 时；无 Key 自动回退本地模型）
+- **星期分组** — 按播出日排列、今天高亮、距播出倒计时、待定播出日分区
+- **详情弹窗** — 封面/评分/制作公司/类型/播出时间/简介一站式展示
+
+### 资源获取与自动追番
+- **🔗 获取资源** — 时间表详情弹窗一键搜索 AnimeGarden（动漫花园聚合站）的 BT 资源
+- **资源列表** — 标题/大小/字幕组/类型/时间，支持复制磁力链接、一键发送到 qBittorrent 下载
+- **RSS 订阅** — 由 AniBox 本地代理生成（`127.0.0.1:5860`），按「番剧 + 字幕组」精确过滤，可复制链接或直接添加到 qBittorrent
+- **➕ 一键追番** — 自动创建 qBittorrent 下载规则：匹配即下载，支持：
+  - **翻译版本过滤**（正则）：简体 / 繁体 / 简繁内嵌 / 简日 / 繁日
+  - **每番独立保存目录** — 追番时指定或直接文件夹选择器挑选
+- **版本自适应** — qBittorrent WebUI 客户端兼容 4.x / 5.x 差异（path 语义、登录响应格式）
 
 ### 播放器
 - **HTML5 video 为主** — 支持 30+ 视频格式（mp4/mkv/ts/rmvb 等）
@@ -49,7 +63,7 @@
 - **OP/ED 智能跳过** — 双点区间标记，所有同系列剧集自动沿用
 - **音轨管理** — 自动检测多音轨，按系列记忆偏好，音频延迟+音量均衡
 - **莫兰迪配色主题** — 5 套主题（暖燕麦/冷亚麻/玫瑰灰/橄榄暮/薰衣雾），ThemeProvider + CSS 变量驱动
-- **全局设置** — 主题/字幕/播放/快捷键/关于 5 个 Tab 设置页
+- **全局设置** — 主题/字幕/播放/快捷键/API/下载/关于 7 个 Tab 设置页
 - **快捷键** — 30+ 键盘快捷键覆盖所有操作，`?` 键呼出帮助面板
 
 ### Staff 职位翻译（日式动画术语）
@@ -67,12 +81,9 @@
 | 存储 | JSON 文件（anibox-store.json，debounce 写入 + 原子保存） |
 | 扫描 | Node.js fs 递归 + 智能发现评分算法 |
 | 元数据 | AniList GraphQL + Bangumi v0 REST API |
-| 翻译模型 | opus-mt-en-zh + opus-mt-ja-en（ONNX Runtime, @xenova/transformers, DirectML GPU） |
-| GPU 加速 | 需 onnxruntime-node@1.20.1（含 DirectML.dll），`package.json` overrides 强制统一版本 |
+| 翻译模型 | Helsinki-NLP/opus-mt-en-zh（ONNX Runtime, @xenova/transformers） |
 | 配色主题 | React Context + CSS 变量桥接，5 套莫兰迪色系 |
 | 打包 | electron-builder |
-| 测试 | Vitest 4.1 |
-| 代码规范 | ESLint 10 + Prettier 3 + Husky 9 + lint-staged |
 
 ---
 
@@ -107,9 +118,8 @@ F:/收藏/
 cd anibox
 npm install
 
-# 预下载翻译模型（可选，否则首次使用翻译时自动下载）
-node scripts/download-model.mjs          # EN→ZH (~114MB)
-node scripts/download-ja-model.mjs       # JA→EN (~110MB)
+# 预下载翻译模型（可选，否则首次获取番剧信息时自动下载）
+node scripts/download-model.mjs
 
 # 开发
 npm run dev
@@ -118,29 +128,30 @@ npm run dev
 npm run package
 ```
 
-### GPU 加速
-
-翻译模型可通过 DirectML 在 NVIDIA/AMD GPU 上加速推理。已通过 RTX 3060 测试。
-
-`npm install` 后确保：
-1. `onnxruntime-node@1.20.1` 被所有依赖使用（`package.json` overrides 已强制）
-2. 删除了 `node_modules/@xenova/transformers/node_modules/onnxruntime-node/`（旧版嵌套）
-
-> **提示**：若 `npm install` 报 safe-delete 错误，用 `npm install --prefer-offline` 重试。
-
-### 自动化检查
-
-| 命令 | 用途 |
-|------|------|
-| `npm run typecheck` | TypeScript 类型检查 |
-| `npm run lint` | ESLint 代码质量检查 |
-| `npm run format` | Prettier 自动格式化 |
-| `npm run format:check` | 检查代码格式 |
-| `npm test` | 运行 39 个单元测试 |
-| `npm run test:watch` | 监视模式运行测试 |
-
-提交代码时会自动触发 `lint-staged`（Prettier + ESLint），不通过则拦截。
+> 提示：`AniBox.bat`（开发模式）与 `AniBox-prod.bat`（生产模式）可直接双击启动。
+> qBittorrent 联动需在「设置 → 下载」中配置 WebUI（默认端口 8080）；RSS 追番时 AniBox 需保持运行。
 
 ---
 
-*最后更新: 2026-08-02*
+## 鸣谢
+
+本项目在开发过程中使用了以下外部服务与开源项目，特此鸣谢：
+
+| 服务 / 项目 | 用途 | 链接 |
+|---|---|---|
+| [AniList](https://anilist.co) | 新番时间表、元数据刮削、标题校验（GraphQL API） | https://anilist.co |
+| [Bangumi 番组计划](https://bgm.tv) | 元数据刮削（REST API） | https://bgm.tv |
+| [AnimeGarden](https://animes.garden) | BT 资源搜索与 RSS 订阅（开放 API），聚合自动漫花园/蜜柑计划/bangumi.moe | https://animes.garden |
+| [动漫花园](https://share.dmhy.org) | BT 资源数据源（经 AnimeGarden 聚合） | https://share.dmhy.org |
+| [蜜柑计划](https://mikanani.me) | BT 资源数据源（经 AnimeGarden 聚合） | https://mikanani.me |
+| [DeepSeek](https://platform.deepseek.com) | 新番标题/简介 AI 翻译（日→中） | https://platform.deepseek.com |
+| [OpenSubtitles](https://opensubtitles.com) | 在线字幕搜索下载 | https://opensubtitles.com |
+| [Hugging Face](https://huggingface.co) | opus-mt 离线翻译模型（国内走 hf-mirror.com 镜像） | https://huggingface.co |
+| [whisper.cpp](https://github.com/ggerganov/whisper.cpp) | Whisper 离线语音识别 | https://github.com/ggerganov/whisper.cpp |
+| [mpv](https://mpv.io) | 播放器兜底引擎 | https://mpv.io |
+
+所有在线服务的 API Key 均仅存储在本地（`userData/` 下 JSON 文件），不会上传。
+
+---
+
+*最后更新: 2026-08-10*
