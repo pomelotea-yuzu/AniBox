@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import type { SeriesInfo, EpisodeInfo } from '../../main/scanner'
 import Player from './components/Player'
 import MpvOverlay from './components/MpvOverlay'
+import MpvCanvas from './components/MpvCanvas'
 import SeriesWall from './components/SeriesWall'
 import EpisodeList from './components/EpisodeList'
 import EmptyState from './components/EmptyState'
@@ -25,6 +26,8 @@ export default function App() {
   } | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [mpvFallback, setMpvFallback] = useState(false)
+  // 方案 A 播放后端：libmpv 内嵌（默认）→ 失败自动回退 legacy（mpv.exe 独立窗口）
+  const [mpvBackend, setMpvBackend] = useState<'libmpv' | 'legacy'>('libmpv')
   const [showSettings, setShowSettings] = useState(false)
   const [seriesMetadata, setSeriesMetadata] = useState<any>(null)
   const [playMode, setPlayMode] = useState<PlayMode>('sequential')
@@ -114,6 +117,7 @@ export default function App() {
   const handlePlayEpisode = useCallback(async (ep: EpisodeInfo, index: number) => {
     currentEpIndexRef.current = index
     setMpvFallback(false)
+    setMpvBackend('libmpv')
     // 播放前检查音频编码兼容性
     try {
       const audio = await window.electronAPI.checkAudio(ep.filePath)
@@ -133,6 +137,7 @@ export default function App() {
   const handleClosePlayer = useCallback(() => {
     setCurrentVideo(null)
     setMpvFallback(false)
+    setMpvBackend('libmpv')
     if (mpvFallback) {
       window.electronAPI.mpvQuit()
     }
@@ -181,6 +186,7 @@ export default function App() {
     const ep = eps[idx]
     currentEpIndexRef.current = idx
     setMpvFallback(false)
+    setMpvBackend('libmpv')
     // 播放前检查音频编码兼容性
     window.electronAPI
       .checkAudio(ep.filePath)
@@ -356,6 +362,7 @@ export default function App() {
               const r = await window.electronAPI.openFile()
               if (!r) return
               setMpvFallback(false)
+    setMpvBackend('libmpv')
               setCurrentVideo({
                 filePath: r.filePath,
                 mediaUrl: window.electronAPI.getMediaUrl(r.filePath),
@@ -375,6 +382,7 @@ export default function App() {
                 setScanRoots(updated)
               }
               setMpvFallback(false)
+    setMpvBackend('libmpv')
               setCurrentVideo({
                 filePath,
                 mediaUrl: window.electronAPI.getMediaUrl(filePath),
@@ -495,6 +503,20 @@ export default function App() {
               }
               // loop-all / shuffle 在末集也能继续（handleNextEpisode 内部处理回绕/随机）
               const canAutoNext = next !== null || playMode === 'loop-all' || playMode === 'shuffle'
+              // 方案 A：libmpv 内嵌（Canvas 显示）；libmpv 初始化失败时回退旧 mpv.exe 独立窗口
+              if (mpvBackend === 'libmpv') {
+                return (
+                  <MpvCanvas
+                    key={currentVideo.filePath}
+                    filePath={currentVideo.filePath}
+                    playMode={playMode}
+                    nextEpisodeTitle={next?.fileName}
+                    onNextEpisode={canAutoNext ? handleNextEpisode : undefined}
+                    onClose={handleClosePlayer}
+                    onFallbackToLegacy={() => setMpvBackend('legacy')}
+                  />
+                )
+              }
               return (
                 <MpvOverlay
                   key={currentVideo.filePath}

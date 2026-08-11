@@ -45,6 +45,7 @@ import {
   exportDanmakuToXML,
 } from './danmaku-fetcher'
 import { startWatching, stopWatching, getWatcherStatus } from './file-watcher'
+import { LibmpvBridge, findLibmpvDll } from './libmpv-bridge'
 import {
   searchAnimeGarden,
   listTeams,
@@ -296,6 +297,65 @@ function registerProtocol(): void {
 }
 
 // === mpv 兜底播放 ===
+// 方案 A：优先 libmpv 内嵌（单窗口，帧走 IPC → Canvas）；失败自动回退旧 mpv.exe 独立窗口
+let libmpvBridge: LibmpvBridge | null = null
+let libmpvFailed = false // 一次加载失败后不再尝试（防重复启动旧链路）
+
+function libmpvQuit(): void {
+  if (libmpvBridge) {
+    libmpvBridge.destroy()
+    libmpvBridge = null
+  }
+}
+
+function libmpvPlay(fp: string): boolean {
+  if (libmpvBridge && libmpvBridge.isActive) {
+    libmpvBridge.loadFile(fp)
+    return true
+  }
+  const dll = findLibmpvDll()
+  if (!dll) {
+    console.warn('[AniBox] libmpv-2.dll 未找到')
+    return false
+  }
+  const bridge = new LibmpvBridge({
+    onFrame: (frame) => {
+      mainWindow?.webContents.send('mpv:frame', frame.buffer, frame.width, frame.height)
+    },
+    onFileLoaded: ({ width, height }) => {
+      console.log('[libmpv] 文件加载完成:', width, 'x', height)
+      mainWindow?.webContents.send('mpv:event', { event: 'file-loaded' })
+    },
+    onStartFile: () => {
+      mainWindow?.webContents.send('mpv:event', { event: 'start-file' })
+    },
+    onEndFile: (reason) => {
+      const reasonStr =
+        reason === 0 ? 'eof' : reason === 1 ? 'stop' : reason === 2 ? 'quit' : reason === 3 ? 'error' : String(reason)
+      mainWindow?.webContents.send('mpv:event', { event: 'end-file', reason: reasonStr })
+    },
+    onTracks: (tracks) => {
+      mainWindow?.webContents.send('mpv:event', { event: 'tracks', data: tracks })
+    },
+    onLog: (level, text) => {
+      console.log('[libmpv]', level + ':', text)
+    },
+  })
+  try {
+    if (!bridge.init(dll)) {
+      bridge.destroy()
+      return false
+    }
+  } catch (err) {
+    console.warn('[AniBox] libmpv init 异常:', err)
+    bridge.destroy()
+    return false
+  }
+  libmpvBridge = bridge
+  bridge.loadFile(fp)
+  return true
+}
+
 let mpvProcess: ChildProcess | null = null
 let mpvSock: Socket | null = null
 let mpvBuf = ''
@@ -760,20 +820,56 @@ function registerIpcHandlers(): void {
     return result ? true : false
   })
 
-  ipcMain.handle('mpv:play', (_e, p: string) => mpvLaunch(p))
+  // 方案 A：优先 libmpv 内嵌（单窗口）；失败自动回退 mpv.exe 独立窗口
+  ipcMain.handle('mpv:play', (_e, p: string) => {
+    if (!libmpvFailed && findLibmpvDll()) {
+      try {
+        if (libmpvPlay(p)) {
+          console.log('[AniBox] libmpv 内嵌播放:', p)
+          return
+        }
+      } catch (err) {
+        console.warn('[AniBox] libmpv 播放失败:', err)
+      }
+      libmpvFailed = true
+      libmpvQuit()
+      mainWindow?.webContents.send('mpv:event', { event: 'libmpv-fallback' })
+    }
+    console.log('[AniBox] 回退 mpv.exe 独立窗口播放:', p)
+    return mpvLaunch(p)
+  })
+
   ipcMain.handle('mpv:quit', () => {
+    libmpvQuit()
     mpvKill()
     mainWindow?.focus()
   })
 
-  // 向运行中的 mpv 发送 JSON IPC 命令（字幕切换、音轨切换等）
+  // 向运行中的 mpv 发送命令（libmpv 或 mpv.exe JSON IPC；字幕/音轨切换、seek 等）
   ipcMain.handle('mpv:command', (_e, cmd: any[]) => {
+    if (libmpvBridge && libmpvBridge.isActive) {
+      return libmpvBridge.command(cmd as (string | number)[])
+    }
     if (!mpvSock) return false
     try {
       mpvSock.write(JSON.stringify({ command: cmd }) + '\n')
       return true
     } catch {
       return false
+    }
+  })
+
+  // 播放状态轮询（渲染进程进度条用）
+  ipcMain.handle('mpv:getState', () => {
+    const b = libmpvBridge
+    if (!b || !b.isActive) return null
+    return {
+      timePos: b.getTimePos(),
+      duration: b.getDuration(),
+      paused: b.isPaused(),
+      loaded: b.isLoaded,
+      width: b.size.width,
+      height: b.size.height,
     }
   })
 
@@ -1549,6 +1645,7 @@ app.whenReady().then(async () => {
 })
 
 app.on('window-all-closed', () => {
+  libmpvQuit()
   mpvKill()
   stopWatching()
   flushStore()
@@ -1556,6 +1653,7 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
+  libmpvQuit()
   stopWatching()
   flushStore()
 })

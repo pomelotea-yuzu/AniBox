@@ -11,6 +11,8 @@ extraResources:
     to: resources
   - from: mpv.exe
     to: .
+  - from: libmpv-2.dll
+    to: .
 win:
   target:
     - nsis

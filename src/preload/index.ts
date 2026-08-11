@@ -161,11 +161,30 @@ const electronAPI = {
   mpvPlay: (filePath: string): Promise<void> => ipcRenderer.invoke('mpv:play', filePath),
   mpvQuit: (): Promise<void> => ipcRenderer.invoke('mpv:quit'),
   mpvCommand: (cmd: any[]): Promise<boolean> => ipcRenderer.invoke('mpv:command', cmd),
+  mpvGetState: (): Promise<{
+    timePos: number
+    duration: number
+    paused: boolean
+    loaded: boolean
+    width: number
+    height: number
+  } | null> => ipcRenderer.invoke('mpv:getState'),
   mpvOnEvent: (cb: (event: Record<string, unknown>) => void): (() => void) => {
     const handler = (_e: Electron.IpcRendererEvent, event: Record<string, unknown>) => cb(event)
     ipcRenderer.on('mpv:event', handler)
     return () => {
       ipcRenderer.removeListener('mpv:event', handler)
+    }
+  },
+  // libmpv 逐帧 RGBA（主进程软渲染 → Canvas）
+  mpvOnFrame: (
+    cb: (frame: { data: Uint8Array; width: number; height: number }) => void,
+  ): (() => void) => {
+    const handler = (_e: Electron.IpcRendererEvent, data: Uint8Array, width: number, height: number) =>
+      cb({ data, width, height })
+    ipcRenderer.on('mpv:frame', handler)
+    return () => {
+      ipcRenderer.removeListener('mpv:frame', handler)
     }
   },
 

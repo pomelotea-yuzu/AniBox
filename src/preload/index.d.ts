@@ -70,7 +70,18 @@ export interface ElectronAPI {
   mpvPlay: (filePath: string) => Promise<void>
   mpvQuit: () => Promise<void>
   mpvCommand: (cmd: any[]) => Promise<boolean>
+  mpvGetState: () => Promise<{
+    timePos: number
+    duration: number
+    paused: boolean
+    loaded: boolean
+    width: number
+    height: number
+  } | null>
   mpvOnEvent: (cb: (event: Record<string, unknown>) => void) => () => void
+  mpvOnFrame: (
+    cb: (frame: { data: Uint8Array; width: number; height: number }) => void,
+  ) => () => void
   subtitleReadVtt: (filePath: string) => Promise<string>
   subtitleGetUrl: (filePath: string) => string
   subtitleRescan: (
