@@ -308,6 +308,23 @@ function libmpvQuit(): void {
   }
 }
 
+// libmpv 链路命令适配：
+// - 'set_property' 是 mpv.exe JSON IPC 语法，libmpv 的 mpv_command 不认（返回 false），改用 setProperty API
+// - 'cycle pause' 在 SW 渲染激活时调用会崩溃（实测 2026-08-12），改为显式设置（查当前状态取反）
+function libmpvCommand(cmd: any[]): boolean {
+  if (!libmpvBridge) return false
+  const c0 = String(cmd[0] || '')
+  if (c0 === 'set_property' && cmd.length >= 3) {
+    return libmpvBridge.setProperty(String(cmd[1]), String(cmd[2]))
+  }
+  if (c0 === 'cycle' && String(cmd[1]) === 'pause') {
+    const target = String(cmd[2] || '')
+    if (target === 'yes' || target === 'no') return libmpvBridge.setProperty('pause', target)
+    return libmpvBridge.setProperty('pause', libmpvBridge.isPaused() ? 'no' : 'yes')
+  }
+  return libmpvBridge.command(cmd as (string | number)[])
+}
+
 function libmpvPlay(fp: string): boolean {
   if (libmpvBridge && libmpvBridge.isActive) {
     libmpvBridge.loadFile(fp)
@@ -848,7 +865,7 @@ function registerIpcHandlers(): void {
   // 向运行中的 mpv 发送命令（libmpv 或 mpv.exe JSON IPC；字幕/音轨切换、seek 等）
   ipcMain.handle('mpv:command', (_e, cmd: any[]) => {
     if (libmpvBridge && libmpvBridge.isActive) {
-      return libmpvBridge.command(cmd as (string | number)[])
+      return libmpvCommand(cmd)
     }
     if (!mpvSock) return false
     try {

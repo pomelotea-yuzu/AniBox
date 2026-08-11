@@ -242,6 +242,9 @@ export class LibmpvBridge {
   private fiPtr: bigint | null = null
   private w = 0
   private h = 0
+  /** SW 渲染目标尺寸（可能小于视频原生尺寸：1080p 原生软渲染会占死主线程导致窗口卡死，降采样渲染） */
+  private renderW = 0
+  private renderH = 0
   private stride = 0
   private loaded = false
   private destroyed = false
@@ -261,7 +264,19 @@ export class LibmpvBridge {
   }
 
   get size(): { width: number; height: number } {
-    return { width: this.w, height: this.h }
+    return { width: this.renderW || this.w, height: this.renderH || this.h }
+  }
+
+  /** SW 渲染最大宽度（等比缩放；默认 1920=1080p 原生，实测用户机器流畅；低配可设 ANIBOX_MPV_RENDER_MAX=960/1280） */
+  private get swMaxWidth(): number {
+    const v = Number(process.env.ANIBOX_MPV_RENDER_MAX)
+    return Number.isFinite(v) && v > 0 ? Math.floor(v) : 1920
+  }
+
+  /** 轮询渲染间隔 ms（默认 50ms ≈ 20fps；SW 渲染在主进程主线程，帧率过高会卡窗口） */
+  private get tickMs(): number {
+    const v = Number(process.env.ANIBOX_MPV_TICK_MS)
+    return Number.isFinite(v) && v > 0 ? Math.floor(v) : 50
   }
 
   /** 初始化 libmpv。失败返回 false（调用方应回退旧 mpv.exe 链路） */
@@ -321,8 +336,9 @@ export class LibmpvBridge {
       this.stridePtr = koffi.alloc('int32', 1)
       this.fiPtr = koffi.alloc('mpv_render_frame_info', 1)
 
-      // 轮询渲染：33ms ≈ 30fps 上限（SW 渲染 1080p 实际帧率视机器而定）
-      this.timer = setInterval(() => this.tick(), 33)
+      // 轮询渲染：50ms ≈ 20fps 上限。SW 渲染在主进程主线程，渲染 1080p 原生尺寸会
+      // 占死主线程（窗口拖不动 + IPC 帧送不出）。降采样 + 限帧率保主线程响应。
+      this.timer = setInterval(() => this.tick(), this.tickMs)
       this.handlers.onReady?.()
       return true
     } catch (err) {
@@ -569,13 +585,18 @@ export class LibmpvBridge {
       console.warn('[libmpv] 文件加载但尺寸未知:', this.w, this.h)
       return
     }
-    this.stride = this.w * 4
+    // 渲染目标尺寸：等比缩放到 ≤swMaxWidth（保主线程响应；mpv 会自动缩放画面，ASS 字幕也随帧渲染）
+    const scale = Math.min(1, this.swMaxWidth / this.w)
+    this.renderW = Math.max(2, Math.floor((this.w * scale) / 2) * 2)
+    this.renderH = Math.max(2, Math.floor((this.h * scale) / 2) * 2)
+    console.log(`[libmpv] 视频 ${this.w}x${this.h} → SW 渲染 ${this.renderW}x${this.renderH}`)
+    this.stride = this.renderW * 4
     // SW_POINTER 必须 4 字节对齐：Node Buffer 天然对齐。用 koffi.address 把 mpv 渲染目标
     // 指向 Node Buffer（Electron 下 koffi.view 创建 external ArrayBuffer 会崩溃，勿用）
-    this.frameBuf = Buffer.allocUnsafe(this.w * this.h * 4)
+    this.frameBuf = Buffer.allocUnsafe(this.renderW * this.renderH * 4)
     this.buildRenderParams()
     this.loaded = true
-    this.handlers.onFileLoaded?.({ width: this.w, height: this.h })
+    this.handlers.onFileLoaded?.({ width: this.renderW, height: this.renderH })
     // 延迟查轨道列表（等 mpv 填充 track-list）
     setTimeout(() => {
       try {
@@ -588,8 +609,8 @@ export class LibmpvBridge {
 
   private buildRenderParams(): void {
     if (!koffi || !this.w || !this.h || !this.frameBuf) return
-    koffi.encode(this.sizePtr!, 0, 'int32', this.w)
-    koffi.encode(this.sizePtr!, 4, 'int32', this.h)
+    koffi.encode(this.sizePtr!, 0, 'int32', this.renderW)
+    koffi.encode(this.sizePtr!, 4, 'int32', this.renderH)
     koffi.encode(this.stridePtr!, 0, 'int32', this.stride)
     const params = koffi.alloc('mpv_render_param', 6)
     const entries = [
@@ -613,6 +634,6 @@ export class LibmpvBridge {
     // render() 返回 0 即帧数据已写入 SW_POINTER；update 非 0 已保证有新帧可渲染）
     if (rr !== 0) return
     // 零拷贝：mpv 直接渲染进了 Node Buffer（IPC 序列化时 structured clone 才拷贝一次）
-    this.handlers.onFrame?.({ buffer: this.frameBuf, width: this.w, height: this.h })
+    this.handlers.onFrame?.({ buffer: this.frameBuf, width: this.renderW, height: this.renderH })
   }
 }
