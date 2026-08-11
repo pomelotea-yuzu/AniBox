@@ -493,10 +493,15 @@ export default function App() {
                   </ErrorBoundary>
                 )
               }
+              // loop-all / shuffle 在末集也能继续（handleNextEpisode 内部处理回绕/随机）
+              const canAutoNext = next !== null || playMode === 'loop-all' || playMode === 'shuffle'
               return (
                 <MpvOverlay
                   key={currentVideo.filePath}
                   filePath={currentVideo.filePath}
+                  playMode={playMode}
+                  nextEpisodeTitle={next?.fileName}
+                  onNextEpisode={canAutoNext ? handleNextEpisode : undefined}
                   onClose={handleClosePlayer}
                 />
               )

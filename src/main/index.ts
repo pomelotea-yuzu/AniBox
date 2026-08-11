@@ -360,9 +360,13 @@ function mpvLaunch(fp: string): Promise<void> {
     })
 
     proc.on('exit', () => {
-      if (mpvProcess === proc) mpvProcess = null
-      mainWindow?.webContents.send('mpv:event', { event: 'end' })
-      mainWindow?.focus()
+      // 仅当退出的是当前最新 mpv 进程时才广播 end（主动 mpvKill 的退出不广播，
+      // 否则连播切集时旧进程的 end 事件会误关新播放器）
+      if (mpvProcess === proc) {
+        mpvProcess = null
+        mainWindow?.webContents.send('mpv:event', { event: 'end' })
+        mainWindow?.focus()
+      }
     })
 
     let tries = 0
