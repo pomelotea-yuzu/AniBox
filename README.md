@@ -38,10 +38,11 @@
 - **版本自适应** — qBittorrent WebUI 客户端兼容 4.x / 5.x 差异（path 语义、登录响应格式）
 
 ### 播放器
-- **HTML5 video 为主** — 支持 30+ 视频格式（mp4/mkv/ts/rmvb 等）
-- **mpv.exe 兜底** — 编码不兼容时自动切换，Named Pipe IPC 通信
+- **HTML5 video 为主** — 支持 30+ 视频格式（mp4/mkv/ts/rmvb 等），4K 走硬解
+- **libmpv 内嵌播放** — 编码/字幕不兼容时自动切换：mpv-2.dll + koffi 软渲染取帧，单窗口内显示（画面/字幕/控制条不割裂），1080p 流畅
+- **mpv.exe 回退** — libmpv 不可用时自动回退独立窗口（Named Pipe IPC）
 - **anibox:// 协议** — 自定义协议实现本地文件 Range 请求
-- **播放控制** — 播放/暂停、进度条、音量、倍速、全屏
+- **播放控制** — 播放/暂停、进度条拖拽、音量、倍速、全屏、静音（libmpv 模式同样支持：快捷键 Space/←→/↑↓/M/F/0-9/?）
 - **进度记忆** — 精确记住每部番的集数 + 时间位置
 - **自动连播** — 看完自动下一话，支持顺序/单集循环/列表循环/随机
 - **Anime4K 实时超分** — WebGL 管线（边缘上采样 + Unsharp Mask + Debanding + FXAA），三档预设，A/B 对比
@@ -128,7 +129,7 @@ AniBox → **设置 → 下载**：
 |----|------|
 | 桌面框架 | Electron 33 + electron-vite |
 | 前端 | React 19 + TypeScript + Tailwind CSS |
-| 播放 | HTML5 video（主）+ mpv.exe Named Pipe IPC（兜底） |
+| 播放 | HTML5 video（主）+ libmpv 内嵌软渲染（koffi FFI 取帧 → WebGL 显示）+ mpv.exe 回退 |
 | 存储 | JSON 文件（anibox-store.json，debounce 写入 + 原子保存） |
 | 扫描 | Node.js fs 递归 + 跨文件夹合并算法 |
 | 搜索 | AniList GraphQL（番剧库）+ Bangumi v0（中文转原名兜底） |
@@ -166,6 +167,7 @@ F:/收藏/
 
 ```bash
 # 依赖：Node.js >= 18
+# libmpv 内嵌播放依赖 koffi（FFI，已含在 dependencies）；libmpv-2.dll 需与 mpv.exe 一并分发
 
 cd anibox
 npm install
@@ -200,10 +202,10 @@ npm run package
 | [OpenSubtitles](https://opensubtitles.com) | 在线字幕搜索下载 | https://opensubtitles.com |
 | [Hugging Face](https://huggingface.co) | opus-mt 离线翻译模型（国内走 hf-mirror.com 镜像） | https://huggingface.co |
 | [whisper.cpp](https://github.com/ggerganov/whisper.cpp) | Whisper 离线语音识别 | https://github.com/ggerganov/whisper.cpp |
-| [mpv](https://mpv.io) | 播放器兜底引擎 | https://mpv.io |
+| [mpv](https://mpv.io) | 播放器兜底引擎（libmpv 内嵌软渲染 + mpv.exe 回退） | https://mpv.io |
 
 所有在线服务的 API Key 均仅存储在本地（`userData/` 下 JSON 文件），不会上传。
 
 ---
 
-*最后更新: 2026-08-10*
+*最后更新: 2026-08-12*
