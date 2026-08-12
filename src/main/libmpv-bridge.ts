@@ -230,6 +230,15 @@ function parseMpvNode(ptr: bigint | null | undefined, depth = 0): any {
 }
 
 // ---------- 播放器桥 ----------
+export interface LibmpvBridgeOptions {
+  /** SW 渲染最大宽度覆盖（预览实例用小尺寸省 CPU） */
+  renderMax?: number
+  /** 不启动轮询 timer（预览实例手动 drainOnce/renderOnce 驱动） */
+  noTimer?: boolean
+  /** 音频输出覆盖（预览实例强制 'null' 静音） */
+  ao?: string
+}
+
 export class LibmpvBridge {
   private api: LibmpvApi | null = null
   private ctx: bigint | null = null
@@ -250,9 +259,15 @@ export class LibmpvBridge {
   private destroyed = false
   private timer: NodeJS.Timeout | null = null
   private handlers: LibmpvHandlers
+  private renderMaxOverride = 0
+  private noTimer = false
+  private aoOverride: string | null = null
 
-  constructor(handlers?: LibmpvHandlers) {
+  constructor(handlers?: LibmpvHandlers, opts?: LibmpvBridgeOptions) {
     this.handlers = handlers || {}
+    if (opts?.renderMax && opts.renderMax > 0) this.renderMaxOverride = opts.renderMax
+    this.noTimer = opts?.noTimer ?? false
+    this.aoOverride = opts?.ao ?? null
   }
 
   get isActive(): boolean {
@@ -269,6 +284,7 @@ export class LibmpvBridge {
 
   /** SW 渲染最大宽度（等比缩放；默认 1920=1080p 原生，实测用户机器流畅；低配可设 ANIBOX_MPV_RENDER_MAX=960/1280） */
   private get swMaxWidth(): number {
+    if (this.renderMaxOverride > 0) return this.renderMaxOverride
     const v = Number(process.env.ANIBOX_MPV_RENDER_MAX)
     return Number.isFinite(v) && v > 0 ? Math.floor(v) : 1920
   }
@@ -338,7 +354,10 @@ export class LibmpvBridge {
 
       // 轮询渲染：50ms ≈ 20fps 上限。SW 渲染在主进程主线程，渲染 1080p 原生尺寸会
       // 占死主线程（窗口拖不动 + IPC 帧送不出）。降采样 + 限帧率保主线程响应。
-      this.timer = setInterval(() => this.tick(), this.tickMs)
+      // 预览实例（noTimer）不启动 timer，由手动 drainOnce/renderOnce 驱动
+      if (!this.noTimer) {
+        this.timer = setInterval(() => this.tick(), this.tickMs)
+      }
       this.handlers.onReady?.()
       return true
     } catch (err) {
@@ -350,7 +369,7 @@ export class LibmpvBridge {
 
   /** 音频输出：默认 wasapi（实机）；无音频设备环境设 ANIBOX_MPV_AO=null 禁用 */
   private get audioOutput(): string {
-    return process.env.ANIBOX_MPV_AO || 'wasapi'
+    return this.aoOverride || process.env.ANIBOX_MPV_AO || 'wasapi'
   }
 
   loadFile(fp: string): void {
@@ -460,6 +479,53 @@ export class LibmpvBridge {
       return true
     } finally {
       koffi.free(buf)
+    }
+  }
+
+  /** 读取音量 0-100（悬浮预览/音量条显示用） */
+  getVolume(): number {
+    return this.getDoubleProperty('volume')
+  }
+
+  /** 读取静音状态 */
+  isMuted(): boolean {
+    if (!this.api || !this.ctx || !koffi) return false
+    const buf = koffi.alloc('int32', 1)
+    try {
+      const r = this.api.mpv_get_property(this.ctx, 'mute', MPV_FORMAT_FLAG, buf)
+      if (r !== 0) return false
+      return koffi.decode(buf, 'int32') !== 0
+    } catch {
+      return false
+    } finally {
+      koffi.free(buf)
+    }
+  }
+
+  /** 手动 drain 一次事件（预览实例 noTimer 模式下等待 FILE_LOADED 等事件） */
+  drainOnce(): void {
+    try {
+      this.drainEvents()
+    } catch {
+      /* ok */
+    }
+  }
+
+  /**
+   * 手动渲染一帧（预览实例用；返回 true 表示取到新帧并已回调 onFrame）
+   * 与 renderFrame 不同：不依赖 timer，调用方主动驱动
+   */
+  renderManualOnce(): boolean {
+    if (!this.loaded || !this.frameBuf || !this.params || !this.api || !this.rc || !koffi) return false
+    try {
+      const upd = this.api.mpv_render_context_update(this.rc)
+      if (!upd) return false
+      const rr = this.api.mpv_render_context_render(this.rc, this.params)
+      if (rr !== 0) return false
+      this.handlers.onFrame?.({ buffer: this.frameBuf, width: this.renderW, height: this.renderH })
+      return true
+    } catch {
+      return false
     }
   }
 

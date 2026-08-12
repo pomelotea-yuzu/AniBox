@@ -187,6 +187,18 @@ const electronAPI = {
       ipcRenderer.removeListener('mpv:frame', handler)
     }
   },
+  // 悬浮预览：seek 指定位置取一帧（独立静音实例）
+  mpvPreview: (filePath: string, t: number): Promise<boolean> => ipcRenderer.invoke('mpv:preview', filePath, t),
+  mpvOnPreviewFrame: (
+    cb: (frame: { data: Uint8Array; width: number; height: number }) => void,
+  ): (() => void) => {
+    const handler = (_e: Electron.IpcRendererEvent, data: Uint8Array, width: number, height: number) =>
+      cb({ data, width, height })
+    ipcRenderer.on('mpv:preview-frame', handler)
+    return () => {
+      ipcRenderer.removeListener('mpv:preview-frame', handler)
+    }
+  },
 
   // 字幕
   subtitleReadVtt: (filePath: string): Promise<string> =>

@@ -301,6 +301,11 @@ function registerProtocol(): void {
 let libmpvBridge: LibmpvBridge | null = null
 let libmpvFailed = false // 一次加载失败后不再尝试（防重复启动旧链路）
 
+// 悬浮预览：独立静音小尺寸 libmpv 实例，seek 取帧（不打断主播放）
+let previewBridge: LibmpvBridge | null = null
+let previewBridgeFile = ''
+let previewBridgeLoading = false
+
 function libmpvQuit(): void {
   if (libmpvBridge) {
     console.log('[libmpv] libmpvQuit → destroy bridge')
@@ -309,6 +314,83 @@ function libmpvQuit(): void {
   } else {
     console.log('[libmpv] libmpvQuit: bridge 不存在（跳过）')
   }
+  // 主 bridge 销毁时顺带销毁预览实例
+  if (previewBridge) {
+    previewBridge.destroy()
+    previewBridge = null
+    previewBridgeFile = ''
+  }
+}
+
+/**
+ * 确保预览实例已加载 filePath。返回 true 表示已就绪（可 seek 取帧）。
+ * 预览实例：ao=null 静音、SW 渲染最大 480 宽（省 CPU）、无 timer（手动驱动）
+ */
+async function ensurePreviewBridge(filePath: string): Promise<boolean> {
+  if (previewBridge && previewBridge.isActive && previewBridgeFile === filePath && previewBridge.isLoaded) {
+    return true
+  }
+  const dll = findLibmpvDll()
+  if (!dll) return false
+  // 换文件或未加载：重建实例
+  try {
+    previewBridge?.destroy()
+  } catch {
+    /* ok */
+  }
+  previewBridge = null
+  previewBridgeFile = filePath
+  const bridge = new LibmpvBridge(
+    {
+      onFrame: (frame) => {
+        mainWindow?.webContents.send('mpv:preview-frame', frame.buffer, frame.width, frame.height)
+      },
+      onLog: (level, text) => {
+        if (level === 'error' || level === 'warn') console.log('[libmpv-preview]', level + ':', text)
+      },
+    },
+    { renderMax: 480, noTimer: true, ao: 'null' },
+  )
+  if (!bridge.init(dll)) {
+    bridge.destroy()
+    previewBridge = null
+    previewBridgeFile = ''
+    return false
+  }
+  previewBridge = bridge
+  bridge.loadFile(filePath)
+  // 等待 FILE_LOADED（手动 drain 事件，最多 5s）
+  const deadline = Date.now() + 5000
+  while (Date.now() < deadline) {
+    bridge.drainOnce()
+    if (bridge.isLoaded) return true
+    await new Promise((r) => setTimeout(r, 20))
+  }
+  console.warn('[libmpv-preview] 等待文件加载超时:', filePath)
+  return false
+}
+
+/** 预览：seek 到 t 秒并渲染一帧回传渲染进程 */
+async function libmpvPreviewAt(filePath: string, t: number): Promise<boolean> {
+  if (!previewBridge || !previewBridge.isActive || previewBridgeFile !== filePath) {
+    const ok = await ensurePreviewBridge(filePath)
+    if (!ok) return false
+  }
+  const bridge = previewBridge!
+  try {
+    bridge.setProperty('pause', 'yes')
+    bridge.seek(t)
+    // 手动渲染直到取到帧（seek 后 mpv 需要解码若干帧才出画面）
+    const deadline = Date.now() + 1500
+    while (Date.now() < deadline) {
+      bridge.drainOnce()
+      if (bridge.renderManualOnce()) return true
+      await new Promise((r) => setTimeout(r, 15))
+    }
+  } catch (err) {
+    console.warn('[libmpv-preview] 取帧异常:', (err as Error).message)
+  }
+  return false
 }
 
 // libmpv 链路命令适配：
@@ -891,7 +973,14 @@ function registerIpcHandlers(): void {
       loaded: b.isLoaded,
       width: b.size.width,
       height: b.size.height,
+      volume: b.getVolume(),
+      muted: b.isMuted(),
     }
+  })
+
+  // 悬浮预览：seek 指定位置取一帧（独立静音实例，不打断播放）
+  ipcMain.handle('mpv:preview', (_e, filePath: string, t: number) => {
+    return libmpvPreviewAt(filePath, t)
   })
 
   ipcMain.handle('window:toggleFullscreen', () => {

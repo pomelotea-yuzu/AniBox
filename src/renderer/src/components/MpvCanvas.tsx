@@ -14,8 +14,12 @@ interface MpvCanvasProps {
   onClose: () => void
   /** 播放模式：sequential / loop-one / loop-all / shuffle */
   playMode?: string
+  /** 上一话标题（用于上一话按钮提示） */
+  prevEpisodeTitle?: string
   /** 下一话标题（用于连播提示） */
   nextEpisodeTitle?: string
+  /** 播放上一集的回调 */
+  onPrevEpisode?: () => void
   /** 播放下一集的回调（App 层复用 handleNextEpisode） */
   onNextEpisode?: () => void
   /** 主进程 libmpv 初始化失败时回调（App 层切回旧 mpv.exe 链路） */
@@ -27,7 +31,9 @@ export default function MpvCanvas({
   filePath,
   onClose,
   playMode,
+  prevEpisodeTitle,
   nextEpisodeTitle,
+  onPrevEpisode,
   onNextEpisode,
   onFallbackToLegacy,
 }: MpvCanvasProps) {
@@ -36,12 +42,15 @@ export default function MpvCanvas({
   onCloseRef.current = onClose
   const playModeRef = useRef(playMode)
   playModeRef.current = playMode
+  const onPrevEpisodeRef = useRef(onPrevEpisode)
+  onPrevEpisodeRef.current = onPrevEpisode
   const onNextEpisodeRef = useRef(onNextEpisode)
   onNextEpisodeRef.current = onNextEpisode
   const onFallbackToLegacyRef = useRef(onFallbackToLegacy)
   onFallbackToLegacyRef.current = onFallbackToLegacy
   const offMpvEventRef = useRef<(() => void) | null>(null)
   const offMpvFrameRef = useRef<(() => void) | null>(null)
+  const offMpvPreviewFrameRef = useRef<(() => void) | null>(null)
   // 帧尺寸变化去重（避免每帧 setState）
   const frameSizeRef = useRef('')
   const containerRef = useRef<HTMLDivElement>(null)
@@ -52,9 +61,17 @@ export default function MpvCanvas({
   const [paused, setPaused] = useState(false)
   const [timePos, setTimePos] = useState(0)
   const [duration, setDuration] = useState(0)
+  const [volume, setVolume] = useState(100)
+  const [muted, setMuted] = useState(false)
   const [frameInfo, setFrameInfo] = useState<{ width: number; height: number } | null>(null)
   // canvas 显示尺寸（contain 放大到容器，消除黑边/最大化画面）
   const [dispSize, setDispSize] = useState<{ w: number; h: number } | null>(null)
+  // 控制条面板开关（字幕/音轨）
+  const [showSubPanel, setShowSubPanel] = useState(false)
+  const [showAudioPanel, setShowAudioPanel] = useState(false)
+  // 悬浮预览：hover 位置时间 + 预览帧
+  const [hoverTime, setHoverTime] = useState<number | null>(null)
+  const [previewFrame, setPreviewFrame] = useState<{ data: Uint8Array; width: number; height: number } | null>(null)
 
   // 容器尺寸变化 / 帧尺寸变化时重算 canvas 显示尺寸（contain 等比放大）
   useEffect(() => {
@@ -91,8 +108,6 @@ export default function MpvCanvas({
   }, [handleCommand])
 
   // 键盘快捷键（与 HTML5 Player 保持一致：空格/方向键/音量/静音/全屏/数字跳转）
-  const volumeRef = useRef(100)
-  const muteRef = useRef(false)
   const durationRef = useRef(0)
   const togglePauseRef = useRef(togglePause)
   togglePauseRef.current = togglePause
@@ -101,6 +116,30 @@ export default function MpvCanvas({
   useEffect(() => {
     durationRef.current = duration
   }, [duration])
+
+  // 音量：ref 与 state 同步，键盘/滑条共用
+  const volumeRef = useRef(100)
+  const setVolumeAll = useCallback(
+    (v: number) => {
+      const clamped = Math.max(0, Math.min(100, Math.round(v)))
+      volumeRef.current = clamped
+      setVolume(clamped)
+      handleCommand(['set_property', 'volume', clamped])
+      if (clamped > 0 && mutedRef.current) {
+        mutedRef.current = false
+        setMuted(false)
+        handleCommand(['set_property', 'mute', 'no'])
+      }
+    },
+    [handleCommand],
+  )
+  const muteRef = useRef(false)
+  const toggleMute = useCallback(() => {
+    const next = !muteRef.current
+    muteRef.current = next
+    setMuted(next)
+    handleCommand(['set_property', 'mute', next ? 'yes' : 'no'])
+  }, [handleCommand])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -119,21 +158,16 @@ export default function MpvCanvas({
         handleCommandRef.current(['seek', String(step), 'relative'])
       } else if (k === 'ArrowUp') {
         e.preventDefault()
-        volumeRef.current = Math.min(100, volumeRef.current + 5)
-        handleCommandRef.current(['set_property', 'volume', volumeRef.current])
-        muteRef.current = false
-        handleCommandRef.current(['set_property', 'mute', 'no'])
+        setVolumeAll(volumeRef.current + 5)
       } else if (k === 'ArrowDown') {
         e.preventDefault()
-        volumeRef.current = Math.max(0, volumeRef.current - 5)
-        handleCommandRef.current(['set_property', 'volume', volumeRef.current])
+        setVolumeAll(volumeRef.current - 5)
       } else if (k === 'f' || k === 'F') {
         e.preventDefault()
         window.electronAPI.toggleFullscreen()
       } else if (k === 'm' || k === 'M') {
         e.preventDefault()
-        muteRef.current = !muteRef.current
-        handleCommandRef.current(['set_property', 'mute', muteRef.current ? 'yes' : 'no'])
+        toggleMute()
       } else if (k >= '0' && k <= '9') {
         e.preventDefault()
         if (durationRef.current > 0) {
@@ -143,7 +177,7 @@ export default function MpvCanvas({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [setVolumeAll, toggleMute])
 
   // ===== WebGL 渲染器：canvas 2D putImageData/drawImage 在本机 Electron 配置下像素不写入位图
   // （实测 canvas位图恒黑），改用 WebGL 纹理上传 + 全屏 quad —— Anime4K 已在同 app 用 WebGL 且正常 =====
@@ -194,7 +228,6 @@ export default function MpvCanvas({
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
     glRef.current = gl
     glTexRef.current = tex
-    console.log('[mpv] WebGL 渲染器初始化完成')
     return gl
   }, [])
 
@@ -228,6 +261,74 @@ export default function MpvCanvas({
     },
     [initGL],
   )
+
+  // 悬浮预览小窗：独立 WebGL 渲染预览帧
+  const previewCanvasRef = useRef<HTMLCanvasElement>(null)
+  const previewGlRef = useRef<WebGLRenderingContext | null>(null)
+  const previewGlTexRef = useRef<WebGLTexture | null>(null)
+  const drawPreviewFrame = useCallback((data: Uint8Array, w: number, h: number) => {
+    const canvas = previewCanvasRef.current
+    if (!canvas || !w || !h) return
+    let gl = previewGlRef.current
+    if (!gl) {
+      gl = (canvas.getContext('webgl', { premultipliedAlpha: false, alpha: false }) ||
+        canvas.getContext('experimental-webgl', { premultipliedAlpha: false, alpha: false })) as
+        | WebGLRenderingContext
+        | null
+      if (!gl) return
+      const vs = gl.createShader(gl.VERTEX_SHADER)!
+      gl.shaderSource(
+        vs,
+        'attribute vec2 aPos;varying vec2 vUV;void main(){vUV=vec2(aPos.x*0.5+0.5,0.5-aPos.y*0.5);gl_Position=vec4(aPos,0.0,1.0);}',
+      )
+      gl.compileShader(vs)
+      const fs = gl.createShader(gl.FRAGMENT_SHADER)!
+      gl.shaderSource(
+        fs,
+        'precision mediump float;varying vec2 vUV;uniform sampler2D uTex;void main(){gl_FragColor=vec4(texture2D(uTex,vUV).rgb,1.0);}',
+      )
+      gl.compileShader(fs)
+      const prog = gl.createProgram()!
+      gl.attachShader(prog, vs)
+      gl.attachShader(prog, fs)
+      gl.linkProgram(prog)
+      gl.useProgram(prog)
+      const buf = gl.createBuffer()!
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf)
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW)
+      const loc = gl.getAttribLocation(prog, 'aPos')
+      gl.enableVertexAttribArray(loc)
+      gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0)
+      const tex = gl.createTexture()!
+      gl.bindTexture(gl.TEXTURE_2D, tex)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+      previewGlRef.current = gl
+      previewGlTexRef.current = tex
+    }
+    if (!gl || !previewGlTexRef.current) return
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w
+      canvas.height = h
+    }
+    gl.viewport(0, 0, w, h)
+    gl.bindTexture(gl.TEXTURE_2D, previewGlTexRef.current)
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1)
+    gl.texImage2D(
+      gl.TEXTURE_2D,
+      0,
+      gl.RGBA,
+      w,
+      h,
+      0,
+      gl.RGBA,
+      gl.UNSIGNED_BYTE,
+      new Uint8Array(data.buffer, data.byteOffset, w * h * 4),
+    )
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
+  }, [])
 
   // rAF 驱动：消费最新帧并绘制（保证合成器刷新）
   const pendingFrameRef = useRef<{ data: Uint8Array; w: number; h: number } | null>(null)
@@ -277,6 +378,19 @@ export default function MpvCanvas({
     }
   }, [showControlsTemporarily])
 
+  // 悬浮预览：hover 进度条时请求预览帧（debounce 80ms：快速滑动合并到最后一个位置）
+  const previewTimerRef = useRef(0)
+  const requestPreview = useCallback(
+    (t: number) => {
+      if (t < 0 || !durationRef.current) return
+      window.clearTimeout(previewTimerRef.current)
+      previewTimerRef.current = window.setTimeout(() => {
+        window.electronAPI.mpvPreview(filePath, t).catch(() => {})
+      }, 80)
+    },
+    [filePath],
+  )
+
   useEffect(() => {
     window.electronAPI.mpvPlay(filePath)
 
@@ -325,32 +439,57 @@ export default function MpvCanvas({
     })
     offMpvFrameRef.current = offMpvFrame
 
-    // 周期同步播放状态
-    const stateTimer = setInterval(() => {
-    window.electronAPI
-      .mpvGetState()
-      .then((s: any) => {
-        if (!s) return
-        setPaused(!!s.paused)
-        if (typeof s.timePos === 'number') setTimePos(s.timePos)
-        if (typeof s.duration === 'number') setDuration(s.duration)
-      })
-      .catch(() => {})
-  }, 1000)
+    // 悬浮预览帧
+    const offPreview = window.electronAPI.mpvOnPreviewFrame((frame) => {
+      if (!frame || !frame.data) return
+      setPreviewFrame(frame)
+      drawPreviewFrame(frame.data, frame.width || 480, frame.height || 270)
+    })
+    offMpvPreviewFrameRef.current = offPreview
 
-  return () => {
-    offMpvEventRef.current = null
-    offMpvFrameRef.current = null
-    // 卸载必须停止 libmpv：fire-and-forget 但必须发出（App 层 view 兜底也会再调一次，幂等）
-    window.electronAPI.mpvQuit().catch(() => {})
-    offMpvEvent()
-    offMpvFrame()
-    if (hideTimerRef.current) clearTimeout(hideTimerRef.current)
-    clearInterval(stateTimer)
-  }
-}, [filePath, drawFrame])
+    // 周期同步播放状态（含音量）
+    const stateTimer = setInterval(() => {
+      window.electronAPI
+        .mpvGetState()
+        .then((s: any) => {
+          if (!s) return
+          setPaused(!!s.paused)
+          if (typeof s.timePos === 'number') setTimePos(s.timePos)
+          if (typeof s.duration === 'number') setDuration(s.duration)
+          if (typeof s.volume === 'number' && !muteRef.current) {
+            volumeRef.current = s.volume
+            setVolume(s.volume)
+          }
+          if (typeof s.muted === 'boolean') {
+            muteRef.current = s.muted
+            setMuted(s.muted)
+          }
+        })
+        .catch(() => {})
+    }, 1000)
+
+    return () => {
+      offMpvEventRef.current = null
+      offMpvFrameRef.current = null
+      offMpvPreviewFrameRef.current = null
+      // 卸载必须停止 libmpv：fire-and-forget 但必须发出（App 层 view 兜底也会再调一次，幂等）
+      window.electronAPI.mpvQuit().catch(() => {})
+      window.clearTimeout(previewTimerRef.current)
+      offMpvEvent()
+      offMpvFrame()
+      offPreview()
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current)
+      clearInterval(stateTimer)
+    }
+  }, [filePath, drawFrame, drawPreviewFrame])
 
   const fileName = filePath.split(/[/\\]/).pop() || filePath
+
+  const handleGotoPrev = useCallback(() => {
+    if (!onPrevEpisodeRef.current) return
+    offMpvEventRef.current?.()
+    onPrevEpisodeRef.current()
+  }, [])
 
   const handleGotoNext = useCallback(() => {
     if (!onNextEpisodeRef.current) return
@@ -371,6 +510,22 @@ export default function MpvCanvas({
     setTimePos(t)
   }, [])
 
+  // 进度条 hover：显示预览 + 时间
+  const hoverRatioRef = useRef(0)
+  const onProgressHover = useCallback(
+    (clientX: number) => {
+      const el = progressRef.current
+      if (!el || !durationRef.current) return
+      const rect = el.getBoundingClientRect()
+      const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width))
+      hoverRatioRef.current = ratio
+      const t = ratio * durationRef.current
+      setHoverTime(t)
+      requestPreview(t)
+    },
+    [requestPreview],
+  )
+
   const [showHelp, setShowHelp] = useState(false)
 
   const playModeLabel =
@@ -388,6 +543,15 @@ export default function MpvCanvas({
     const s = Math.floor(sec % 60)
     return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
   }
+
+  // 悬浮预览小窗定位：跟随 hover 位置（进度条上方，自动贴边）
+  const previewTipStyle = (() => {
+    if (hoverTime === null) return {}
+    const ratio = hoverRatioRef.current
+    // 左右贴边处理（小窗宽约 256px，相对容器比例换算）
+    const leftPct = Math.min(94, Math.max(6, ratio * 100))
+    return { left: `${leftPct}%`, transform: 'translateX(-50%)' }
+  })()
 
   return (
     <div className="relative w-full h-full bg-black select-none" onContextMenu={(e) => e.preventDefault()}>
@@ -407,13 +571,28 @@ export default function MpvCanvas({
         </span>
       </div>
 
+      {/* 悬浮预览小窗（进度条 hover 时显示） */}
+      {hoverTime !== null && showControls && (
+        <div
+          className="absolute bottom-16 z-20 pointer-events-none flex flex-col items-center"
+          style={previewTipStyle}
+        >
+          <div className="rounded-lg overflow-hidden border border-white/20 shadow-2xl bg-black/80">
+            <canvas ref={previewCanvasRef} style={{ width: 256, height: 144 }} />
+          </div>
+          <span className="mt-1 text-[10px] px-1.5 py-0.5 rounded bg-black/70 text-neutral-200 tabular-nums">
+            {fmt(hoverTime)} / {fmt(duration)}
+          </span>
+        </div>
+      )}
+
       {/* 底部控制条 */}
       <div
         className={`absolute bottom-0 left-0 right-0 px-4 pb-3 pt-8 bg-gradient-to-t from-black/70 to-transparent transition-opacity duration-200 ${
           showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
       >
-        {/* 进度（可点击/拖拽 seek） */}
+        {/* 进度（可点击/拖拽 seek + hover 悬浮预览） */}
         <div className="flex items-center gap-2 mb-1">
           <span className="text-[10px] text-neutral-400 tabular-nums">{fmt(timePos)}</span>
           <div
@@ -425,11 +604,19 @@ export default function MpvCanvas({
               seekFromPointer(e.clientX)
             }}
             onPointerMove={(e) => {
-              if (draggingRef.current) seekFromPointer(e.clientX)
+              if (draggingRef.current) {
+                seekFromPointer(e.clientX)
+              } else {
+                onProgressHover(e.clientX)
+              }
             }}
             onPointerUp={(e) => {
               e.stopPropagation()
               draggingRef.current = false
+            }}
+            onPointerLeave={() => {
+              setHoverTime(null)
+              setPreviewFrame(null)
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -438,18 +625,42 @@ export default function MpvCanvas({
                 className="h-full bg-anibox-accent rounded-full"
                 style={{ width: `${duration > 0 ? Math.min(100, (timePos / duration) * 100) : 0}%` }}
               />
+              {/* hover 指示点 */}
+              {hoverTime !== null && duration > 0 && (
+                <div
+                  className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-white shadow"
+                  style={{ left: `calc(${Math.min(100, (hoverTime / duration) * 100)}% - 5px)` }}
+                />
+              )}
             </div>
           </div>
           <span className="text-[10px] text-neutral-400 tabular-nums">{fmt(duration)}</span>
         </div>
-        {/* 控制按钮 + 模式 */}
-        <div className="flex items-center gap-3">
+        {/* 控制按钮 + 模式 + 字幕/音轨/音量 */}
+        <div className="flex items-center gap-2.5">
+          {/* 上一话 */}
+          {onPrevEpisode && prevEpisodeTitle && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                handleGotoPrev()
+              }}
+              className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors shrink-0"
+              title={`上一话：${prevEpisodeTitle}`}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <polygon points="18,5 8,12 18,19" />
+                <rect x="5" y="4" width="2.5" height="16" rx="1" />
+              </svg>
+            </button>
+          )}
+          {/* 暂停/播放 */}
           <button
             onClick={(e) => {
               e.stopPropagation()
               togglePause()
             }}
-            className="w-9 h-9 rounded-full bg-white/15 hover:bg-white/25 text-white flex items-center justify-center transition-colors"
+            className="w-9 h-9 rounded-full bg-white/15 hover:bg-white/25 text-white flex items-center justify-center transition-colors shrink-0"
             title={paused ? '播放 (Space)' : '暂停 (Space)'}
           >
             {paused ? (
@@ -463,21 +674,153 @@ export default function MpvCanvas({
               </svg>
             )}
           </button>
-          {/* 静音 */}
+          {/* 下一话 */}
+          {onNextEpisode && nextEpisodeTitle && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                handleGotoNext()
+              }}
+              className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors shrink-0"
+              title={`下一话：${nextEpisodeTitle}`}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <polygon points="6,5 16,12 6,19" />
+                <rect x="16.5" y="4" width="2.5" height="16" rx="1" />
+              </svg>
+            </button>
+          )}
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-black/40 text-neutral-300 shrink-0">
+            {playModeLabel}
+          </span>
+
+          <div className="flex-1" />
+
+          {/* 字幕轨道（按钮 + 内联面板） */}
+          {subtitleTracks.length > 0 && (
+            <>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setShowSubPanel((v) => !v)
+                  setShowAudioPanel(false)
+                }}
+                className={`w-8 h-8 rounded-full text-white flex items-center justify-center transition-colors shrink-0 ${
+                  showSubPanel ? 'bg-anibox-accent/40' : 'bg-white/10 hover:bg-white/20'
+                }`}
+                title="字幕轨道"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="2" y="5" width="20" height="14" rx="2" />
+                  <line x1="7" y1="12" x2="17" y2="12" />
+                  <line x1="9" y1="16" x2="15" y2="16" />
+                </svg>
+              </button>
+              {showSubPanel && (
+                <div className="absolute bottom-16 right-16 bg-black/85 rounded-lg p-2 min-w-[180px] backdrop-blur border border-white/10 z-20">
+                  <p className="text-[11px] text-neutral-400 mb-1.5 px-1">字幕轨道</p>
+                  <div className="flex flex-col gap-0.5">
+                    <button
+                      className={`text-xs px-2.5 py-1.5 rounded text-left transition-colors ${
+                        subtitleTracks.every((t) => !t.selected)
+                          ? 'bg-anibox-accent/30 text-anibox-accent'
+                          : 'hover:bg-white/10 text-neutral-200'
+                      }`}
+                      onClick={() => {
+                        handleCommand(['set_property', 'sid', 'no'])
+                        setShowSubPanel(false)
+                      }}
+                    >
+                      关闭字幕
+                    </button>
+                    {subtitleTracks.map((t) => (
+                      <button
+                        key={t.id}
+                        className={`text-xs px-2.5 py-1.5 rounded text-left transition-colors ${
+                          t.selected
+                            ? 'bg-anibox-accent/30 text-anibox-accent'
+                            : 'hover:bg-white/10 text-neutral-200'
+                        }`}
+                        onClick={() => {
+                          handleCommand(['set_property', 'sid', t.id])
+                          setShowSubPanel(false)
+                        }}
+                      >
+                        {t.title || t.lang || `轨道 ${t.id}`}
+                        <span className="text-[10px] text-neutral-500 ml-1">({t.codec || t.lang})</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* 音轨（按钮 + 内联面板） */}
+          {audioTracks.length > 1 && (
+            <>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setShowAudioPanel((v) => !v)
+                  setShowSubPanel(false)
+                }}
+                className={`w-8 h-8 rounded-full text-white flex items-center justify-center transition-colors shrink-0 ${
+                  showAudioPanel ? 'bg-anibox-accent/40' : 'bg-white/10 hover:bg-white/20'
+                }`}
+                title="音轨"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M9 18V5l12-2v13" />
+                  <circle cx="6" cy="18" r="3" />
+                  <circle cx="18" cy="16" r="3" />
+                </svg>
+              </button>
+              {showAudioPanel && (
+                <div className="absolute bottom-16 right-16 bg-black/85 rounded-lg p-2 min-w-[180px] backdrop-blur border border-white/10 z-20">
+                  <p className="text-[11px] text-neutral-400 mb-1.5 px-1">音轨</p>
+                  <div className="flex flex-col gap-0.5">
+                    {audioTracks.map((t) => (
+                      <button
+                        key={t.id}
+                        className={`text-xs px-2.5 py-1.5 rounded text-left transition-colors ${
+                          t.selected
+                            ? 'bg-anibox-accent/30 text-anibox-accent'
+                            : 'hover:bg-white/10 text-neutral-200'
+                        }`}
+                        onClick={() => {
+                          handleCommand(['set_property', 'aid', t.id])
+                          setShowAudioPanel(false)
+                        }}
+                      >
+                        {t.title || t.lang || `音轨 ${t.id}`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* 音量（喇叭 + 滑动条） */}
           <button
             onClick={(e) => {
               e.stopPropagation()
-              muteRef.current = !muteRef.current
-              handleCommand(['set_property', 'mute', muteRef.current ? 'yes' : 'no'])
+              toggleMute()
             }}
-            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors shrink-0"
             title="静音 (M)"
           >
-            {muteRef.current ? (
+            {muted || volume === 0 ? (
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <polygon points="11,5 6,9 2,9 2,15 6,15 11,19 11,5" />
                 <line x1="23" y1="9" x2="17" y2="15" />
                 <line x1="17" y1="9" x2="23" y2="15" />
+              </svg>
+            ) : volume < 50 ? (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polygon points="11,5 6,9 2,9 2,15 6,15 11,19 11,5" />
+                <path d="M15.5 8.5a5 5 0 0 1 0 7" />
               </svg>
             ) : (
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -487,13 +830,45 @@ export default function MpvCanvas({
               </svg>
             )}
           </button>
+          {/* 音量滑条：点击/拖拽调节，带反馈 */}
+          <div
+            className="flex items-center w-24 h-6 group cursor-pointer"
+            title="音量"
+            onClick={(e) => e.stopPropagation()}
+            onPointerDown={(e) => {
+              e.stopPropagation()
+              const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect()
+              const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width))
+              setVolumeAll(ratio * 100)
+            }}
+            onPointerMove={(e) => {
+              if (e.buttons === 1) {
+                const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect()
+                const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width))
+                setVolumeAll(ratio * 100)
+              }
+            }}
+          >
+            <div className="relative flex-1 h-1 bg-white/20 rounded-full overflow-hidden group-hover:h-1.5 transition-all">
+              <div
+                className="h-full bg-white/80 rounded-full"
+                style={{ width: `${muted ? 0 : volume}%` }}
+              />
+              <div
+                className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-white shadow transition-opacity opacity-0 group-hover:opacity-100"
+                style={{ left: `calc(${muted ? 0 : volume}% - 5px)` }}
+              />
+            </div>
+          </div>
+          <span className="text-[10px] text-neutral-400 tabular-nums w-8 shrink-0">{muted ? 0 : volume}</span>
+
           {/* 全屏 */}
           <button
             onClick={(e) => {
               e.stopPropagation()
               window.electronAPI.toggleFullscreen()
             }}
-            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors shrink-0"
             title="全屏 (F)"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -506,31 +881,11 @@ export default function MpvCanvas({
               e.stopPropagation()
               setShowHelp((v) => !v)
             }}
-            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors shrink-0"
             title="快捷键帮助 (?)"
           >
             <span className="text-xs font-bold">?</span>
           </button>
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-black/40 text-neutral-300">
-            {playModeLabel}
-          </span>
-          {onNextEpisode && nextEpisodeTitle && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                handleGotoNext()
-              }}
-              className="text-[10px] px-2 py-0.5 rounded-full bg-anibox-accent/20 text-anibox-accent hover:bg-anibox-accent/30 transition-colors"
-              title="播放下一话"
-            >
-              下一话：{nextEpisodeTitle} ›
-            </button>
-          )}
-          <div className="flex-1" />
-          {/* 字幕/音轨快捷切换（点击弹面板） */}
-          {(subtitleTracks.length > 0 || audioTracks.length > 1) && (
-            <span className="text-[10px] text-neutral-400">点击画面切换字幕/音轨</span>
-          )}
         </div>
       </div>
 
@@ -567,61 +922,6 @@ export default function MpvCanvas({
                 </div>
               ))}
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* 字幕轨道选择 */}
-      {subtitleTracks.length > 0 && showControls && (
-        <div className="absolute bottom-24 left-4 bg-black/80 rounded-lg p-3 min-w-[200px] backdrop-blur">
-          <p className="text-xs text-neutral-300 mb-2">字幕轨道</p>
-          <div className="flex flex-col gap-1">
-            <button
-              className={`text-xs px-3 py-1.5 rounded text-left transition-colors ${
-                subtitleTracks.every((t) => !t.selected)
-                  ? 'bg-anibox-accent/30 text-anibox-accent'
-                  : 'hover:bg-white/10 text-neutral-200'
-              }`}
-              onClick={() => handleCommand(['set_property', 'sid', 'no'])}
-            >
-              关闭字幕
-            </button>
-            {subtitleTracks.map((t) => (
-              <button
-                key={t.id}
-                className={`text-xs px-3 py-1.5 rounded text-left transition-colors ${
-                  t.selected
-                    ? 'bg-anibox-accent/30 text-anibox-accent'
-                    : 'hover:bg-white/10 text-neutral-200'
-                }`}
-                onClick={() => handleCommand(['set_property', 'sid', t.id])}
-              >
-                {t.title || t.lang || `轨道 ${t.id}`}
-                <span className="text-[10px] text-neutral-500 ml-1">({t.codec || t.lang})</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* 音轨选择 */}
-      {audioTracks.length > 1 && showControls && (
-        <div className="absolute bottom-24 right-4 bg-black/80 rounded-lg p-3 min-w-[200px] backdrop-blur">
-          <p className="text-xs text-neutral-300 mb-2">音轨</p>
-          <div className="flex flex-col gap-1">
-            {audioTracks.map((t) => (
-              <button
-                key={t.id}
-                className={`text-xs px-3 py-1.5 rounded text-left transition-colors ${
-                  t.selected
-                    ? 'bg-anibox-accent/30 text-anibox-accent'
-                    : 'hover:bg-white/10 text-neutral-200'
-                }`}
-                onClick={() => handleCommand(['set_property', 'aid', t.id])}
-              >
-                {t.title || t.lang || `音轨 ${t.id}`}
-              </button>
-            ))}
           </div>
         </div>
       )}

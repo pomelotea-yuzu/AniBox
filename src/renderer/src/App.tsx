@@ -519,7 +519,9 @@ export default function App() {
                     key={currentVideo.filePath}
                     filePath={currentVideo.filePath}
                     playMode={playMode}
+                    prevEpisodeTitle={prev?.fileName}
                     nextEpisodeTitle={next?.fileName}
+                    onPrevEpisode={prev ? handlePrevEpisode : undefined}
                     onNextEpisode={canAutoNext ? handleNextEpisode : undefined}
                     onClose={handleClosePlayer}
                     onFallbackToLegacy={() => setMpvBackend('legacy')}

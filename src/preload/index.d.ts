@@ -77,9 +77,15 @@ export interface ElectronAPI {
     loaded: boolean
     width: number
     height: number
+    volume: number
+    muted: boolean
   } | null>
   mpvOnEvent: (cb: (event: Record<string, unknown>) => void) => () => void
   mpvOnFrame: (
+    cb: (frame: { data: Uint8Array; width: number; height: number }) => void,
+  ) => () => void
+  mpvPreview: (filePath: string, t: number) => Promise<boolean>
+  mpvOnPreviewFrame: (
     cb: (frame: { data: Uint8Array; width: number; height: number }) => void,
   ) => () => void
   subtitleReadVtt: (filePath: string) => Promise<string>
