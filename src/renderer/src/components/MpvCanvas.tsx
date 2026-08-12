@@ -407,6 +407,16 @@ export default function MpvCanvas({
             onCloseRef.current()
           }
         }
+      } else if (event.event === 'eof-reached') {
+        // keep-open=yes 时 mpv 播完不发 end-file，改由 eof-reached 属性观察触发连播
+        if (playModeRef.current === 'loop-one') {
+          window.electronAPI.mpvCommand(['loadfile', filePath, 'replace']).catch(() => {})
+        } else if (onNextEpisodeRef.current) {
+          offMpvEventRef.current?.()
+          onNextEpisodeRef.current()
+        } else {
+          onCloseRef.current()
+        }
       } else if (event.event === 'end') {
         onCloseRef.current()
       } else if (event.event === 'tracks' && Array.isArray(event.data)) {
@@ -571,20 +581,20 @@ export default function MpvCanvas({
         </span>
       </div>
 
-      {/* 悬浮预览小窗（进度条 hover 时显示） */}
-      {hoverTime !== null && showControls && (
-        <div
-          className="absolute bottom-16 z-20 pointer-events-none flex flex-col items-center"
-          style={previewTipStyle}
-        >
-          <div className="rounded-lg overflow-hidden border border-white/20 shadow-2xl bg-black/80">
-            <canvas ref={previewCanvasRef} style={{ width: 256, height: 144 }} />
-          </div>
-          <span className="mt-1 text-[10px] px-1.5 py-0.5 rounded bg-black/70 text-neutral-200 tabular-nums">
-            {fmt(hoverTime)} / {fmt(duration)}
-          </span>
+      {/* 悬浮预览小窗（canvas 常驻避免 WebGL context 失效，用显隐控制） */}
+      <div
+        className={`absolute bottom-16 z-20 pointer-events-none flex flex-col items-center transition-opacity duration-150 ${
+          hoverTime !== null && showControls ? 'opacity-100' : 'opacity-0'
+        }`}
+        style={previewTipStyle}
+      >
+        <div className="rounded-lg overflow-hidden border border-white/20 shadow-2xl bg-black/80">
+          <canvas ref={previewCanvasRef} style={{ width: 256, height: 144 }} />
         </div>
-      )}
+        <span className="mt-1 text-[10px] px-1.5 py-0.5 rounded bg-black/70 text-neutral-200 tabular-nums">
+          {hoverTime !== null ? `${fmt(hoverTime)} / ${fmt(duration)}` : ''}
+        </span>
+      </div>
 
       {/* 底部控制条 */}
       <div

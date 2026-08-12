@@ -301,11 +301,6 @@ function registerProtocol(): void {
 let libmpvBridge: LibmpvBridge | null = null
 let libmpvFailed = false // 一次加载失败后不再尝试（防重复启动旧链路）
 
-// 悬浮预览：独立静音小尺寸 libmpv 实例，seek 取帧（不打断主播放）
-let previewBridge: LibmpvBridge | null = null
-let previewBridgeFile = ''
-let previewBridgeLoading = false
-
 function libmpvQuit(): void {
   if (libmpvBridge) {
     console.log('[libmpv] libmpvQuit → destroy bridge')
@@ -322,52 +317,64 @@ function libmpvQuit(): void {
   }
 }
 
+// 悬浮预览：独立静音小尺寸 libmpv 实例，seek 取帧（不打断主播放）
+let previewBridge: LibmpvBridge | null = null
+let previewBridgeFile = ''
+let previewBridgePromise: Promise<boolean> | null = null
+
 /**
  * 确保预览实例已加载 filePath。返回 true 表示已就绪（可 seek 取帧）。
  * 预览实例：ao=null 静音、SW 渲染最大 480 宽（省 CPU）、无 timer（手动驱动）
+ * 并发调用共享同一个加载 promise，避免快速 hover 时反复重建
  */
-async function ensurePreviewBridge(filePath: string): Promise<boolean> {
+function ensurePreviewBridge(filePath: string): Promise<boolean> {
   if (previewBridge && previewBridge.isActive && previewBridgeFile === filePath && previewBridge.isLoaded) {
-    return true
+    return Promise.resolve(true)
   }
-  const dll = findLibmpvDll()
-  if (!dll) return false
-  // 换文件或未加载：重建实例
-  try {
-    previewBridge?.destroy()
-  } catch {
-    /* ok */
-  }
-  previewBridge = null
-  previewBridgeFile = filePath
-  const bridge = new LibmpvBridge(
-    {
-      onFrame: (frame) => {
-        mainWindow?.webContents.send('mpv:preview-frame', frame.buffer, frame.width, frame.height)
-      },
-      onLog: (level, text) => {
-        if (level === 'error' || level === 'warn') console.log('[libmpv-preview]', level + ':', text)
-      },
-    },
-    { renderMax: 480, noTimer: true, ao: 'null' },
-  )
-  if (!bridge.init(dll)) {
-    bridge.destroy()
+  if (previewBridgePromise) return previewBridgePromise
+  previewBridgePromise = (async () => {
+    const dll = findLibmpvDll()
+    if (!dll) return false
+    // 换文件或未加载：重建实例
+    try {
+      previewBridge?.destroy()
+    } catch {
+      /* ok */
+    }
     previewBridge = null
-    previewBridgeFile = ''
+    previewBridgeFile = filePath
+    const bridge = new LibmpvBridge(
+      {
+        onFrame: (frame) => {
+          mainWindow?.webContents.send('mpv:preview-frame', frame.buffer, frame.width, frame.height)
+        },
+        onLog: (level, text) => {
+          if (level === 'error' || level === 'warn') console.log('[libmpv-preview]', level + ':', text)
+        },
+      },
+      { renderMax: 480, noTimer: true, ao: 'null' },
+    )
+    if (!bridge.init(dll)) {
+      bridge.destroy()
+      previewBridge = null
+      previewBridgeFile = ''
+      return false
+    }
+    previewBridge = bridge
+    bridge.loadFile(filePath)
+    // 等待 FILE_LOADED（手动 drain 事件，最多 5s）
+    const deadline = Date.now() + 5000
+    while (Date.now() < deadline) {
+      bridge.drainOnce()
+      if (bridge.isLoaded) return true
+      await new Promise((r) => setTimeout(r, 20))
+    }
+    console.warn('[libmpv-preview] 等待文件加载超时:', filePath)
     return false
-  }
-  previewBridge = bridge
-  bridge.loadFile(filePath)
-  // 等待 FILE_LOADED（手动 drain 事件，最多 5s）
-  const deadline = Date.now() + 5000
-  while (Date.now() < deadline) {
-    bridge.drainOnce()
-    if (bridge.isLoaded) return true
-    await new Promise((r) => setTimeout(r, 20))
-  }
-  console.warn('[libmpv-preview] 等待文件加载超时:', filePath)
-  return false
+  })().finally(() => {
+    previewBridgePromise = null
+  })
+  return previewBridgePromise
 }
 
 /** 预览：seek 到 t 秒并渲染一帧回传渲染进程 */
@@ -435,6 +442,13 @@ function libmpvPlay(fp: string): boolean {
       const reasonStr =
         reason === 0 ? 'eof' : reason === 1 ? 'stop' : reason === 2 ? 'quit' : reason === 3 ? 'error' : String(reason)
       mainWindow?.webContents.send('mpv:event', { event: 'end-file', reason: reasonStr })
+    },
+    onEofReached: (reached) => {
+      // keep-open=yes 时播放完不发 END_FILE，靠 eof-reached 属性变化触发连播
+      if (reached) {
+        console.log('[libmpv] eof-reached → 触发连播')
+        mainWindow?.webContents.send('mpv:event', { event: 'eof-reached' })
+      }
     },
     onTracks: (tracks) => {
       mainWindow?.webContents.send('mpv:event', { event: 'tracks', data: tracks })

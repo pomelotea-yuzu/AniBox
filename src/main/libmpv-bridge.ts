@@ -45,6 +45,7 @@ const MPV_EVENT_LOG_MESSAGE = 2
 const MPV_EVENT_START_FILE = 6
 const MPV_EVENT_END_FILE = 7
 const MPV_EVENT_FILE_LOADED = 8
+const MPV_EVENT_PROPERTY_CHANGE = 20
 // mpv_render_param_type
 const MPV_RENDER_PARAM_API_TYPE = 1
 const MPV_RENDER_PARAM_NEXT_FRAME_INFO = 11
@@ -81,6 +82,8 @@ export interface LibmpvHandlers {
   onStartFile?: () => void
   /** reason: 0=EOF, 1=STOP, 2=QUIT, 3=ERROR, 4=REDIRECT */
   onEndFile?: (reason: number) => void
+  /** eof-reached 属性变化（keep-open=yes 时不发 END_FILE，靠这个触发连播） */
+  onEofReached?: (reached: boolean) => void
   onTracks?: (tracks: LibmpvTrack[]) => void
   onLog?: (level: string, text: string) => void
   onReady?: () => void
@@ -94,6 +97,7 @@ interface LibmpvApi {
   mpv_get_property: (ctx: bigint, name: string, format: number, data: bigint) => number
   mpv_set_property_string: (ctx: bigint, name: string, data: string) => number
   mpv_set_option_string: (ctx: bigint, name: string, data: string) => number
+  mpv_observe_property: (ctx: bigint, reply_userdata: number, name: string, format: number) => number
   mpv_request_log_messages: (ctx: bigint, level: string) => number
   mpv_wait_event: (ctx: bigint, timeout: number) => bigint | null
   mpv_render_context_create: (res: bigint, ctx: bigint, params: bigint) => number
@@ -117,6 +121,7 @@ function ensureDeclared(): boolean {
     playlist_insert_id: 'int32',
     playlist_insert_num_entries: 'int32',
   })
+  koffi.struct('mpv_event_property', { name: 'str', format: 'int32', data: 'void *' })
   koffi.struct('mpv_render_frame_info', { target_time: 'int64', flags: 'int32' })
   declared = true
   return true
@@ -136,6 +141,7 @@ function getApi(dllPath: string): LibmpvApi {
     mpv_get_property: lib.func('int mpv_get_property(void *ctx, const char *name, int format, void *data)'),
     mpv_set_property_string: lib.func('int mpv_set_property_string(void *ctx, const char *name, const char *data)'),
     mpv_set_option_string: lib.func('int mpv_set_option_string(void *ctx, const char *name, const char *data)'),
+    mpv_observe_property: lib.func('int mpv_observe_property(void *ctx, uint64_t reply_userdata, const char *name, int format)'),
     mpv_request_log_messages: lib.func('int mpv_request_log_messages(void *ctx, const char *min_level)'),
     mpv_wait_event: lib.func('void *mpv_wait_event(void *ctx, double timeout)'),
     mpv_render_context_create: lib.func('int mpv_render_context_create(void **res, void *mpv, const void *params)'),
@@ -262,6 +268,8 @@ export class LibmpvBridge {
   private renderMaxOverride = 0
   private noTimer = false
   private aoOverride: string | null = null
+  /** eof-reached 边沿检测（防重复触发连播） */
+  private eofReachedSent = false
 
   constructor(handlers?: LibmpvHandlers, opts?: LibmpvBridgeOptions) {
     this.handlers = handlers || {}
@@ -329,6 +337,12 @@ export class LibmpvBridge {
         return false
       }
       this.api.mpv_request_log_messages(ctx, 'warn')
+      // 观察 eof-reached：keep-open=yes 时播放完不发 END_FILE 事件，靠属性变化触发连播
+      try {
+        this.api.mpv_observe_property(ctx, 1, 'eof-reached', MPV_FORMAT_FLAG)
+      } catch {
+        /* ok */
+      }
 
       // 创建 SW 渲染上下文
       const rcBuf = koffi.alloc('void *', 1)
@@ -502,6 +516,21 @@ export class LibmpvBridge {
     }
   }
 
+  /** 读取 eof-reached（keep-open=yes 时播放完的连播信号，轮询用） */
+  isEofReached(): boolean {
+    if (!this.api || !this.ctx || !koffi) return false
+    const buf = koffi.alloc('int32', 1)
+    try {
+      const r = this.api.mpv_get_property(this.ctx, 'eof-reached', MPV_FORMAT_FLAG, buf)
+      if (r !== 0) return false
+      return koffi.decode(buf, 'int32') !== 0
+    } catch {
+      return false
+    } finally {
+      koffi.free(buf)
+    }
+  }
+
   /** 手动 drain 一次事件（预览实例 noTimer 模式下等待 FILE_LOADED 等事件） */
   drainOnce(): void {
     try {
@@ -612,6 +641,20 @@ export class LibmpvBridge {
     } catch {
       /* ok */
     }
+    // keep-open=yes 时 mpv 播放完不发 END_FILE 事件，改轮询 eof-reached 属性边沿触发连播
+    try {
+      if (this.loaded) {
+        const eof = this.isEofReached()
+        if (eof && !this.eofReachedSent) {
+          this.eofReachedSent = true
+          this.handlers.onEofReached?.(true)
+        } else if (!eof) {
+          this.eofReachedSent = false
+        }
+      }
+    } catch {
+      /* ok */
+    }
     try {
       this.renderFrame()
     } catch {
@@ -641,6 +684,19 @@ export class LibmpvBridge {
         case MPV_EVENT_END_FILE: {
           const ef = koffi.decode(e.data || 0n, 'mpv_event_end_file')
           this.handlers.onEndFile?.(ef.reason)
+          break
+        }
+        case MPV_EVENT_PROPERTY_CHANGE: {
+          // eof-reached 属性变化（keep-open=yes 时播放完的连播信号）
+          try {
+            const prop = koffi.decode(e.data || 0n, 'mpv_event_property')
+            if (prop && prop.name === 'eof-reached' && prop.data) {
+              const val = koffi.decode(prop.data, 'int32')
+              this.handlers.onEofReached?.(val !== 0)
+            }
+          } catch {
+            /* ok */
+          }
           break
         }
         default:
