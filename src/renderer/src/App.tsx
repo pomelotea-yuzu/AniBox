@@ -138,12 +138,21 @@ export default function App() {
     setCurrentVideo(null)
     setMpvFallback(false)
     setMpvBackend('libmpv')
-    if (mpvFallback) {
-      window.electronAPI.mpvQuit()
-    }
+    // 无条件停止 mpv：libmpv / legacy 双链路都要停（libmpvQuit/mpvKill 对空引用安全）
+    window.electronAPI.mpvQuit().catch(() => {})
     if (selectedSeries) setView('episodes')
     else setView('wall')
-  }, [selectedSeries, mpvFallback])
+  }, [selectedSeries])
+
+  // 播放器视图退出兜底：任何路径离开 player 视图都确保 mpv 停止，
+  // 防止 MpvCanvas 卸载 cleanup 的 quit IPC 丢失导致「返回后声音仍在播放」
+  const prevViewRef = useRef<View>('loading')
+  useEffect(() => {
+    if (prevViewRef.current === 'player' && view !== 'player') {
+      window.electronAPI.mpvQuit().catch(() => {})
+    }
+    prevViewRef.current = view
+  }, [view])
 
   const handleEpisodeList = useCallback(() => {
     if (selectedSeries) setView('episodes')

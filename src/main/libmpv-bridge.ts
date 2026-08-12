@@ -496,6 +496,12 @@ export class LibmpvBridge {
       this.timer = null
     }
     if (this.api) {
+      // 先暂停（setProperty 安全；mpv_command(['stop']) 在 SW 渲染下会原生崩溃，禁止用命令停）
+      try {
+        this.api.mpv_set_property_string(this.ctx!, 'pause', 'yes')
+      } catch {
+        /* ok */
+      }
       if (this.rc) {
         try {
           this.api.mpv_render_context_free(this.rc)

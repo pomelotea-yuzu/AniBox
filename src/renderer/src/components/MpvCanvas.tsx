@@ -341,7 +341,8 @@ export default function MpvCanvas({
   return () => {
     offMpvEventRef.current = null
     offMpvFrameRef.current = null
-    window.electronAPI.mpvQuit()
+    // 卸载必须停止 libmpv：fire-and-forget 但必须发出（App 层 view 兜底也会再调一次，幂等）
+    window.electronAPI.mpvQuit().catch(() => {})
     offMpvEvent()
     offMpvFrame()
     if (hideTimerRef.current) clearTimeout(hideTimerRef.current)

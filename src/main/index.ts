@@ -303,8 +303,11 @@ let libmpvFailed = false // 一次加载失败后不再尝试（防重复启动�
 
 function libmpvQuit(): void {
   if (libmpvBridge) {
+    console.log('[libmpv] libmpvQuit → destroy bridge')
     libmpvBridge.destroy()
     libmpvBridge = null
+  } else {
+    console.log('[libmpv] libmpvQuit: bridge 不存在（跳过）')
   }
 }
 
@@ -857,6 +860,7 @@ function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('mpv:quit', () => {
+    console.log('[AniBox] mpv:quit 收到')
     libmpvQuit()
     mpvKill()
     mainWindow?.focus()
