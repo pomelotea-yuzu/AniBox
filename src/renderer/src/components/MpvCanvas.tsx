@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+/** 倍速档位（与 HTML5 播放器保持一致） */
+const PLAYBACK_SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3]
+
 interface MpvTrack {
   id: number
   type: string
@@ -24,6 +27,12 @@ interface MpvCanvasProps {
   onNextEpisode?: () => void
   /** 主进程 libmpv 初始化失败时回调（App 层切回旧 mpv.exe 链路） */
   onFallbackToLegacy?: () => void
+  /** 选集列表（番剧模式下传入，用于播放器内选集） */
+  episodes?: Array<{ fileName: string; filePath: string; epNumber?: number }>
+  /** 当前集索引 */
+  currentEpIndex?: number
+  /** 选集切换回调（切到 index 集） */
+  onSelectEpisode?: (index: number) => void
 }
 
 /** libmpv 内嵌播放（方案 A）——主进程软渲染取帧 → IPC → Canvas 显示，单窗口、叠加层可用 */
@@ -36,6 +45,9 @@ export default function MpvCanvas({
   onPrevEpisode,
   onNextEpisode,
   onFallbackToLegacy,
+  episodes,
+  currentEpIndex = -1,
+  onSelectEpisode,
 }: MpvCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const onCloseRef = useRef(onClose)
@@ -69,6 +81,11 @@ export default function MpvCanvas({
   // 控制条面板开关（字幕/音轨）
   const [showSubPanel, setShowSubPanel] = useState(false)
   const [showAudioPanel, setShowAudioPanel] = useState(false)
+  // 倍速 + 选集
+  const [playbackRate, setPlaybackRate] = useState(1)
+  const [showSpeedMenu, setShowSpeedMenu] = useState(false)
+  const [customSpeed, setCustomSpeed] = useState('')
+  const [showEpisodePanel, setShowEpisodePanel] = useState(false)
   // 悬浮预览：hover 位置时间 + 预览帧
   const [hoverTime, setHoverTime] = useState<number | null>(null)
   const [previewFrame, setPreviewFrame] = useState<{ data: Uint8Array; width: number; height: number } | null>(null)
@@ -95,10 +112,39 @@ export default function MpvCanvas({
     window.electronAPI.mpvCommand(cmd).catch(() => {})
   }, [])
 
+  // 倍速：通过 mpv speed 属性设置（主进程 set_property 适配层已支持）
+  const setSpeed = useCallback(
+    (s: number) => {
+      const v = Math.min(16, Math.max(0.1, s))
+      setPlaybackRate(v)
+      handleCommand(['set_property', 'speed', String(v)])
+    },
+    [handleCommand],
+  )
+
   const pausedRef = useRef(false)
   useEffect(() => {
     pausedRef.current = paused
   }, [paused])
+
+  // 进度记忆：libmpv 也要保存播放进度（供首页「继续观看」使用），与 HTML5 播放器保持一致。
+  // 之前 libmpv 链路完全不写进度，导致重进软件后「继续观看」没有上次播放记录。
+  const timePosRef = useRef(0)
+  useEffect(() => {
+    timePosRef.current = timePos
+  }, [timePos])
+
+  useEffect(() => {
+    const saveProgress = () => {
+      const p = timePosRef.current
+      if (p > 0) window.electronAPI.savePosition(filePath, p).catch(() => {})
+    }
+    const timer = setInterval(saveProgress, 5000)
+    return () => {
+      clearInterval(timer)
+      saveProgress() // 卸载前保存最终进度（返回/切集/连播到下一集都会触发）
+    }
+  }, [filePath])
 
   // 暂停/播放：显式 set_property（libmpv 下 'cycle pause' 会崩溃，主进程适配层也做了兜底转换）
   const togglePause = useCallback(() => {
@@ -708,6 +754,70 @@ export default function MpvCanvas({
             {playModeLabel}
           </span>
 
+          {/* 选集（番剧模式下显示，点击展开选集面板） */}
+          {episodes && episodes.length > 0 && (
+            <>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setShowEpisodePanel((v) => !v)
+                  setShowSubPanel(false)
+                  setShowAudioPanel(false)
+                }}
+                className={`w-8 h-8 rounded-full text-white flex items-center justify-center transition-colors shrink-0 ${
+                  showEpisodePanel ? 'bg-anibox-accent/40' : 'bg-white/10 hover:bg-white/20'
+                }`}
+                title="选集"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="8" y1="6" x2="21" y2="6" />
+                  <line x1="8" y1="12" x2="21" y2="12" />
+                  <line x1="8" y1="18" x2="21" y2="18" />
+                  <line x1="3" y1="6" x2="3.01" y2="6" />
+                  <line x1="3" y1="12" x2="3.01" y2="12" />
+                  <line x1="3" y1="18" x2="3.01" y2="18" />
+                </svg>
+              </button>
+              {showEpisodePanel && (
+                <div className="absolute bottom-16 left-4 w-72 max-h-80 bg-black/85 rounded-lg shadow-xl z-20 flex flex-col backdrop-blur border border-white/10">
+                  <div className="flex items-center justify-between px-3 py-2 border-b border-white/10 shrink-0">
+                    <span className="text-xs font-medium text-neutral-200">选集</span>
+                    <button
+                      onClick={() => setShowEpisodePanel(false)}
+                      className="text-neutral-400 hover:text-white text-sm px-1"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <div className="flex-1 overflow-y-auto p-2">
+                    <div className="grid grid-cols-5 gap-1.5">
+                      {episodes.map((ep, i) => {
+                        const isCurrent = i === currentEpIndex
+                        return (
+                          <button
+                            key={ep.filePath}
+                            onClick={() => {
+                              onSelectEpisode?.(i)
+                              setShowEpisodePanel(false)
+                            }}
+                            className={`aspect-square rounded text-xs font-medium transition-colors flex items-center justify-center ${
+                              isCurrent
+                                ? 'bg-anibox-accent text-white'
+                                : 'bg-white/5 text-white/70 hover:bg-white/15 hover:text-white'
+                            }`}
+                            title={ep.fileName}
+                          >
+                            {ep.epNumber ?? i + 1}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
           <div className="flex-1" />
 
           {/* 字幕轨道（按钮 + 内联面板） */}
@@ -875,6 +985,65 @@ export default function MpvCanvas({
             </div>
           </div>
           <span className="text-[10px] text-neutral-400 tabular-nums w-8 shrink-0">{muted ? 0 : volume}</span>
+
+          {/* 倍速 */}
+          <div className="relative shrink-0">
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                setShowSpeedMenu((v) => !v)
+              }}
+              className="min-w-[30px] h-8 px-1.5 rounded text-xs text-neutral-200 hover:bg-white/10 transition-colors shrink-0"
+              title="播放速度"
+            >
+              {playbackRate}x
+            </button>
+            {showSpeedMenu && (
+              <div className="absolute bottom-full right-0 mb-2 bg-black/85 border border-white/10 rounded-md shadow-xl py-1 z-30 min-w-[100px] backdrop-blur">
+                {PLAYBACK_SPEEDS.map((speed) => (
+                  <button
+                    key={speed}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setSpeed(speed)
+                      setShowSpeedMenu(false)
+                    }}
+                    className={`block w-full text-left px-4 py-1.5 text-xs hover:bg-white/10 transition-colors whitespace-nowrap ${
+                      playbackRate === speed ? 'text-anibox-accent font-medium' : 'text-neutral-200'
+                    }`}
+                  >
+                    {speed}x
+                  </button>
+                ))}
+                {/* 自定义倍速输入 */}
+                <div className="border-t border-white/10 mt-1 pt-1 px-2">
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault()
+                      const val = parseFloat(customSpeed)
+                      if (val >= 0.1 && val <= 16) {
+                        setSpeed(val)
+                        setShowSpeedMenu(false)
+                        setCustomSpeed('')
+                      }
+                    }}
+                  >
+                    <input
+                      type="number"
+                      min="0.1"
+                      max="16"
+                      step="0.05"
+                      value={customSpeed}
+                      onChange={(e) => setCustomSpeed(e.target.value)}
+                      placeholder="自定义..."
+                      className="w-full bg-white/5 border border-white/10 rounded px-2 py-1 text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-anibox-accent [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  </form>
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* 全屏 */}
           <button
