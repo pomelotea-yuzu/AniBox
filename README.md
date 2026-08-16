@@ -2,12 +2,34 @@
 
 本地番剧库管理器 + 播放器。扫描番剧目录自动生成海报墙，新番时间表追更，还能**搜索想要的番剧并一键下载 BT 资源**，点击即播。
 
+## 快速开始
+
+**普通用户（便携版）**
+1. 下载 `AniBox-x.y.z-portable-x64.zip`，解压后双击 `AniBox.exe`
+2. 首次使用点 **手动添加** 选择番剧目录（或直接「搜索番剧」在线找资源）
+3. 可选：在 **设置 → 下载** 配置 qBittorrent WebUI，解锁「一键下载 / 追番」
+
+**开发者**
+```bash
+cd anibox
+pnpm install      # 原生依赖（electron/esbuild/koffi 等）构建已由 pnpm-workspace.yaml 放行
+pnpm dev          # 开发模式
+pnpm typecheck    # 类型检查
+pnpm test         # 单元测试
+pnpm package      # 打包
+```
+
+> 环境要求：Windows 10/11，Node.js ≥ 20（pnpm 11 要求）与 pnpm ≥ 11。
+> 运行期需要 `libmpv-2.dll` 与 `mpv.exe` 与应用一同分发（内嵌播放与兜底播放引擎）。
+
+---
+
 ## 功能
 
 ### 番剧管理
 - **多根扫描** — 支持多个番剧目录同时管理
 - **海报墙** — 封面展示、搜索筛选、类型过滤、多种排序
-- **元数据刮削** — AniList GraphQL + Bangumi v0 REST 双源，自动获取中文标题、简介、评分、Staff、类型标签
+- **元数据刮削** — AniList GraphQL + Bangumi v0 REST 双源，自动获取中文标题、简介、评分、Staff、类型标签；**Staff 职位自动中文化**（监督/演出/系列构成/作画监督… 90+ 日式动画职位术语）
 - **本地翻译** — 内置 Helsinki-NLP/opus-mt-en-zh 模型（~114MB），离线 EN→ZH 翻译；搭配 200+ 动漫短语词典 + 130+ 句式模板
 - **标题校验** — AniList 在线校验文件夹标题，给出建议
 - **追番状态** — 在看/已追/弃番
@@ -44,7 +66,7 @@
 - **anibox:// 协议** — 自定义协议实现本地文件 Range 请求
 - **播放控制** — 播放/暂停、进度条拖拽、音量、倍速、全屏、静音（libmpv 模式同样支持：快捷键 Space/←→/↑↓/M/F/0-9/?）
 - **进度记忆** — 精确记住每部番的集数 + 时间位置
-- **自动连播** — 看完自动下一话，支持顺序/单集循环/列表循环/随机
+- **自动连播** — 看完自动下一话（快进到底同样触发），支持顺序/单集循环/列表循环/随机
 - **Anime4K 实时超分** — WebGL 管线（边缘上采样 + Unsharp Mask + Debanding + FXAA），三档预设，A/B 对比
 - **AB 循环** — 标记起点终点循环播放
 - **画中画** — 系统级画中画
@@ -73,9 +95,6 @@
 - **莫兰迪配色主题** — 5 套主题（暖燕麦/冷亚麻/玫瑰灰/橄榄暮/薰衣雾），ThemeProvider + CSS 变量驱动
 - **全局设置** — 主题/字幕/播放/快捷键/API/下载/关于 7 个 Tab 设置页
 - **快捷键** — 30+ 键盘快捷键覆盖所有操作，`?` 键呼出帮助面板
-
-### Staff 职位翻译（日式动画术语）
-监督·副监督·演出·系列构成·脚本·原作·漫画家·角色设计·角色原案·美术监督·音响监督·作画监督·总作画监督·摄影监督·3D监督·色彩设计·机械设计·原画·中间帧·动画师·上色·剪辑·制作人 等 90+ 职位
 
 ---
 
@@ -163,23 +182,44 @@ F:/收藏/
 
 ---
 
+## 项目结构
+
+```
+anibox/
+├─ src/main/       Electron 主进程：扫描、元数据/字幕/弹幕抓取、libmpv bridge、qBittorrent 联动
+├─ src/preload/    预加载脚本（IPC 桥，contextBridge 暴露 window.electronAPI）
+├─ src/renderer/   React 渲染进程：海报墙、播放器（Player/MpvCanvas）、时间表、搜索、设置
+├─ resources/      应用图标等静态资源
+├─ scripts/        开发/打包辅助脚本（模型下载、便携版打包等）
+└─ pnpm-workspace.yaml   pnpm 11 构建白名单（原生依赖 allowBuilds）
+```
+
+---
+
 ## 开发
 
 ```bash
-# 依赖：Node.js >= 18
-# libmpv 内嵌播放依赖 koffi（FFI，已含在 dependencies）；libmpv-2.dll 需与 mpv.exe 一并分发
+# 依赖：Node.js >= 20（pnpm 11 要求）、pnpm >= 11
+# 原生依赖（electron/esbuild/koffi/onnxruntime-node/sharp）的构建脚本已通过
+# pnpm-workspace.yaml 的 allowBuilds 放行，首次 pnpm install 会自动下载/编译（需联网）
 
 cd anibox
-npm install
+pnpm install
 
 # 预下载翻译模型（可选，否则首次获取番剧信息时自动下载）
 node scripts/download-model.mjs
 
 # 开发
-npm run dev
+pnpm dev
+
+# 类型检查
+pnpm typecheck
+
+# 单元测试
+pnpm test
 
 # 打包
-npm run package
+pnpm package
 ```
 
 > 提示：`AniBox.bat`（开发模式）与 `AniBox-prod.bat`（生产模式）可直接双击启动。
@@ -208,4 +248,4 @@ npm run package
 
 ---
 
-*最后更新: 2026-08-12*
+*最后更新: 2026-08-13*
