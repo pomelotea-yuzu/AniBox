@@ -14,11 +14,27 @@ export interface ElectronAPI {
     } | null
   } | null>
   checkAudio: (filePath: string) => Promise<{ codec: string; supported: boolean }>
+  checkAudioBatch: (
+    filePaths: string[],
+  ) => Promise<Record<string, { codec: string; supported: boolean }>>
   detectEmbeddedSubtitles: (
     filePath: string,
   ) => Promise<Array<{ label: string; language: string; codec: string; index: number }>>
   savePosition: (filePath: string, position: number) => Promise<void>
   getPosition: (filePath: string) => Promise<number>
+  getRecentProgress: () => Promise<
+    Array<{
+      episodeId: string
+      filePath: string
+      fileName: string
+      epNumber: number
+      seriesTitle: string
+      seriesId: string
+      folderPath: string
+      position: number
+      updatedAt: string
+    }>
+  >
   getMediaUrl: (filePath: string) => string
   getCoverUrl: (filePath: string) => string
   openFolder: () => Promise<string | null>
@@ -37,6 +53,11 @@ export interface ElectronAPI {
       coverPath?: string
     }>
   >
+  scanRootsGet: () => Promise<string[]>
+  scanRootsAdd: (root: string) => Promise<string[]>
+  scanRootsRemove: (root: string) => Promise<string[]>
+  scanRootsSetAll: (roots: string[]) => Promise<string[]>
+  scanRootsScanAll: () => Promise<Array<any>>
   getSeriesProgress: (folderPath: string) => Promise<{ total: number; watched: number }>
   setSeriesStatus: (folderPath: string, status: string) => Promise<void>
   updateTitle: (folderPath: string, newTitle: string) => Promise<void>
@@ -65,8 +86,24 @@ export interface ElectronAPI {
   fetchMetadataBatch: (series: Array<{ title: string; folderPath: string }>) => Promise<any>
   getMetadata: (folderPath: string) => Promise<any>
   onMetadataProgress: (
-    cb: (data: { current: number; total: number; title: string; ok: boolean }) => void,
+    cb: (data: {
+      current: number
+      total: number
+      title: string
+      ok: boolean
+      status?: string
+    }) => void,
   ) => () => void
+  validateTitles: (series: Array<{ folderPath: string; title: string }>) => Promise<
+    Array<{
+      folderPath: string
+      currentTitle: string
+      suggestedTitle: string
+      anilistId: number
+      confidence: number
+      reason: string
+    }>
+  >
   mpvPlay: (filePath: string) => Promise<void>
   mpvQuit: () => Promise<void>
   mpvCommand: (cmd: any[]) => Promise<boolean>
@@ -121,7 +158,7 @@ export interface ElectronAPI {
     strokeColor: string
     strokeWidth: number
     bgColor: string
-    position: string
+    position: 'bottom' | 'top'
     secondaryFontSize: number
     dualSubtitleGap: number
   }>
@@ -212,7 +249,9 @@ export interface ElectronAPI {
   favoritesGetAll: () => Promise<string[]>
   favoritesToggle: (seriesId: string) => Promise<boolean>
   favoritesIsFavorited: (seriesId: string) => Promise<boolean>
-  playlistsGetAll: () => Promise<Array<{ id: string; name: string; seriesIds: string[] }>>
+  playlistsGetAll: () => Promise<
+    Array<{ id: string; name: string; seriesIds: string[]; createdAt: string }>
+  >
   playlistsCreate: (name: string) => Promise<string>
   playlistsDelete: (id: string) => Promise<void>
   playlistsAddSeries: (listId: string, seriesId: string) => Promise<void>
@@ -220,7 +259,10 @@ export interface ElectronAPI {
   seasonFetchTimeline: (forceRefresh?: boolean) => Promise<any>
   seasonFetchDetail: (anilistId: number) => Promise<any>
   // 番剧搜索（AniList 搜索番剧）
-  animeSearch: (query: string, pageSize?: number) => Promise<{
+  animeSearch: (
+    query: string,
+    pageSize?: number,
+  ) => Promise<{
     ok: boolean
     anime?: any[]
     error?: string
@@ -278,17 +320,20 @@ export interface ElectronAPI {
     username: string
     password: string
   }) => Promise<{ ok: boolean; message: string; version?: string }>
-  qbAddTorrent: (
-    magnet: string,
-    savepath?: string,
-  ) => Promise<{ ok: boolean; message: string }>
+  qbAddTorrent: (magnet: string, savepath?: string) => Promise<{ ok: boolean; message: string }>
   qbAddRss: (
     feedUrl: string,
     path?: string,
   ) => Promise<{ ok: boolean; message: string; path?: string }>
   qbAddRule: (
     ruleName: string,
-    opts: { mustContain: string; savepath?: string; affectedFeeds?: string[]; addPaused?: boolean; useRegex?: boolean },
+    opts: {
+      mustContain: string
+      savepath?: string
+      affectedFeeds?: string[]
+      addPaused?: boolean
+      useRegex?: boolean
+    },
   ) => Promise<{ ok: boolean; message: string }>
   qbRemoveRule: (ruleName: string) => Promise<{ ok: boolean; message: string }>
   translateJaModelLoad: () => Promise<boolean>
@@ -306,6 +351,7 @@ export interface ElectronAPI {
   ) => Promise<boolean>
   saveScreenshot: (dataUrl: string) => Promise<boolean>
   toggleFullscreen: () => Promise<void>
+  exitFullscreen: () => Promise<void>
   onFullscreenChanged: (cb: (isFullscreen: boolean) => void) => () => void
 }
 

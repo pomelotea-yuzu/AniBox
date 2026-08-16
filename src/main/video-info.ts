@@ -283,10 +283,13 @@ export function parseMP4Meta(filePath: string): VideoStreamMeta | null {
   }
 }
 
-/** Chromium 不支持的音频编码 */
+/**
+ * Chromium 不支持的音频编码。
+ * 注意：AC-3 (Dolby Digital) 与 E-AC-3 (DD+) 在新版 Chromium/Electron 上已可通过
+ * Windows Media Foundation 平台解码器播放，不再强制切 mpv（放宽检测，见问题 #4）。
+ * DTS / DTS-HD / DTS Express / Dolby TrueHD 仍无浏览器解码器，必须走 libmpv。
+ */
 const UNSUPPORTED_AUDIO_CODECS = new Set([
-  'ac-3', // Dolby Digital
-  'ec-3', // Dolby Digital Plus / E-AC-3
   'dtsc', // DTS
   'dtsh', // DTS-HD
   'dtse', // DTS Express

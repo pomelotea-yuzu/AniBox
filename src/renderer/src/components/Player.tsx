@@ -69,7 +69,7 @@ export default function Player({
   // Toast（最先创建，供其他 hooks 使用）
   const toast = usePlayerExtras({
     filePath,
-    videoRef: { current: null } as React.RefObject<HTMLVideoElement>,
+    videoRef: { current: null } as unknown as React.RefObject<HTMLVideoElement>,
     showToast: () => {},
     primaryVttContentRef: { current: '' },
   })

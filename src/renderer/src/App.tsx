@@ -34,6 +34,11 @@ export default function App() {
 
   const playbackRef = useRef({ position: 0, duration: 0, isPlaying: false })
   const currentEpIndexRef = useRef(-1)
+  // 音频编码兼容性缓存：key = 集文件路径，value = HTML5 是否可播放。
+  // 避免连播/切集时逐集重复检测导致「跳一下」（问题 #3）。
+  const audioSupportCacheRef = useRef<Map<string, boolean>>(new Map())
+  // 已批量预热过音频检测的番剧目录集合
+  const seriesAudioWarmedRef = useRef<Set<string>>(new Set())
 
   // 启动：不自动扫描，显示空状态让用户手动选择
   useEffect(() => {
@@ -114,25 +119,56 @@ export default function App() {
     setView('wall')
   }, [])
 
-  const handlePlayEpisode = useCallback(async (ep: EpisodeInfo, index: number) => {
-    currentEpIndexRef.current = index
-    setMpvFallback(false)
-    setMpvBackend('libmpv')
-    // 播放前检查音频编码兼容性
+  // 单集音频兼容性解析：优先命中缓存，否则实时检测一次并写缓存。
+  // 返回 true 表示 HTML5 可播放，false 表示需要 mpv。
+  const resolveAudioSupport = useCallback(async (filePath: string): Promise<boolean> => {
+    const cached = audioSupportCacheRef.current.get(filePath)
+    if (cached !== undefined) return cached
     try {
-      const audio = await window.electronAPI.checkAudio(ep.filePath)
-      if (!audio.supported) {
-        console.log('[AniBox] Unsupported audio codec:', audio.codec, 'using mpv')
-        setMpvFallback(true)
-      }
+      const audio = await window.electronAPI.checkAudio(filePath)
+      audioSupportCacheRef.current.set(filePath, audio.supported)
+      return audio.supported
     } catch {
-      /* ignore */
+      return true // 检测失败默认走 HTML5
     }
-    const savedPosition = await window.electronAPI.getPosition(ep.filePath)
-    const mediaUrl = window.electronAPI.getMediaUrl(ep.filePath)
-    setCurrentVideo({ filePath: ep.filePath, mediaUrl, savedPosition })
-    setView('player')
   }, [])
+
+  // 后台批量预热整部番的音频检测结果（一次性检测全部，连播时逐集命中缓存，不再「跳一下」）
+  const warmSeriesAudioCache = useCallback((series: SeriesInfo | null) => {
+    if (!series) return
+    const folder = series.folderPath
+    if (seriesAudioWarmedRef.current.has(folder)) return
+    seriesAudioWarmedRef.current.add(folder)
+    const paths = series.episodes.map((e) => e.filePath)
+    window.electronAPI
+      .checkAudioBatch(paths)
+      .then((map) => {
+        for (const [p, info] of Object.entries(map)) {
+          if (info && typeof info.supported === 'boolean') {
+            audioSupportCacheRef.current.set(p, info.supported)
+          }
+        }
+      })
+      .catch(() => {})
+  }, [])
+
+  const handlePlayEpisode = useCallback(
+    async (ep: EpisodeInfo, index: number) => {
+      currentEpIndexRef.current = index
+      setMpvBackend('libmpv')
+      // 播放前检查音频编码兼容性（缓存优先）
+      const supported = await resolveAudioSupport(ep.filePath)
+      setMpvFallback(!supported)
+      if (!supported) console.log('[AniBox] Unsupported audio codec, using mpv:', ep.filePath)
+      // 后台批量预热整部番，之后连播/切集直接命中缓存
+      warmSeriesAudioCache(selectedSeries)
+      const savedPosition = await window.electronAPI.getPosition(ep.filePath)
+      const mediaUrl = window.electronAPI.getMediaUrl(ep.filePath)
+      setCurrentVideo({ filePath: ep.filePath, mediaUrl, savedPosition })
+      setView('player')
+    },
+    [resolveAudioSupport, warmSeriesAudioCache, selectedSeries],
+  )
 
   const handleClosePlayer = useCallback(() => {
     setCurrentVideo(null)
@@ -145,11 +181,13 @@ export default function App() {
   }, [selectedSeries])
 
   // 播放器视图退出兜底：任何路径离开 player 视图都确保 mpv 停止，
-  // 防止 MpvCanvas 卸载 cleanup 的 quit IPC 丢失导致「返回后声音仍在播放」
+  // 防止 MpvCanvas 卸载 cleanup 的 quit IPC 丢失导致「返回后声音仍在播放」；
+  // 同时退出全屏（问题 #5：全屏连播完退出后软件仍停留在全屏、无窗口控制按钮）
   const prevViewRef = useRef<View>('loading')
   useEffect(() => {
     if (prevViewRef.current === 'player' && view !== 'player') {
       window.electronAPI.mpvQuit().catch(() => {})
+      window.electronAPI.exitFullscreen().catch(() => {})
     }
     prevViewRef.current = view
   }, [view])
@@ -191,31 +229,32 @@ export default function App() {
     switchToEpisode(eps, prevIdx)
   }, [selectedSeries])
 
-  const switchToEpisode = useCallback((eps: EpisodeInfo[], idx: number) => {
-    const ep = eps[idx]
-    currentEpIndexRef.current = idx
-    setMpvFallback(false)
-    setMpvBackend('libmpv')
-    // 播放前检查音频编码兼容性
-    window.electronAPI
-      .checkAudio(ep.filePath)
-      .then((audio) => {
-        if (!audio.supported) {
-          console.log('[AniBox] Unsupported audio codec:', audio.codec, 'using mpv')
-          setMpvFallback(true)
-        }
+  const switchToEpisode = useCallback(
+    async (eps: EpisodeInfo[], idx: number) => {
+      const ep = eps[idx]
+      currentEpIndexRef.current = idx
+      setMpvBackend('libmpv')
+      // 缓存优先检测，避免连播中间先切回 HTML5 再切回 mpv 造成的「跳一下」。
+      // 注意：此处不再同步 setMpvFallback(false)，而是等检测结果确定后再一次性切换。
+      const supported = await resolveAudioSupport(ep.filePath)
+      setMpvFallback(!supported)
+      if (!supported) console.log('[AniBox] Unsupported audio codec, using mpv:', ep.filePath)
+      // 停止当前 mpv，再加载新集（幂等；MpvCanvas 卸载 cleanup 时也会再调一次）
+      await window.electronAPI.mpvQuit().catch(() => {})
+      let savedPosition = 0
+      try {
+        savedPosition = await window.electronAPI.getPosition(ep.filePath)
+      } catch {
+        /* ignore */
+      }
+      setCurrentVideo({
+        filePath: ep.filePath,
+        mediaUrl: window.electronAPI.getMediaUrl(ep.filePath),
+        savedPosition,
       })
-      .catch(() => {})
-    window.electronAPI.mpvQuit().then(() => {
-      window.electronAPI.getPosition(ep.filePath).then((p) => {
-        setCurrentVideo({
-          filePath: ep.filePath,
-          mediaUrl: window.electronAPI.getMediaUrl(ep.filePath),
-          savedPosition: p,
-        })
-      })
-    })
-  }, [])
+    },
+    [resolveAudioSupport],
+  )
 
   const cyclePlayMode = useCallback(() => {
     const modes: PlayMode[] = ['sequential', 'loop-one', 'loop-all', 'shuffle']
@@ -334,11 +373,20 @@ export default function App() {
                   flex items-center gap-1.5"
                 title="新番时间表"
               >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg
+                  width="13"
+                  height="13"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
                   <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                  <line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" />
+                  <line x1="16" y1="2" x2="16" y2="6" />
+                  <line x1="8" y1="2" x2="8" y2="6" />
                   <line x1="3" y1="10" x2="21" y2="10" />
-                  <line x1="10" y1="14" x2="14" y2="14" /><line x1="12" y1="14" x2="12" y2="18" />
+                  <line x1="10" y1="14" x2="14" y2="14" />
+                  <line x1="12" y1="14" x2="12" y2="18" />
                 </svg>
                 新番
               </button>
@@ -349,7 +397,14 @@ export default function App() {
                   flex items-center gap-1.5"
                 title="设置"
               >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg
+                  width="13"
+                  height="13"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
                   <circle cx="12" cy="12" r="3" />
                   <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
                 </svg>
@@ -371,7 +426,7 @@ export default function App() {
               const r = await window.electronAPI.openFile()
               if (!r) return
               setMpvFallback(false)
-    setMpvBackend('libmpv')
+              setMpvBackend('libmpv')
               setCurrentVideo({
                 filePath: r.filePath,
                 mediaUrl: window.electronAPI.getMediaUrl(r.filePath),
@@ -391,7 +446,7 @@ export default function App() {
                 setScanRoots(updated)
               }
               setMpvFallback(false)
-    setMpvBackend('libmpv')
+              setMpvBackend('libmpv')
               setCurrentVideo({
                 filePath,
                 mediaUrl: window.electronAPI.getMediaUrl(filePath),
@@ -528,7 +583,9 @@ export default function App() {
                     episodes={selectedSeries?.episodes}
                     currentEpIndex={curIdx}
                     onSelectEpisode={
-                      selectedSeries ? (idx) => switchToEpisode(selectedSeries.episodes, idx) : undefined
+                      selectedSeries
+                        ? (idx) => switchToEpisode(selectedSeries.episodes, idx)
+                        : undefined
                     }
                   />
                 )

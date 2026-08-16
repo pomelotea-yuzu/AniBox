@@ -15,6 +15,11 @@ const electronAPI = {
   checkAudio: (filePath: string): Promise<{ codec: string; supported: boolean }> =>
     ipcRenderer.invoke('video:checkAudio', filePath),
 
+  checkAudioBatch: (
+    filePaths: string[],
+  ): Promise<Record<string, { codec: string; supported: boolean }>> =>
+    ipcRenderer.invoke('video:checkAudioBatch', filePaths),
+
   detectEmbeddedSubtitles: (
     filePath: string,
   ): Promise<Array<{ label: string; language: string; codec: string; index: number }>> =>
@@ -180,20 +185,29 @@ const electronAPI = {
   mpvOnFrame: (
     cb: (frame: { data: Uint8Array; width: number; height: number }) => void,
   ): (() => void) => {
-    const handler = (_e: Electron.IpcRendererEvent, data: Uint8Array, width: number, height: number) =>
-      cb({ data, width, height })
+    const handler = (
+      _e: Electron.IpcRendererEvent,
+      data: Uint8Array,
+      width: number,
+      height: number,
+    ) => cb({ data, width, height })
     ipcRenderer.on('mpv:frame', handler)
     return () => {
       ipcRenderer.removeListener('mpv:frame', handler)
     }
   },
   // 悬浮预览：seek 指定位置取一帧（独立静音实例）
-  mpvPreview: (filePath: string, t: number): Promise<boolean> => ipcRenderer.invoke('mpv:preview', filePath, t),
+  mpvPreview: (filePath: string, t: number): Promise<boolean> =>
+    ipcRenderer.invoke('mpv:preview', filePath, t),
   mpvOnPreviewFrame: (
     cb: (frame: { data: Uint8Array; width: number; height: number }) => void,
   ): (() => void) => {
-    const handler = (_e: Electron.IpcRendererEvent, data: Uint8Array, width: number, height: number) =>
-      cb({ data, width, height })
+    const handler = (
+      _e: Electron.IpcRendererEvent,
+      data: Uint8Array,
+      width: number,
+      height: number,
+    ) => cb({ data, width, height })
     ipcRenderer.on('mpv:preview-frame', handler)
     return () => {
       ipcRenderer.removeListener('mpv:preview-frame', handler)
@@ -463,11 +477,20 @@ const electronAPI = {
     ipcRenderer.invoke('qb:test', cfg),
   qbAddTorrent: (magnet: string, savepath?: string): Promise<{ ok: boolean; message: string }> =>
     ipcRenderer.invoke('qb:addTorrent', magnet, savepath),
-  qbAddRss: (feedUrl: string, path?: string): Promise<{ ok: boolean; message: string; path?: string }> =>
+  qbAddRss: (
+    feedUrl: string,
+    path?: string,
+  ): Promise<{ ok: boolean; message: string; path?: string }> =>
     ipcRenderer.invoke('qb:addRss', feedUrl, path),
   qbAddRule: (
     ruleName: string,
-    opts: { mustContain: string; savepath?: string; affectedFeeds?: string[]; addPaused?: boolean; useRegex?: boolean },
+    opts: {
+      mustContain: string
+      savepath?: string
+      affectedFeeds?: string[]
+      addPaused?: boolean
+      useRegex?: boolean
+    },
   ): Promise<{ ok: boolean; message: string }> => ipcRenderer.invoke('qb:addRule', ruleName, opts),
   qbRemoveRule: (ruleName: string): Promise<{ ok: boolean; message: string }> =>
     ipcRenderer.invoke('qb:removeRule', ruleName),
@@ -496,6 +519,7 @@ const electronAPI = {
 
   // 窗口控制
   toggleFullscreen: () => ipcRenderer.invoke('window:toggleFullscreen'),
+  exitFullscreen: () => ipcRenderer.invoke('window:exitFullscreen'),
   onFullscreenChanged: (cb: (isFullscreen: boolean) => void): (() => void) => {
     const handler = (_e: Electron.IpcRendererEvent, isFullscreen: boolean) => cb(isFullscreen)
     ipcRenderer.on('window:fullscreen-changed', handler)

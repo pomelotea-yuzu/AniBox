@@ -88,7 +88,11 @@ export default function MpvCanvas({
   const [showEpisodePanel, setShowEpisodePanel] = useState(false)
   // 悬浮预览：hover 位置时间 + 预览帧
   const [hoverTime, setHoverTime] = useState<number | null>(null)
-  const [previewFrame, setPreviewFrame] = useState<{ data: Uint8Array; width: number; height: number } | null>(null)
+  const [previewFrame, setPreviewFrame] = useState<{
+    data: Uint8Array
+    width: number
+    height: number
+  } | null>(null)
 
   // 容器尺寸变化 / 帧尺寸变化时重算 canvas 显示尺寸（contain 等比放大）
   useEffect(() => {
@@ -100,7 +104,10 @@ export default function MpvCanvas({
       const ch = c.clientHeight
       if (!cw || !ch) return
       const scale = Math.min(cw / frameInfo.width, ch / frameInfo.height)
-      setDispSize({ w: Math.floor(frameInfo.width * scale), h: Math.floor(frameInfo.height * scale) })
+      setDispSize({
+        w: Math.floor(frameInfo.width * scale),
+        h: Math.floor(frameInfo.height * scale),
+      })
     }
     compute()
     const ro = new ResizeObserver(compute)
@@ -153,6 +160,24 @@ export default function MpvCanvas({
     setPaused(next)
   }, [handleCommand])
 
+  // 播放结束统一处理：eof-reached / end-file(eof) 可能各触发一次，用 ref 去重，
+  // 避免连播回调被重复调用导致跳集。
+  const endTriggeredRef = useRef(false)
+  const handlePlaybackEnd = useCallback(() => {
+    if (endTriggeredRef.current) return
+    endTriggeredRef.current = true
+    if (playModeRef.current === 'loop-one') {
+      // 单集循环：重新加载当前文件（不重启进程）
+      window.electronAPI.mpvCommand(['loadfile', filePath, 'replace']).catch(() => {})
+      endTriggeredRef.current = false
+    } else if (onNextEpisodeRef.current) {
+      offMpvEventRef.current?.()
+      onNextEpisodeRef.current()
+    } else {
+      onCloseRef.current()
+    }
+  }, [filePath])
+
   // 键盘快捷键（与 HTML5 Player 保持一致：空格/方向键/音量/静音/全屏/数字跳转）
   const durationRef = useRef(0)
   const togglePauseRef = useRef(togglePause)
@@ -171,8 +196,8 @@ export default function MpvCanvas({
       volumeRef.current = clamped
       setVolume(clamped)
       handleCommand(['set_property', 'volume', clamped])
-      if (clamped > 0 && mutedRef.current) {
-        mutedRef.current = false
+      if (clamped > 0 && muteRef.current) {
+        muteRef.current = false
         setMuted(false)
         handleCommand(['set_property', 'mute', 'no'])
       }
@@ -217,7 +242,11 @@ export default function MpvCanvas({
       } else if (k >= '0' && k <= '9') {
         e.preventDefault()
         if (durationRef.current > 0) {
-          handleCommandRef.current(['seek', String((parseInt(k, 10) / 10) * durationRef.current), 'absolute'])
+          handleCommandRef.current([
+            'seek',
+            String((parseInt(k, 10) / 10) * durationRef.current),
+            'absolute',
+          ])
         }
       }
     }
@@ -233,9 +262,10 @@ export default function MpvCanvas({
   const initGL = useCallback((canvas: HTMLCanvasElement): WebGLRenderingContext | null => {
     if (glRef.current) return glRef.current
     const gl = (canvas.getContext('webgl', { premultipliedAlpha: false, alpha: false }) ||
-      canvas.getContext('experimental-webgl', { premultipliedAlpha: false, alpha: false })) as
-      | WebGLRenderingContext
-      | null
+      canvas.getContext('experimental-webgl', {
+        premultipliedAlpha: false,
+        alpha: false,
+      })) as WebGLRenderingContext | null
     if (!gl) {
       console.error('[mpv] WebGL 不可用')
       return null
@@ -318,9 +348,10 @@ export default function MpvCanvas({
     let gl = previewGlRef.current
     if (!gl) {
       gl = (canvas.getContext('webgl', { premultipliedAlpha: false, alpha: false }) ||
-        canvas.getContext('experimental-webgl', { premultipliedAlpha: false, alpha: false })) as
-        | WebGLRenderingContext
-        | null
+        canvas.getContext('experimental-webgl', {
+          premultipliedAlpha: false,
+          alpha: false,
+        })) as WebGLRenderingContext | null
       if (!gl) return
       const vs = gl.createShader(gl.VERTEX_SHADER)!
       gl.shaderSource(
@@ -443,26 +474,10 @@ export default function MpvCanvas({
     const offMpvEvent = window.electronAPI.mpvOnEvent((event: any) => {
       if (event.event === 'end-file') {
         // 仅正常播放到末尾（eof）触发连播；stop/error/quit 忽略
-        if (event.reason === 'eof') {
-          if (playModeRef.current === 'loop-one') {
-            window.electronAPI.mpvCommand(['loadfile', filePath, 'replace']).catch(() => {})
-          } else if (onNextEpisodeRef.current) {
-            offMpvEventRef.current?.()
-            onNextEpisodeRef.current()
-          } else {
-            onCloseRef.current()
-          }
-        }
+        if (event.reason === 'eof') handlePlaybackEnd()
       } else if (event.event === 'eof-reached') {
         // keep-open=yes 时 mpv 播完不发 end-file，改由 eof-reached 属性观察触发连播
-        if (playModeRef.current === 'loop-one') {
-          window.electronAPI.mpvCommand(['loadfile', filePath, 'replace']).catch(() => {})
-        } else if (onNextEpisodeRef.current) {
-          offMpvEventRef.current?.()
-          onNextEpisodeRef.current()
-        } else {
-          onCloseRef.current()
-        }
+        handlePlaybackEnd()
       } else if (event.event === 'end') {
         onCloseRef.current()
       } else if (event.event === 'tracks' && Array.isArray(event.data)) {
@@ -472,6 +487,7 @@ export default function MpvCanvas({
       } else if (event.event === 'file-loaded') {
         setPaused(false)
         setTimePos(0)
+        endTriggeredRef.current = false
       } else if (event.event === 'libmpv-fallback') {
         // 主进程 libmpv 不可用，切回旧 mpv.exe 链路（渲染旧 MpvOverlay）
         offMpvEventRef.current?.()
@@ -537,7 +553,7 @@ export default function MpvCanvas({
       if (hideTimerRef.current) clearTimeout(hideTimerRef.current)
       clearInterval(stateTimer)
     }
-  }, [filePath, drawFrame, drawPreviewFrame])
+  }, [filePath, drawFrame, drawPreviewFrame, handlePlaybackEnd])
 
   const fileName = filePath.split(/[/\\]/).pop() || filePath
 
@@ -610,12 +626,18 @@ export default function MpvCanvas({
   })()
 
   return (
-    <div className="relative w-full h-full bg-black select-none" onContextMenu={(e) => e.preventDefault()}>
+    <div
+      className={`relative w-full h-full bg-black select-none ${!showControls && !paused ? 'cursor-none' : ''}`}
+      onContextMenu={(e) => e.preventDefault()}
+    >
       {/* 画面层：canvas 内部像素 = 渲染尺寸（WebGL），CSS 尺寸 = contain 放大（JS 计算，消除黑边） */}
       <div ref={containerRef} className="absolute inset-0 flex items-center justify-center">
         <canvas
           ref={canvasRef}
-          style={{ width: dispSize ? `${dispSize.w}px` : 'auto', height: dispSize ? `${dispSize.h}px` : 'auto' }}
+          style={{
+            width: dispSize ? `${dispSize.w}px` : 'auto',
+            height: dispSize ? `${dispSize.h}px` : 'auto',
+          }}
         />
       </div>
 
@@ -683,7 +705,9 @@ export default function MpvCanvas({
             <div className="relative w-full h-1 bg-white/20 rounded-full overflow-hidden group-hover:h-1.5 transition-all">
               <div
                 className="h-full bg-anibox-accent rounded-full"
-                style={{ width: `${duration > 0 ? Math.min(100, (timePos / duration) * 100) : 0}%` }}
+                style={{
+                  width: `${duration > 0 ? Math.min(100, (timePos / duration) * 100) : 0}%`,
+                }}
               />
               {/* hover 指示点 */}
               {hoverTime !== null && duration > 0 && (
@@ -769,7 +793,14 @@ export default function MpvCanvas({
                 }`}
                 title="选集"
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
                   <line x1="8" y1="6" x2="21" y2="6" />
                   <line x1="8" y1="12" x2="21" y2="12" />
                   <line x1="8" y1="18" x2="21" y2="18" />
@@ -834,7 +865,14 @@ export default function MpvCanvas({
                 }`}
                 title="字幕轨道"
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
                   <rect x="2" y="5" width="20" height="14" rx="2" />
                   <line x1="7" y1="12" x2="17" y2="12" />
                   <line x1="9" y1="16" x2="15" y2="16" />
@@ -871,7 +909,9 @@ export default function MpvCanvas({
                         }}
                       >
                         {t.title || t.lang || `轨道 ${t.id}`}
-                        <span className="text-[10px] text-neutral-500 ml-1">({t.codec || t.lang})</span>
+                        <span className="text-[10px] text-neutral-500 ml-1">
+                          ({t.codec || t.lang})
+                        </span>
                       </button>
                     ))}
                   </div>
@@ -894,7 +934,14 @@ export default function MpvCanvas({
                 }`}
                 title="音轨"
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
                   <path d="M9 18V5l12-2v13" />
                   <circle cx="6" cy="18" r="3" />
                   <circle cx="18" cy="16" r="3" />
@@ -936,18 +983,39 @@ export default function MpvCanvas({
             title="静音 (M)"
           >
             {muted || volume === 0 ? (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
                 <polygon points="11,5 6,9 2,9 2,15 6,15 11,19 11,5" />
                 <line x1="23" y1="9" x2="17" y2="15" />
                 <line x1="17" y1="9" x2="23" y2="15" />
               </svg>
             ) : volume < 50 ? (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
                 <polygon points="11,5 6,9 2,9 2,15 6,15 11,19 11,5" />
                 <path d="M15.5 8.5a5 5 0 0 1 0 7" />
               </svg>
             ) : (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
                 <polygon points="11,5 6,9 2,9 2,15 6,15 11,19 11,5" />
                 <path d="M15.5 8.5a5 5 0 0 1 0 7" />
                 <path d="M18.5 5.5a9 9 0 0 1 0 13" />
@@ -984,7 +1052,9 @@ export default function MpvCanvas({
               />
             </div>
           </div>
-          <span className="text-[10px] text-neutral-400 tabular-nums w-8 shrink-0">{muted ? 0 : volume}</span>
+          <span className="text-[10px] text-neutral-400 tabular-nums w-8 shrink-0">
+            {muted ? 0 : volume}
+          </span>
 
           {/* 倍速 */}
           <div className="relative shrink-0">
@@ -1054,7 +1124,14 @@ export default function MpvCanvas({
             className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors shrink-0"
             title="全屏 (F)"
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
               <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
             </svg>
           </button>
@@ -1084,7 +1161,10 @@ export default function MpvCanvas({
           >
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-base font-semibold text-white">键盘快捷键</h3>
-              <button onClick={() => setShowHelp(false)} className="text-white/40 hover:text-white transition-colors text-sm px-2">
+              <button
+                onClick={() => setShowHelp(false)}
+                className="text-white/40 hover:text-white transition-colors text-sm px-2"
+              >
                 ✕ Esc
               </button>
             </div>
@@ -1099,8 +1179,13 @@ export default function MpvCanvas({
                 ['0–9', '跳转到 0%–90%'],
                 ['?', '显示 / 隐藏此帮助'],
               ].map(([key, desc]) => (
-                <div key={key} className="flex items-center justify-between text-xs py-1 border-b border-white/5">
-                  <kbd className="px-1.5 py-0.5 bg-white/10 rounded text-[11px] text-neutral-200 font-mono">{key}</kbd>
+                <div
+                  key={key}
+                  className="flex items-center justify-between text-xs py-1 border-b border-white/5"
+                >
+                  <kbd className="px-1.5 py-0.5 bg-white/10 rounded text-[11px] text-neutral-200 font-mono">
+                    {key}
+                  </kbd>
                   <span className="text-neutral-400 ml-2 truncate">{desc}</span>
                 </div>
               ))}

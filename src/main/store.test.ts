@@ -20,7 +20,11 @@ vi.mock('electron', () => ({
 const storeModule = await import('./store')
 
 afterAll(() => {
-  try { rmSync(TEST_DIR, { recursive: true, force: true }) } catch { /* ignore */ }
+  try {
+    rmSync(TEST_DIR, { recursive: true, force: true })
+  } catch {
+    /* ignore */
+  }
 })
 
 describe('store CRUD', () => {
@@ -29,15 +33,15 @@ describe('store CRUD', () => {
   })
 
   it('should create store file on flush', () => {
-    storeModule.upsertSeries('/test/folder', 'Test Series', 1, 12, 'tv')
+    storeModule.upsertSeries('/test/folder', 'Test Series', '/test/folder', 1, 'tv')
     storeModule.flushStore()
     expect(existsSync(join(TEST_DIR, 'anibox-store.json'))).toBe(true)
   })
 
   it('should save and retrieve multiple series', () => {
     storeModule.clearAllSeriesAndEpisodes()
-    storeModule.upsertSeries('/anime/a', 'Anime A', 1, 12, 'tv')
-    storeModule.upsertSeries('/anime/b', 'Anime B', 2, 24, 'movie')
+    storeModule.upsertSeries('/anime/a', 'Anime A', '/anime/a', 1, 'tv')
+    storeModule.upsertSeries('/anime/b', 'Anime B', '/anime/b', 2, 'movie')
 
     const all = storeModule.getAllSeries()
     expect(all.length).toBe(2)
@@ -47,7 +51,7 @@ describe('store CRUD', () => {
 
   it('should handle episode CRUD', () => {
     storeModule.clearAllSeriesAndEpisodes()
-    storeModule.upsertSeries('/anime/ep-series', 'Ep Anime', 1, 0, 'tv')
+    storeModule.upsertSeries('/anime/ep-series', 'Ep Anime', '/anime/ep-series', 1, 'tv')
     const seriesId = storeModule.getAllSeries()[0].id
 
     storeModule.clearEpisodesForSeries(seriesId)
@@ -79,11 +83,14 @@ describe('store CRUD', () => {
 
   it('should handle skip times', () => {
     storeModule.clearAllSeriesAndEpisodes()
-    storeModule.upsertSeries('/anime/skip', 'Skip Anime', 1, 12, 'tv')
+    storeModule.upsertSeries('/anime/skip', 'Skip Anime', '/anime/skip', 1, 'tv')
     const seriesId = storeModule.getAllSeries()[0].id
 
     storeModule.setSkipTimes(seriesId, {
-      opStart: 0, opEnd: 90, edStart: 1320, edEnd: 1440,
+      opStart: 0,
+      opEnd: 90,
+      edStart: 1320,
+      edEnd: 1440,
     })
     storeModule.flushStore()
 

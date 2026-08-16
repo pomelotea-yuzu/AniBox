@@ -283,13 +283,11 @@ export default function SeriesWall({
 
   const handleManualSearch = useCallback(async (item: FailedItem) => {
     if (!item.manualQuery.trim()) return
-    setFetching(true)
     const ok = await window.electronAPI.fetchManualCover(item.folderPath, item.manualQuery.trim())
     if (ok) {
       setFailedList((prev) => prev.filter((f) => f.folderPath !== item.folderPath))
       await onRefresh()
     }
-    setFetching(false)
   }, [])
 
   const handleManualQueryChange = useCallback((folderPath: string, value: string) => {

@@ -21,8 +21,19 @@ import {
   setOpenSubtitlesConfig,
 } from './online-subtitle'
 import { parseMP4Meta, detectAudioCodec } from './video-info'
-import { fetchMetadataForSeries, fetchMetadataBatch, validateBatchTitles, searchBangumiMeta } from './metadata-fetcher'
-import { loadModel, getTranslateStatus, loadJaModel, translateJaToZh, translateEnToZh } from './local-translate'
+import {
+  fetchMetadataForSeries,
+  fetchMetadataBatch,
+  validateBatchTitles,
+  searchBangumiMeta,
+} from './metadata-fetcher'
+import {
+  loadModel,
+  getTranslateStatus,
+  loadJaModel,
+  translateJaToZh,
+  translateEnToZh,
+} from './local-translate'
 import { configureAI, translateWithAI, getAIKey } from './ai-translate'
 import { translateLocal } from './anime-dict'
 import {
@@ -328,7 +339,12 @@ let previewBridgePromise: Promise<boolean> | null = null
  * 并发调用共享同一个加载 promise，避免快速 hover 时反复重建
  */
 function ensurePreviewBridge(filePath: string): Promise<boolean> {
-  if (previewBridge && previewBridge.isActive && previewBridgeFile === filePath && previewBridge.isLoaded) {
+  if (
+    previewBridge &&
+    previewBridge.isActive &&
+    previewBridgeFile === filePath &&
+    previewBridge.isLoaded
+  ) {
     return Promise.resolve(true)
   }
   if (previewBridgePromise) return previewBridgePromise
@@ -349,7 +365,8 @@ function ensurePreviewBridge(filePath: string): Promise<boolean> {
           mainWindow?.webContents.send('mpv:preview-frame', frame.buffer, frame.width, frame.height)
         },
         onLog: (level, text) => {
-          if (level === 'error' || level === 'warn') console.log('[libmpv-preview]', level + ':', text)
+          if (level === 'error' || level === 'warn')
+            console.log('[libmpv-preview]', level + ':', text)
         },
       },
       { renderMax: 480, noTimer: true, ao: 'null' },
@@ -440,7 +457,15 @@ function libmpvPlay(fp: string): boolean {
     },
     onEndFile: (reason) => {
       const reasonStr =
-        reason === 0 ? 'eof' : reason === 1 ? 'stop' : reason === 2 ? 'quit' : reason === 3 ? 'error' : String(reason)
+        reason === 0
+          ? 'eof'
+          : reason === 1
+            ? 'stop'
+            : reason === 2
+              ? 'quit'
+              : reason === 3
+                ? 'error'
+                : String(reason)
       mainWindow?.webContents.send('mpv:event', { event: 'end-file', reason: reasonStr })
     },
     onEofReached: (reached) => {
@@ -639,11 +664,19 @@ function detectSubtitlesViaMpv(filePath: string): Promise<EmbeddedSubTrack[]> {
     const cleanup = () => {
       clearTimeout(timeout)
       if (sock) {
-        try { sock.destroy() } catch { /* ok */ }
+        try {
+          sock.destroy()
+        } catch {
+          /* ok */
+        }
         sock = null
       }
       if (!proc.killed) {
-        try { proc.kill() } catch { /* ok */ }
+        try {
+          proc.kill()
+        } catch {
+          /* ok */
+        }
       }
     }
 
@@ -654,14 +687,18 @@ function detectSubtitlesViaMpv(filePath: string): Promise<EmbeddedSubTrack[]> {
       resolve(result)
     }
 
-    const proc = spawn(exe, [
-      `--input-ipc-server=${pipeName}`,
-      '--idle=yes',
-      '--vo=null',
-      '--ao=null',
-      '--no-config',
-      '--no-video',
-    ], { stdio: 'ignore' })
+    const proc = spawn(
+      exe,
+      [
+        `--input-ipc-server=${pipeName}`,
+        '--idle=yes',
+        '--vo=null',
+        '--ao=null',
+        '--no-config',
+        '--no-video',
+      ],
+      { stdio: 'ignore' },
+    )
 
     proc.on('error', () => finish([]))
 
@@ -687,16 +724,20 @@ function detectSubtitlesViaMpv(filePath: string): Promise<EmbeddedSubTrack[]> {
 
             if (msg.event === 'file-loaded' && trackList === null) {
               // 文件加载完毕，查询轨道列表
-              sock!.write(JSON.stringify({
-                command: ['get_property', 'track-list'],
-                request_id: 1,
-              }) + '\n')
+              sock!.write(
+                JSON.stringify({
+                  command: ['get_property', 'track-list'],
+                  request_id: 1,
+                }) + '\n',
+              )
             } else if (msg.request_id === 1 && msg.data !== undefined) {
               // 收到轨道列表
               trackList = msg.data || []
               sock!.write(JSON.stringify({ command: ['quit'] }) + '\n')
             }
-          } catch { /* ignore malformed JSON */ }
+          } catch {
+            /* ignore malformed JSON */
+          }
         }
       })
 
@@ -712,10 +753,16 @@ function detectSubtitlesViaMpv(filePath: string): Promise<EmbeddedSubTrack[]> {
               codec: t.codec || '',
               index: i,
             }))
-          console.log('[AniBox] detectSubtitlesViaMpv: found', subs.length, 'embedded subtitle tracks')
+          console.log(
+            '[AniBox] detectSubtitlesViaMpv: found',
+            subs.length,
+            'embedded subtitle tracks',
+          )
           finish(subs)
         } else {
-          console.log('[AniBox] detectSubtitlesViaMpv: no track-list received (timeout or mpv failed)')
+          console.log(
+            '[AniBox] detectSubtitlesViaMpv: no track-list received (timeout or mpv failed)',
+          )
           finish([])
         }
       })
@@ -781,6 +828,24 @@ function registerIpcHandlers(): void {
     } catch {
       return { codec: 'unknown', supported: true }
     }
+  })
+
+  // 批量检测音频编码（连播时一次性检测整部番，避免逐集重复检测导致的「跳一下」）
+  ipcMain.handle('video:checkAudioBatch', (_e, paths: string[]) => {
+    const result: Record<string, { codec: string; supported: boolean }> = {}
+    for (const p of paths) {
+      try {
+        if (!p.toLowerCase().endsWith('.mp4')) {
+          result[p] = { codec: 'unknown', supported: true }
+          continue
+        }
+        const info = detectAudioCodec(p)
+        result[p] = info || { codec: 'unknown', supported: true }
+      } catch {
+        result[p] = { codec: 'unknown', supported: true }
+      }
+    }
+    return result
   })
 
   // 通过 mpv 检测内封字幕（解决 Chromium 不暴露 ASS/SSA/PGS 字幕轨道的问题）
@@ -999,6 +1064,10 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('window:toggleFullscreen', () => {
     mainWindow?.setFullScreen(!mainWindow?.isFullScreen())
+  })
+
+  ipcMain.handle('window:exitFullscreen', () => {
+    if (mainWindow?.isFullScreen()) mainWindow?.setFullScreen(false)
   })
 
   ipcMain.handle('window:isFullscreen', () => mainWindow?.isFullScreen() ?? false)
@@ -1372,7 +1441,10 @@ function registerIpcHandlers(): void {
   })
 
   // AI 翻译
-  ipcMain.handle('ai:configure', (_e, key: string) => { configureAI(key); return true })
+  ipcMain.handle('ai:configure', (_e, key: string) => {
+    configureAI(key)
+    return true
+  })
   ipcMain.handle('ai:getKey', () => getAIKey())
 
   // AnimeGarden 资源搜索
@@ -1384,19 +1456,32 @@ function registerIpcHandlers(): void {
   // 本地 RSS 订阅代理
   ipcMain.handle('animegarden:createFeed', (_e, cfg: any) => createRssFeed(cfg || {}))
   ipcMain.handle('animegarden:listFeeds', () => listRssFeeds())
-  ipcMain.handle('animegarden:deleteFeed', (_e, id: string) => { deleteRssFeed(id); return true })
+  ipcMain.handle('animegarden:deleteFeed', (_e, id: string) => {
+    deleteRssFeed(id)
+    return true
+  })
 
   // qBittorrent 联动
   ipcMain.handle('qb:getConfig', () => getQbConfig())
-  ipcMain.handle('qb:setConfig', (_e, cfg: any) => { setQbConfig(cfg); return true })
+  ipcMain.handle('qb:setConfig', (_e, cfg: any) => {
+    setQbConfig(cfg)
+    return true
+  })
   ipcMain.handle('qb:test', (_e, cfg?: any) => qbTestConnection(cfg || {}))
-  ipcMain.handle('qb:addTorrent', (_e, magnet: string, savepath?: string) => qbAddTorrent(magnet, savepath))
+  ipcMain.handle('qb:addTorrent', (_e, magnet: string, savepath?: string) =>
+    qbAddTorrent(magnet, savepath),
+  )
   ipcMain.handle('qb:addRss', (_e, feedUrl: string, path?: string) => qbAddRssFeed(feedUrl, path))
-  ipcMain.handle('qb:addRule', (_e, ruleName: string, opts: any) => qbAddRssRule(ruleName, opts || {}))
+  ipcMain.handle('qb:addRule', (_e, ruleName: string, opts: any) =>
+    qbAddRssRule(ruleName, opts || {}),
+  )
   ipcMain.handle('qb:removeRule', (_e, ruleName: string) => qbRemoveRssRule(ruleName))
   ipcMain.handle('ai:translate', async (_e, text: string, from: string, to: string) => {
-    try { return await translateWithAI(text, from, to) }
-    catch (e: any) { return text }
+    try {
+      return await translateWithAI(text, from, to)
+    } catch (e: any) {
+      return text
+    }
   })
 
   // AniList 番剧详情
@@ -1544,7 +1629,10 @@ function registerIpcHandlers(): void {
     const cachePath = join(app.getPath('userData'), 'season-cache.json')
     const now = new Date()
     const m = now.getMonth() + 1
-    let se = 'WINTER'; if (m >= 4 && m <= 6) se = 'SPRING'; else if (m >= 7 && m <= 9) se = 'SUMMER'; else if (m >= 10 && m <= 12) se = 'FALL'
+    let se = 'WINTER'
+    if (m >= 4 && m <= 6) se = 'SPRING'
+    else if (m >= 7 && m <= 9) se = 'SUMMER'
+    else if (m >= 10 && m <= 12) se = 'FALL'
     const currentSeason = `${se} ${now.getFullYear()}`
 
     if (!forceRefresh) {
@@ -1556,7 +1644,9 @@ function registerIpcHandlers(): void {
             console.log('[AniBox] 缓存命中，季度匹配，直接复用')
             return { ok: true, fromCache: true, season: cache.data.season, anime: cache.data.anime }
           }
-          console.log(`[AniBox] 缓存季度(${cache.data.season})与当前(${currentSeason})不匹配，重新抓取`)
+          console.log(
+            `[AniBox] 缓存季度(${cache.data.season})与当前(${currentSeason})不匹配，重新抓取`,
+          )
         }
       } catch (e: any) {
         console.log('[AniBox] 缓存读取失败:', e.message)
@@ -1616,11 +1706,13 @@ function registerIpcHandlers(): void {
         seasonYear: m.seasonYear || 0,
         format: m.format,
         status: m.status,
-        nextAiring: m.nextAiringEpisode ? {
-          episode: m.nextAiringEpisode.episode,
-          airingAt: m.nextAiringEpisode.airingAt,
-          timeUntilAiring: m.nextAiringEpisode.timeUntilAiring,
-        } : null,
+        nextAiring: m.nextAiringEpisode
+          ? {
+              episode: m.nextAiringEpisode.episode,
+              airingAt: m.nextAiringEpisode.airingAt,
+              timeUntilAiring: m.nextAiringEpisode.timeUntilAiring,
+            }
+          : null,
       }))
 
       // AI 标题翻译（并发批量，有 Key 时用 DeepSeek）
@@ -1630,12 +1722,18 @@ function registerIpcHandlers(): void {
         let done = 0
         for (let i = 0; i < anime.length; i += BATCH) {
           const batch = anime.slice(i, i + BATCH)
-          await Promise.all(batch.map(async (a: any) => {
-            try {
-              const zh = await translateWithAI(a.title, 'ja', 'zh')
-              if (zh && zh !== a.title) { a.titleZh = zh }
-            } catch { a.titleZh = a.titleRomaji || a.titleEnglish || a.title }
-          }))
+          await Promise.all(
+            batch.map(async (a: any) => {
+              try {
+                const zh = await translateWithAI(a.title, 'ja', 'zh')
+                if (zh && zh !== a.title) {
+                  a.titleZh = zh
+                }
+              } catch {
+                a.titleZh = a.titleRomaji || a.titleEnglish || a.title
+              }
+            }),
+          )
           done += batch.length
           console.log(`[AniBox] AI translate progress: ${done}/${anime.length}`)
         }
@@ -1648,12 +1746,18 @@ function registerIpcHandlers(): void {
           let descDone = 0
           for (let i = 0; i < withDesc.length; i += BATCH) {
             const batch = withDesc.slice(i, i + BATCH)
-            await Promise.all(batch.map(async (a: any) => {
-              try {
-                const zh = await translateWithAI(a.description, 'auto', 'zh')
-                if (zh && zh !== a.description) { a.descriptionZh = zh }
-              } catch { a.descriptionZh = a.description }
-            }))
+            await Promise.all(
+              batch.map(async (a: any) => {
+                try {
+                  const zh = await translateWithAI(a.description, 'auto', 'zh')
+                  if (zh && zh !== a.description) {
+                    a.descriptionZh = zh
+                  }
+                } catch {
+                  a.descriptionZh = a.description
+                }
+              }),
+            )
             descDone += batch.length
             console.log(`[AniBox] AI desc translate progress: ${descDone}/${withDesc.length}`)
           }
@@ -1663,13 +1767,19 @@ function registerIpcHandlers(): void {
 
       const payload = { season: currentSeason, anime }
       try {
-        writeFileSync(cachePath, JSON.stringify({ timestamp: Date.now(), data: payload }, null, 2), 'utf-8')
+        writeFileSync(
+          cachePath,
+          JSON.stringify({ timestamp: Date.now(), data: payload }, null, 2),
+          'utf-8',
+        )
       } catch {}
       return { ok: true, fromCache: false, ...payload }
     } catch (err: any) {
       console.error('[AniBox] season:fetchTimeline error:', err)
       try {
-        const fb = JSON.parse(readFileSync(join(app.getPath('userData'), 'season-cache.json'), 'utf-8'))
+        const fb = JSON.parse(
+          readFileSync(join(app.getPath('userData'), 'season-cache.json'), 'utf-8'),
+        )
         return { ok: true, fromCache: true, stale: true, ...fb.data }
       } catch {}
       return { ok: false, error: err.message || '网络请求失败', anime: [] }

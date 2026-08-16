@@ -39,9 +39,9 @@ export function usePlayback(opts: UsePlaybackOptions) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const previewVideoRef = useRef<HTMLVideoElement>(null)
   const hasSeekedRef = useRef(false)
-  const hideTimerRef = useRef<ReturnType<typeof setTimeout>>()
-  const fallbackTimerRef = useRef<ReturnType<typeof setTimeout>>()
-  const errorFallbackTimerRef = useRef<ReturnType<typeof setTimeout>>()
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const errorFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const playbackRef = useRef({ position: 0, duration: 0, volume: 1, playing: false })
 
   // —— 播放核心状态 ——
@@ -144,7 +144,12 @@ export function usePlayback(opts: UsePlaybackOptions) {
     console.log('[AniBox] detectEmbeddedTracks called, filePath:', filePath)
 
     // 方法1: 浏览器 textTracks API（Chromium 支持的格式：SRT/WebVTT 内封）
-    const fromTextTracks = (): { label: string; language: string; index: number; codec?: string }[] => {
+    const fromTextTracks = (): {
+      label: string
+      language: string
+      index: number
+      codec?: string
+    }[] => {
       if (!v || !v.textTracks) {
         console.log('[AniBox] textTracks: video element or textTracks not available')
         return []
@@ -157,7 +162,9 @@ export function usePlayback(opts: UsePlaybackOptions) {
       const embedded: { label: string; language: string; index: number; codec?: string }[] = []
       for (let i = 0; i < tracks.length; i++) {
         const t = tracks[i]
-        console.log(`[AniBox] textTrack[${i}]: kind=${t.kind} label="${t.label}" lang="${t.language}"`)
+        console.log(
+          `[AniBox] textTrack[${i}]: kind=${t.kind} label="${t.label}" lang="${t.language}"`,
+        )
         if (t.kind === 'subtitles' || t.kind === 'captions') {
           embedded.push({
             label: t.label || `轨道 ${i + 1}`,
@@ -171,7 +178,9 @@ export function usePlayback(opts: UsePlaybackOptions) {
     }
 
     // 方法2: mpv JSON IPC 检测（支持 ASS/SSA/PGS 等 Chromium 不暴露的格式）
-    const fromMpv = async (): Promise<{ label: string; language: string; index: number; codec?: string }[]> => {
+    const fromMpv = async (): Promise<
+      { label: string; language: string; index: number; codec?: string }[]
+    > => {
       try {
         console.log('[AniBox] Calling detectEmbeddedSubtitles IPC...')
         const mpvTracks = await window.electronAPI.detectEmbeddedSubtitles(filePath)
@@ -184,7 +193,10 @@ export function usePlayback(opts: UsePlaybackOptions) {
     }
 
     // 合并去重 + 自动回退
-    const mergeAndSet = (textTracks: typeof result, mpvTracks: Awaited<ReturnType<typeof fromMpv>>) => {
+    const mergeAndSet = (
+      textTracks: ReturnType<typeof fromTextTracks>,
+      mpvTracks: Awaited<ReturnType<typeof fromMpv>>,
+    ) => {
       const seen = new Set<string>()
       const merged: { label: string; language: string; index: number; codec?: string }[] = []
 
@@ -205,7 +217,11 @@ export function usePlayback(opts: UsePlaybackOptions) {
         }
       }
 
-      console.log('[AniBox] Merged embedded tracks:', merged.length, merged.map(t => `${t.label}(${t.codec})`))
+      console.log(
+        '[AniBox] Merged embedded tracks:',
+        merged.length,
+        merged.map((t) => `${t.label}(${t.codec})`),
+      )
       if (merged.length > 0) {
         setEmbeddedTextTracks(merged)
 
@@ -230,9 +246,7 @@ export function usePlayback(opts: UsePlaybackOptions) {
       if (lateResult.length > 0) {
         setEmbeddedTextTracks((prev) => {
           const seen = new Set(prev.map((t) => `${t.language}|${t.label}`))
-          const newTracks = lateResult.filter(
-            (t) => !seen.has(`${t.language}|${t.label}`),
-          )
+          const newTracks = lateResult.filter((t) => !seen.has(`${t.language}|${t.label}`))
           return newTracks.length > 0 ? [...prev, ...newTracks] : prev
         })
       }

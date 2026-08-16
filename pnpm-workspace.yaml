@@ -1,0 +1,11 @@
+# pnpm 11 构建脚本白名单（allowBuilds）。
+# electron/esbuild/koffi/onnxruntime-node/sharp 等 native 依赖的 postinstall 需要下载/编译二进制，
+# 置 true 允许其构建（pnpm dev / pnpm build / 打包必需）。
+# 如个别依赖在特定机器上构建失败，可单独改为 false 或运行 pnpm approve-builds 处理。
+allowBuilds:
+  electron: true
+  esbuild: true
+  koffi: true
+  onnxruntime-node: true
+  protobufjs: true
+  sharp: true

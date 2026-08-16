@@ -3,7 +3,6 @@
  */
 import { useRef, useState, useCallback, useEffect, useMemo } from 'react'
 import { formatTimeShort } from '../utils/format'
-import type { SubtitleTrackInfo } from '../components/VideoDisplay'
 
 interface UsePlayerExtrasOptions {
   filePath: string
@@ -26,7 +25,7 @@ export function usePlayerExtras(opts: UsePlayerExtrasOptions) {
   // 截图
   const screenshotCanvasRef = useRef<HTMLCanvasElement>(null)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
-  const toastTimerRef = useRef<ReturnType<typeof setTimeout>>()
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   // 画中画
   const [isPiP, setIsPiP] = useState(false)
@@ -43,7 +42,7 @@ export function usePlayerExtras(opts: UsePlayerExtrasOptions) {
   const [previewTime, setPreviewTime] = useState<number | null>(null)
   const [previewImage, setPreviewImage] = useState<string | null>(null)
   const previewCanvasRef = useRef<HTMLCanvasElement>(null)
-  const previewTimerRef = useRef<ReturnType<typeof setTimeout>>()
+  const previewTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const previewCleanupRef = useRef<(() => void) | null>(null)
 
   // 生词点查
@@ -169,8 +168,9 @@ export function usePlayerExtras(opts: UsePlayerExtrasOptions) {
   }, [showToast, parseVttForWordLookup, handleWordLookup, videoRef, primaryVttContentRef])
 
   // —— Whisper ——
+  // 注意：回调实际由调用方（Player）自行重新扫描字幕，不使用 tracks 参数，故声明为无参
   const handleWhisperTranscribe = useCallback(
-    (onSubtitleRescan?: (tracks: SubtitleTrackInfo[]) => void) => {
+    (onSubtitleRescan?: () => void) => {
       if (!filePath) return
       if (
         !window.confirm(

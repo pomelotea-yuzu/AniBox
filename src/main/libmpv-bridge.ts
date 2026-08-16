@@ -19,7 +19,7 @@ import { existsSync } from 'fs'
 import { join, dirname } from 'path'
 
 // --- koffi 动态加载：包缺失时优雅降级（旧 mpv.exe 链路） ---
-type Koffi = typeof import('koffi')['default']
+type Koffi = (typeof import('koffi'))['default']
 let koffi: Koffi | null = null
 try {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -97,7 +97,12 @@ interface LibmpvApi {
   mpv_get_property: (ctx: bigint, name: string, format: number, data: bigint) => number
   mpv_set_property_string: (ctx: bigint, name: string, data: string) => number
   mpv_set_option_string: (ctx: bigint, name: string, data: string) => number
-  mpv_observe_property: (ctx: bigint, reply_userdata: number, name: string, format: number) => number
+  mpv_observe_property: (
+    ctx: bigint,
+    reply_userdata: number,
+    name: string,
+    format: number,
+  ) => number
   mpv_request_log_messages: (ctx: bigint, level: string) => number
   mpv_wait_event: (ctx: bigint, timeout: number) => bigint | null
   mpv_render_context_create: (res: bigint, ctx: bigint, params: bigint) => number
@@ -112,8 +117,18 @@ function ensureDeclared(): boolean {
   if (!koffi) return false
   if (declared) return true
   koffi.struct('mpv_render_param', { type: 'int32', data: 'void *' })
-  koffi.struct('mpv_event', { event_id: 'int32', error: 'int32', reply_userdata: 'uint64', data: 'void *' })
-  koffi.struct('mpv_event_log_message', { prefix: 'str', level: 'str', text: 'str', log_level: 'uint64' })
+  koffi.struct('mpv_event', {
+    event_id: 'int32',
+    error: 'int32',
+    reply_userdata: 'uint64',
+    data: 'void *',
+  })
+  koffi.struct('mpv_event_log_message', {
+    prefix: 'str',
+    level: 'str',
+    text: 'str',
+    log_level: 'uint64',
+  })
   koffi.struct('mpv_event_end_file', {
     reason: 'int32',
     error: 'int32',
@@ -138,15 +153,29 @@ function getApi(dllPath: string): LibmpvApi {
     mpv_initialize: lib.func('int mpv_initialize(void *ctx)'),
     mpv_destroy: lib.func('void mpv_destroy(void *ctx)'),
     mpv_command: lib.func('int mpv_command(void *ctx, const char **args)'),
-    mpv_get_property: lib.func('int mpv_get_property(void *ctx, const char *name, int format, void *data)'),
-    mpv_set_property_string: lib.func('int mpv_set_property_string(void *ctx, const char *name, const char *data)'),
-    mpv_set_option_string: lib.func('int mpv_set_option_string(void *ctx, const char *name, const char *data)'),
-    mpv_observe_property: lib.func('int mpv_observe_property(void *ctx, uint64_t reply_userdata, const char *name, int format)'),
-    mpv_request_log_messages: lib.func('int mpv_request_log_messages(void *ctx, const char *min_level)'),
+    mpv_get_property: lib.func(
+      'int mpv_get_property(void *ctx, const char *name, int format, void *data)',
+    ),
+    mpv_set_property_string: lib.func(
+      'int mpv_set_property_string(void *ctx, const char *name, const char *data)',
+    ),
+    mpv_set_option_string: lib.func(
+      'int mpv_set_option_string(void *ctx, const char *name, const char *data)',
+    ),
+    mpv_observe_property: lib.func(
+      'int mpv_observe_property(void *ctx, uint64_t reply_userdata, const char *name, int format)',
+    ),
+    mpv_request_log_messages: lib.func(
+      'int mpv_request_log_messages(void *ctx, const char *min_level)',
+    ),
     mpv_wait_event: lib.func('void *mpv_wait_event(void *ctx, double timeout)'),
-    mpv_render_context_create: lib.func('int mpv_render_context_create(void **res, void *mpv, const void *params)'),
+    mpv_render_context_create: lib.func(
+      'int mpv_render_context_create(void **res, void *mpv, const void *params)',
+    ),
     mpv_render_context_update: lib.func('uint64_t mpv_render_context_update(void *ctx)'),
-    mpv_render_context_render: lib.func('int mpv_render_context_render(void *ctx, const void *params)'),
+    mpv_render_context_render: lib.func(
+      'int mpv_render_context_render(void *ctx, const void *params)',
+    ),
     mpv_render_context_free: lib.func('void mpv_render_context_free(void *ctx)'),
   }
   cachedDll = dllPath
@@ -347,7 +376,10 @@ export class LibmpvBridge {
       // 创建 SW 渲染上下文
       const rcBuf = koffi.alloc('void *', 1)
       const createParams = koffi.alloc('mpv_render_param', 2)
-      koffi.encode(createParams, 0, 'mpv_render_param', { type: MPV_RENDER_PARAM_API_TYPE, data: 'sw' })
+      koffi.encode(createParams, 0, 'mpv_render_param', {
+        type: MPV_RENDER_PARAM_API_TYPE,
+        data: 'sw',
+      })
       koffi.encode(createParams, 16, 'mpv_render_param', { type: 0, data: null })
       const rcR = this.api.mpv_render_context_create(rcBuf, this.ctx, createParams)
       if (rcR !== 0) {
@@ -545,7 +577,8 @@ export class LibmpvBridge {
    * 与 renderFrame 不同：不依赖 timer，调用方主动驱动
    */
   renderManualOnce(): boolean {
-    if (!this.loaded || !this.frameBuf || !this.params || !this.api || !this.rc || !koffi) return false
+    if (!this.loaded || !this.frameBuf || !this.params || !this.api || !this.rc || !koffi)
+      return false
     try {
       const upd = this.api.mpv_render_context_update(this.rc)
       if (!upd) return false
@@ -641,10 +674,20 @@ export class LibmpvBridge {
     } catch {
       /* ok */
     }
-    // keep-open=yes 时 mpv 播放完不发 END_FILE 事件，改轮询 eof-reached 属性边沿触发连播
+    // keep-open=yes 时 mpv 播放完不发 END_FILE 事件，改轮询 eof-reached 属性边沿触发连播。
+    // 注意：快进/seek 直接跳到结尾时 mpv 可能不置位 eof-reached，导致停在最后一帧不连播，
+    // 因此额外用 time-pos≈duration 兜底检测（问题 #1）。阈值收紧到 0.2s 且排除暂停状态，
+    // 自然播放时仅比 eof-reached 提前约 0.16s 触发，几乎无感知。
     try {
       if (this.loaded) {
-        const eof = this.isEofReached()
+        let eof = this.isEofReached()
+        if (!eof && !this.eofReachedSent && !this.isPaused()) {
+          const dur = this.getDuration()
+          if (dur > 0) {
+            const tpos = this.getTimePos()
+            if (tpos > 0 && tpos >= dur - 0.2) eof = true
+          }
+        }
         if (eof && !this.eofReachedSent) {
           this.eofReachedSent = true
           this.handlers.onEofReached?.(true)
@@ -676,6 +719,7 @@ export class LibmpvBridge {
         }
         case MPV_EVENT_START_FILE:
           this.loaded = false
+          this.eofReachedSent = false
           this.handlers.onStartFile?.()
           break
         case MPV_EVENT_FILE_LOADED:

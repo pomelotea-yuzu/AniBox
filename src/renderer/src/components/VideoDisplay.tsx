@@ -5,6 +5,8 @@ export interface SubtitleTrackInfo {
   language: string
   src: string
   default?: boolean
+  /** 外挂字幕 VTT 原文（读盘缓存，用于双语副字幕/生词点查，不传给 <track>） */
+  _vttContent?: string
 }
 
 export interface VideoDisplayHandle {
@@ -63,7 +65,7 @@ const VideoDisplay = forwardRef<VideoDisplayHandle, VideoDisplayProps>(
         src={src}
         className={`w-full h-full ${objectFit}`}
         preload="auto"
-        crossOrigin={crossOrigin}
+        crossOrigin={crossOrigin as 'anonymous' | 'use-credentials' | '' | undefined}
       >
         {!hideNativeSubtitles &&
           subtitleTracks?.map((track, i) => (
