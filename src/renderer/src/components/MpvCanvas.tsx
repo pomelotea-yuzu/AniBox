@@ -573,8 +573,12 @@ export default function MpvCanvas({
         />
       </div>
 
-      {/* 顶部信息 */}
-      <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-4 py-2 bg-gradient-to-b from-black/60 to-transparent">
+      {/* 顶部信息（与底部控制条一起随 showControls 显隐，全屏鼠标静止时一并隐藏） */}
+      <div
+        className={`absolute top-0 left-0 right-0 flex items-center justify-between px-4 py-2 bg-gradient-to-b from-black/60 to-transparent transition-opacity duration-200 ${
+          showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        }`}
+      >
         <span className="text-xs text-neutral-300 truncate max-w-[60%]">{fileName}</span>
         <span className="text-[10px] px-2 py-0.5 rounded-full bg-black/40 text-neutral-300">
           libmpv{frameInfo ? ` ${frameInfo.width}×${frameInfo.height}` : ''}
