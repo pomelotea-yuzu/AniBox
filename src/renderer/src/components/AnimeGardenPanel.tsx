@@ -201,7 +201,9 @@ export default function AnimeGardenPanel({ titles, onClose, onOpenSettings }: Pr
   }, [makeFeed, showNotice])
 
   // 订阅后自动创建下载规则（一键追番，支持翻译版本过滤）
-  const addRuleAfterFeed = useCallback(async (feedPath: string | undefined, label: string, savepath: string, subLabel: string) => {
+  // 注意：qBittorrent 的 affectedFeeds 填的是「订阅源 URL」，不是订阅在 RSS 面板里的目录路径。
+  // 之前误传了目录路径（如 "/" 或 "/AniBox-xxx"），导致规则匹配不到任何订阅源、永远不会触发下载。
+  const addRuleAfterFeed = useCallback(async (feedUrl: string | undefined, label: string, savepath: string, subLabel: string) => {
     try {
       const kw = keyword.trim()
       const opt = SUB_OPTIONS.find((o) => o.label === subLabel) || SUB_OPTIONS[0]
@@ -211,7 +213,7 @@ export default function AnimeGardenPanel({ titles, onClose, onOpenSettings }: Pr
         mustContain: opt.re || kw,
         useRegex: !!opt.re,
         savepath,
-        affectedFeeds: feedPath ? [feedPath] : [],
+        affectedFeeds: feedUrl ? [feedUrl] : [],
       })
       return ruleRes
     } catch {
@@ -243,7 +245,7 @@ export default function AnimeGardenPanel({ titles, onClose, onOpenSettings }: Pr
       if (!url) { setSubmitting(false); return }
       const r = await window.electronAPI.qbAddRss(url)
       if (!r.ok) { showNotice(`⚠ ${r.message}`); setSubmitting(false); return }
-      const rule = await addRuleAfterFeed(r.path, label, savepath, subChoice)
+      const rule = await addRuleAfterFeed(url, label, savepath, subChoice)
       const scope = pathDialog.fansubName ? `（${pathDialog.fansubName}）` : ''
       const subTxt = subChoice === '不限' ? '' : ` / 仅${subChoice}`
       showNotice(rule.ok

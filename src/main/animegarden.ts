@@ -507,6 +507,28 @@ export async function qbAddRssFeed(
 }
 
 /**
+ * 确保 qBittorrent 全局 RSS 自动下载开关已打开。
+ * 一键追番依赖两个全局偏好：拉取 RSS 源（rss_processing_enabled）
+ * 与自动下载匹配资源（rss_auto_downloading_enabled）。若用户没在
+ * qBittorrent 里手动打开后者，即使规则创建正确也不会自动下载。
+ */
+async function qbEnableRssAutoDownload(cfg: QbConfig): Promise<void> {
+  try {
+    const prefs = JSON.stringify({
+      rss_processing_enabled: true,
+      rss_auto_downloading_enabled: true,
+    })
+    await qbRequest(cfg, '/api/v2/app/setPreferences', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ json: prefs }).toString(),
+    })
+  } catch {
+    /* 旧版本/改版可能不支持该偏好，忽略，不阻断后续流程 */
+  }
+}
+
+/**
  * 创建 RSS 自动下载规则（ruleDef 参考 qBittorrent RSS Downloader）
  * 参数名兼容：官方版用 rule_name/rule_def，部分改版用 ruleName/ruleDef，两组都传
  */
@@ -518,7 +540,11 @@ export async function qbAddRssRule(
   if (!cfg) return { ok: false, message: '未配置 qBittorrent，请先在设置中配置' }
   try {
     await qbLogin(cfg)
+    await qbEnableRssAutoDownload(cfg)
     const ruleDef = JSON.stringify({
+      // qBittorrent 的 ruleDef 里 `enabled` 缺省为 false：不显式传 true，
+      // 规则会被创建成「禁用」状态，导致订阅到新资源也不会自动下载。
+      enabled: true,
       mustContain: opts.mustContain,
       mustNotContain: '',
       savePath: opts.savepath || '',
