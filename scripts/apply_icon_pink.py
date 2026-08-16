@@ -58,13 +58,18 @@ def rounded_box(size: int, bg, dark, ratio: float = 0.22) -> Image.Image:
     d = ImageDraw.Draw(img)
     radius = int(size * ratio)
     d.rounded_rectangle([0, 0, size - 1, size - 1], radius=radius, fill=bg)
-    # 顶部轻微高光
-    hl = int(size * 0.22)
-    for i in range(hl):
-        y = i
-        a = int(30 * (1 - i / hl))
-        d.line([(radius, y), (size - radius, y)], fill=(255, 255, 255, a))
     return img
+
+
+def erode_alpha(img: Image.Image, px: int = 2) -> Image.Image:
+    """腐蚀 alpha 通道 px 像素，去掉去白底后贴纸边缘残留的白边/白晕"""
+    from PIL import ImageFilter
+    arr = np.array(img)
+    alpha = Image.fromarray(arr[:, :, 3].copy(), "L")
+    for _ in range(px):
+        alpha = alpha.filter(ImageFilter.MinFilter(3))
+    arr[:, :, 3] = np.array(alpha)
+    return Image.fromarray(arr, "RGBA")
 
 
 def compose(size: int, sticker: Image.Image) -> Image.Image:
@@ -82,6 +87,7 @@ def main():
     print("src:", src.size)
 
     alpha = remove_white_bg_flood(src)
+    alpha = erode_alpha(alpha, px=2)
     cropped = crop_to_content(alpha, pad=10)
     print("cropped:", cropped.size)
 
