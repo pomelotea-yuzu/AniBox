@@ -2,10 +2,16 @@
 
 本地番剧库管理器 + 播放器。扫描番剧目录自动生成海报墙，新番时间表追更，还能**搜索想要的番剧并一键下载 BT 资源**，点击即播。
 
+## 项目地址
+
+- **Gitee（国内镜像）**: https://gitee.com/yuzu-tea-duck/ani-box
+- **GitHub**: https://github.com/pomelotea-yuzu/AniBox
+- **Releases 下载**: https://gitee.com/yuzu-tea-duck/ani-box/releases
+
 ## 快速开始
 
 **普通用户（便携版）**
-1. 下载 `AniBox-x.y.z-portable-x64.zip`，解压后双击 `AniBox.exe`
+1. 下载 `AniBox-x.y.z-portable-x64.zip`（见上方 Releases 页），解压后双击 `AniBox.exe`
 2. 首次使用点 **手动添加** 选择番剧目录（或直接「搜索番剧」在线找资源）
 3. 可选：在 **设置 → 下载** 配置 qBittorrent WebUI，解锁「一键下载 / 追番」
 
