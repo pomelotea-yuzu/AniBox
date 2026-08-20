@@ -91,8 +91,21 @@ export default function Player({
     subtitleDisplayTracks: [], // will be updated later
   })
 
-  // OP/ED 跳过
-  const skiptimes = useSkipTimes({ folderPath, showToast })
+  // 全屏状态 ref（keydown handler 空依赖下访问最新值，Esc 退出全屏用）
+  const isFullscreenRef = useRef(playback.isFullscreen)
+  useEffect(() => {
+    isFullscreenRef.current = playback.isFullscreen
+  }, [playback.isFullscreen])
+
+  // OP/ED 跳过（快捷键模式：连按 3 次 → 跳过 90 秒）
+  const skiptimes = useSkipTimes()
+  // keydown handler 空依赖，经 ref 访问最新开关
+  const skipShortcutEnabledRef = useRef(skiptimes.skipShortcutEnabled)
+  useEffect(() => {
+    skipShortcutEnabledRef.current = skiptimes.skipShortcutEnabled
+  }, [skiptimes.skipShortcutEnabled])
+  // 三连按右键时间戳（600ms 窗口）
+  const rightPressesRef = useRef<number[]>([])
 
   // 字幕
   const subs = useSubtitles({ subtitleTracks, filePath, showToast })
@@ -116,40 +129,6 @@ export default function Player({
     showToast,
     primaryVttContentRef: subs.subRefs.primaryVttContentRef,
   })
-
-  // ============ OP/ED skip timeupdate 独立监听 ============
-  useEffect(() => {
-    const v = playback.videoRef.current
-    if (!v) return
-
-    const onSkipTimeUpdate = () => {
-      const sk = skiptimes.skipRef.current
-      if (
-        sk.skipOp &&
-        sk.opEnd > 0 &&
-        !sk.hasSkippedOp &&
-        v.currentTime >= sk.opStart &&
-        v.currentTime < sk.opEnd
-      ) {
-        v.currentTime = sk.opEnd
-        skiptimes.skipRef.current.hasSkippedOp = true
-      }
-      if (
-        sk.skipEd &&
-        sk.edStart > 0 &&
-        !sk.hasSkippedEd &&
-        v.currentTime >= sk.edStart &&
-        v.currentTime < (sk.edEnd || v.duration)
-      ) {
-        if (sk.edEnd > 0) v.currentTime = sk.edEnd
-        else if (v.duration > 0) v.currentTime = v.duration - 0.1
-        skiptimes.skipRef.current.hasSkippedEd = true
-      }
-    }
-
-    v.addEventListener('timeupdate', onSkipTimeUpdate)
-    return () => v.removeEventListener('timeupdate', onSkipTimeUpdate)
-  }, [filePath, skiptimes.skipRef])
 
   // ============ AB 循环检查 ============
   useEffect(() => {
@@ -287,6 +266,13 @@ export default function Player({
       if (!v) return
 
       switch (e.key) {
+        case 'Escape':
+          // 退出全屏（KeyboardHelp 面板开着时由它优先关闭，此处只处理全屏）
+          if (isFullscreenRef.current) {
+            e.preventDefault()
+            window.electronAPI.exitFullscreen()
+          }
+          break
         case ' ':
           e.preventDefault()
           if (v.paused) {
@@ -303,10 +289,24 @@ export default function Player({
           break
         case 'ArrowRight':
           e.preventDefault()
-          if (e.shiftKey) v.currentTime = Math.min(v.duration || 0, v.currentTime + 0.1)
-          else if (e.ctrlKey || e.metaKey)
-            v.currentTime = Math.min(v.duration || 0, v.currentTime + 10)
-          else v.currentTime = Math.min(v.duration || 0, v.currentTime + 5)
+          {
+            // 三连按右键（600ms 窗口）= 跳过 90 秒（OP/ED 固定时长）；开关关闭时回退普通快进
+            const now = Date.now()
+            rightPressesRef.current = rightPressesRef.current.filter((t) => now - t < 600)
+            rightPressesRef.current.push(now)
+            if (rightPressesRef.current.length >= 3) {
+              rightPressesRef.current = []
+              if (skipShortcutEnabledRef.current) {
+                v.currentTime = Math.min(v.duration || 0, v.currentTime + 90)
+                showToast('⏭ 已跳过 90 秒')
+                break
+              }
+            }
+            if (e.shiftKey) v.currentTime = Math.min(v.duration || 0, v.currentTime + 0.1)
+            else if (e.ctrlKey || e.metaKey)
+              v.currentTime = Math.min(v.duration || 0, v.currentTime + 10)
+            else v.currentTime = Math.min(v.duration || 0, v.currentTime + 5)
+          }
           break
         case ',':
           if (e.ctrlKey || e.metaKey) {
@@ -821,24 +821,9 @@ export default function Player({
           onVolumeNormalizationToggle={() =>
             audio.handleVolumeNormalizationToggle(playback.videoRef.current)
           }
-          onOpAction={
-            folderPath
-              ? () => skiptimes.handleOpAction(playback.videoRef.current?.currentTime || 0)
-              : undefined
-          }
-          onEdAction={
-            folderPath
-              ? () => skiptimes.handleEdAction(playback.videoRef.current?.currentTime || 0)
-              : undefined
-          }
-          onOpClear={folderPath ? skiptimes.handleOpClear : undefined}
-          onEdClear={folderPath ? skiptimes.handleEdClear : undefined}
-          opStart={skiptimes.opStart}
-          opEnd={skiptimes.opEnd}
-          edStart={skiptimes.edStart}
-          edEnd={skiptimes.edEnd}
-          skipOpEnabled={skiptimes.skipOpEnabled}
-          skipEdEnabled={skiptimes.skipEdEnabled}
+          // OP/ED 跳过（快捷键模式）：合并开关按钮，开启后连按 3 次 → 跳过 90 秒
+          skipShortcutEnabled={skiptimes.skipShortcutEnabled}
+          onSkipShortcutToggle={skiptimes.toggleSkipShortcut}
           enhanceEnabled={enh.enhanceEnabled}
           enhancePreset={enh.enhancePreset}
           onEnhanceToggle={() => enh.setEnhanceEnabled((prev) => !prev)}

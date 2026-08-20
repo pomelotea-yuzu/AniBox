@@ -7,10 +7,12 @@ import { useState, useCallback, useEffect } from 'react'
 const SHORTCUTS = [
   { key: 'Space', desc: '播放 / 暂停' },
   { key: '← / →', desc: '快退 / 快进 5 秒' },
+  { key: '→ ×3', desc: '连按 3 次 → 跳过 90 秒（OP/ED）' },
   { key: 'Shift + ←/→', desc: '逐帧后退 / 前进' },
   { key: 'Ctrl + ←/→', desc: '快退 / 快进 10 秒' },
   { key: '↑ / ↓', desc: '音量增减 5%' },
   { key: 'F', desc: '全屏切换' },
+  { key: 'Esc', desc: '退出全屏 / 关闭面板' },
   { key: 'M', desc: '静音切换' },
   { key: '0–9', desc: '跳转到 0%–90%' },
   { key: ',', desc: '上一帧' },
@@ -33,7 +35,6 @@ const SHORTCUTS = [
   { key: 'W', desc: '生词点查' },
   { key: 'Ctrl + W', desc: 'Whisper 语音识别' },
   { key: '?', desc: '显示 / 隐藏此帮助' },
-  { key: 'Esc', desc: '关闭帮助面板' },
 ]
 
 export default function KeyboardHelp() {

@@ -580,6 +580,7 @@ export default function App() {
                     onNextEpisode={canAutoNext ? handleNextEpisode : undefined}
                     onClose={handleClosePlayer}
                     onFallbackToLegacy={() => setMpvBackend('legacy')}
+                    onCyclePlayMode={cyclePlayMode}
                     episodes={selectedSeries?.episodes}
                     currentEpIndex={curIdx}
                     onSelectEpisode={

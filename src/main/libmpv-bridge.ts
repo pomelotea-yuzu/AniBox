@@ -299,6 +299,10 @@ export class LibmpvBridge {
   private aoOverride: string | null = null
   /** eof-reached 边沿检测（防重复触发连播） */
   private eofReachedSent = false
+  /** 当前视频帧率（FILE_LOADED 后读取 container-fps，用于自动调节渲染节奏） */
+  private fps = 0
+  /** 当前轮询间隔 ms（默认 50ms=20fps，FILE_LOADED 后按视频帧率动态调整） */
+  private timerMs = 0
 
   constructor(handlers?: LibmpvHandlers, opts?: LibmpvBridgeOptions) {
     this.handlers = handlers || {}
@@ -330,6 +334,39 @@ export class LibmpvBridge {
   private get tickMs(): number {
     const v = Number(process.env.ANIBOX_MPV_TICK_MS)
     return Number.isFinite(v) && v > 0 ? Math.floor(v) : 50
+  }
+
+  /**
+   * SW 渲染轮询最大帧率（默认 30fps，ANIBOX_MPV_MAX_FPS 可调）。
+   * 软渲染在主进程主线程，帧率过高会占死主线程（窗口拖不动）；30fps 在保流畅与保响应间折中，
+   * 60fps 视频以 30fps 均匀节奏显示（不丢关键帧感知不明显），需要更平滑可设 ANIBOX_MPV_MAX_FPS=60
+   */
+  private get maxFps(): number {
+    const v = Number(process.env.ANIBOX_MPV_MAX_FPS)
+    return Number.isFinite(v) && v >= 20 ? Math.floor(v) : 30
+  }
+
+  /**
+   * 按视频帧率动态调整轮询渲染节奏。
+   * 固定 50ms(20fps) 与 23.976/29.97 等非整数帧率不同步：帧显示时长在 41.7~50ms 间抖动
+   * 且周期性跳帧/重复帧，大范围移动场景观感卡顿。轮询间隔匹配视频帧间隔（每帧恒定显示时长）
+   * 后即平滑；非整数帧率（23.976→41.7ms）自动落入匹配间隔，无需人工干预。
+   */
+  private syncTimer(): void {
+    if (this.noTimer) return
+    let ms = this.tickMs
+    if (this.fps > 0) {
+      const effFps = Math.min(Math.max(this.fps, 20), this.maxFps)
+      ms = Math.max(8, Math.round(1000 / effFps))
+    }
+    if (this.timerMs === ms) return
+    this.timerMs = ms
+    if (this.timer) clearInterval(this.timer)
+    this.timer = setInterval(() => this.tick(), ms)
+    console.log(
+      `[libmpv] 渲染节奏 ${ms}ms (~${Math.round(1000 / ms)}fps)` +
+        (this.fps > 0 ? `，视频帧率 ${this.fps.toFixed(3)}fps` : ''),
+    )
   }
 
   /** 初始化 libmpv。失败返回 false（调用方应回退旧 mpv.exe 链路） */
@@ -398,11 +435,12 @@ export class LibmpvBridge {
       this.stridePtr = koffi.alloc('int32', 1)
       this.fiPtr = koffi.alloc('mpv_render_frame_info', 1)
 
-      // 轮询渲染：50ms ≈ 20fps 上限。SW 渲染在主进程主线程，渲染 1080p 原生尺寸会
-      // 占死主线程（窗口拖不动 + IPC 帧送不出）。降采样 + 限帧率保主线程响应。
-      // 预览实例（noTimer）不启动 timer，由手动 drainOnce/renderOnce 驱动
+      // 轮询渲染：默认 50ms ≈ 20fps 上限；FILE_LOADED 后 syncTimer() 会按视频帧率自动调整。
+      // SW 渲染在主进程主线程，渲染 1080p 原生尺寸会占死主线程（窗口拖不动 + IPC 帧送不出）。
+      // 降采样 + 限帧率保主线程响应。预览实例（noTimer）不启动 timer，由手动 drainOnce/renderOnce 驱动
       if (!this.noTimer) {
-        this.timer = setInterval(() => this.tick(), this.tickMs)
+        this.timerMs = this.tickMs
+        this.timer = setInterval(() => this.tick(), this.timerMs)
       }
       this.handlers.onReady?.()
       return true
@@ -757,6 +795,12 @@ export class LibmpvBridge {
       console.warn('[libmpv] 文件加载但尺寸未知:', this.w, this.h)
       return
     }
+    // 视频帧率：优先 container-fps（23.976/29.97 等非整数帧率直接读出），回退 estimated-vf-fps
+    let fps = this.getDoubleProperty('container-fps')
+    if (!(fps > 0)) fps = this.getDoubleProperty('estimated-vf-fps')
+    this.fps = fps > 0 ? fps : 0
+    // 帧率已知后把轮询间隔调到匹配视频帧率（消除 20fps 固定轮询与源帧率的失步抖动）
+    this.syncTimer()
     // 渲染目标尺寸：等比缩放到 ≤swMaxWidth（保主线程响应；mpv 会自动缩放画面，ASS 字幕也随帧渲染）
     const scale = Math.min(1, this.swMaxWidth / this.w)
     this.renderW = Math.max(2, Math.floor((this.w * scale) / 2) * 2)

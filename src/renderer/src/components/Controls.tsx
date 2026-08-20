@@ -53,17 +53,9 @@ interface ControlsProps {
   /** 音量均衡开关 */
   volumeNormalization?: boolean
   onVolumeNormalizationToggle?: () => void
-  /** OP/ED 跳过 — 顺序打点 + 开关 */
-  onOpAction?: () => void
-  onEdAction?: () => void
-  onOpClear?: () => void
-  onEdClear?: () => void
-  opStart?: number
-  opEnd?: number
-  edStart?: number
-  edEnd?: number
-  skipOpEnabled?: boolean
-  skipEdEnabled?: boolean
+  /** OP/ED 跳过（快捷键模式）：连按 3 次右方向键 = 跳过 90 秒 */
+  skipShortcutEnabled?: boolean
+  onSkipShortcutToggle?: () => void
   /** 画面增强 */
   enhanceEnabled?: boolean
   enhancePreset?: string
@@ -199,16 +191,8 @@ export default function Controls({
   onAudioDelayChange,
   volumeNormalization,
   onVolumeNormalizationToggle,
-  onOpAction,
-  onEdAction,
-  onOpClear,
-  onEdClear,
-  opStart,
-  opEnd,
-  edStart,
-  edEnd,
-  skipOpEnabled,
-  skipEdEnabled,
+  skipShortcutEnabled,
+  onSkipShortcutToggle,
   enhanceEnabled,
   enhancePreset,
   onEnhanceToggle,
@@ -462,62 +446,24 @@ export default function Controls({
           </div>
         )}
 
-        {/* OP/ED 跳过（两点式：第一次→起点，第二次→终点，右键→清除） */}
-        {onOpAction && (
-          <div className="flex items-center gap-0.5">
-            {/* OP 按钮 */}
-            <button
-              onClick={onOpAction}
-              onContextMenu={(e) => {
-                e.preventDefault()
-                onOpClear?.()
-              }}
-              className={`text-[10px] px-1 py-0.5 rounded transition-colors ${
-                opStart && opStart > 0 && opEnd && opEnd > 0
-                  ? skipOpEnabled
-                    ? 'text-green-400'
-                    : 'text-white/25 hover:text-white/50'
-                  : opStart && opStart > 0
-                    ? 'text-green-400 animate-pulse'
-                    : 'text-white/25 hover:text-white/50'
-              }`}
-              title={
-                opStart && opStart > 0 && opEnd && opEnd > 0
-                  ? `片头跳过${skipOpEnabled ? '：开 (右键清除标记)' : '：关 (右键清除标记)'}`
-                  : opStart && opStart > 0
-                    ? '点击标记片头终点 · 右键取消'
-                    : '点击标记片头起点'
-              }
-            >
-              OP{opEnd && opEnd > 0 ? <span className="ml-0.5 align-top text-[8px]">●</span> : ''}
-            </button>
-            {/* ED 按钮 — 两点式，同 OP */}
-            <button
-              onClick={onEdAction}
-              onContextMenu={(e) => {
-                e.preventDefault()
-                onEdClear?.()
-              }}
-              className={`text-[10px] px-1 py-0.5 rounded transition-colors ${
-                edStart && edStart > 0 && edEnd && edEnd > 0
-                  ? skipEdEnabled
-                    ? 'text-orange-400'
-                    : 'text-white/25 hover:text-white/50'
-                  : edStart && edStart > 0
-                    ? 'text-orange-400 animate-pulse'
-                    : 'text-white/25 hover:text-white/50'
-              }`}
-              title={
-                edStart && edStart > 0 && edEnd && edEnd > 0
-                  ? `片尾跳过${skipEdEnabled ? '：开 (右键清除标记)' : '：关 (右键清除标记)'}`
-                  : edStart && edStart > 0
-                    ? '点击标记片尾终点 · 右键取消'
-                    : '点击标记片尾起点'
-              }
-            >
-              ED{edEnd && edEnd > 0 ? <span className="ml-0.5 align-top text-[8px]">●</span> : ''}
-            </button>
-          </div>
+        {/* OP/ED 跳过（快捷键模式：连按 3 次右方向键 = 跳过 90 秒） */}
+        {onSkipShortcutToggle && (
+          <button
+            onClick={onSkipShortcutToggle}
+            className={`text-[10px] px-1.5 py-0.5 rounded transition-colors ${
+              skipShortcutEnabled
+                ? 'text-green-400'
+                : 'text-white/25 hover:text-white/50'
+            }`}
+            title={
+              skipShortcutEnabled
+                ? 'OP/ED 跳过已开启：连按 3 次 → 跳过 90 秒'
+                : 'OP/ED 跳过已关闭（点击开启）'
+            }
+          >
+            ⏭ 跳过
+            {skipShortcutEnabled ? <span className="ml-0.5 align-top text-[8px]">●</span> : ''}
+          </button>
         )}
 
         {/* 画面增强 */}
