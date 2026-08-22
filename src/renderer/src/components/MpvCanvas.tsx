@@ -158,9 +158,6 @@ export default function MpvCanvas({
     pausedRef.current = paused
   }, [paused])
 
-  // 全屏状态（Esc 退出全屏用；主进程窗口 enter/leave-full-screen 事件驱动）
-  const fullscreenRef = useRef(false)
-
   // 帮助面板开关（keydown handler 空依赖，经 ref 读取）
   const showHelpRef = useRef(false)
   useEffect(() => {
@@ -231,7 +228,7 @@ export default function MpvCanvas({
   togglePauseRef.current = togglePause
   const handleCommandRef = useRef(handleCommand)
   handleCommandRef.current = handleCommand
-  // 三连按右键时间戳（600ms 窗口，跳过 90 秒用）
+  // 三连按右键时间戳（600ms 窗口，跳过 80 秒用）
   const rightPressesRef = useRef<number[]>([])
   useEffect(() => {
     durationRef.current = duration
@@ -265,14 +262,14 @@ export default function MpvCanvas({
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
       const k = e.key
-      // Esc：帮助面板 → 退出全屏（Controls 内部菜单点击外部关闭）
+      // Esc：帮助面板 → 退出全屏（主进程自带 isFullScreen 检查，非全屏时为 no-op）
       if (k === 'Escape') {
         e.preventDefault()
         if (showHelpRef.current) {
           setShowHelp(false)
           return
         }
-        if (fullscreenRef.current) window.electronAPI.exitFullscreen()
+        window.electronAPI.exitFullscreen()
         return
       }
       // 快捷键帮助
@@ -290,15 +287,15 @@ export default function MpvCanvas({
         handleCommandRef.current(['seek', `-${step}`, 'relative'])
       } else if (k === 'ArrowRight') {
         e.preventDefault()
-        // 三连按右键（600ms 窗口）= 跳过 90 秒（受 ⏭ 开关控制），未连按时普通快进
+        // 三连按右键（600ms 窗口）= 跳过 80 秒（受 ⏭ 开关控制，前两次已各快进 5 秒），未连按时普通快进
         const now = Date.now()
         rightPressesRef.current = rightPressesRef.current.filter((t) => now - t < 600)
         rightPressesRef.current.push(now)
         if (rightPressesRef.current.length >= 3) {
           rightPressesRef.current = []
           if (skipShortcutEnabledRef.current) {
-            handleCommandRef.current(['seek', '90', 'relative'])
-            showToastMsg('⏭ 已跳过 90 秒')
+            handleCommandRef.current(['seek', '80', 'relative'])
+            showToastMsg('⏭ 已跳过 80 秒')
             return
           }
         }
@@ -610,9 +607,8 @@ export default function MpvCanvas({
   useEffect(() => {
     window.electronAPI.mpvPlay(filePath)
 
-    // 全屏状态监听（Esc 退出全屏 + Controls 全屏图标）
+    // 全屏状态监听（Controls 全屏图标状态回显）
     const offFs = window.electronAPI.onFullscreenChanged((fs: boolean) => {
-      fullscreenRef.current = fs
       setIsFullscreen(fs)
     })
 
@@ -796,12 +792,12 @@ export default function MpvCanvas({
   // OP/ED 快捷键跳过开关
   const toggleSkipShortcut = useCallback(() => {
     setSkipShortcutEnabled((prev) => {
-      showToastMsg(prev ? 'OP/ED 跳过已关闭' : 'OP/ED 跳过已开启（连按 3 次 → 跳过 90 秒）')
+      showToastMsg(prev ? 'OP/ED 跳过已关闭' : 'OP/ED 跳过已开启（连按 3 次 → 跳过 80 秒）')
       return !prev
     })
   }, [showToastMsg])
 
-  // 三连按右键 = 跳过 90 秒（受开关控制；与 HTML5 Player 一致）
+  // 三连按右键 = 跳过 80 秒（受开关控制；与 HTML5 Player 一致）
   const skipShortcutEnabledRef = useRef(false)
   useEffect(() => {
     skipShortcutEnabledRef.current = skipShortcutEnabled
@@ -836,6 +832,7 @@ export default function MpvCanvas({
     <div
       className={`relative w-full h-full bg-black select-none ${!showControls && !paused ? 'cursor-none' : ''}`}
       onContextMenu={(e) => e.preventDefault()}
+      onDoubleClick={togglePause}
     >
       {/* 画面层：canvas 内部像素 = 渲染尺寸（WebGL），CSS 尺寸 = contain 放大（JS 计算，消除黑边） */}
       <div ref={containerRef} className="absolute inset-0 flex items-center justify-center">
@@ -952,7 +949,7 @@ export default function MpvCanvas({
               {[
                 ['Space', '播放 / 暂停'],
                 ['← / →', '快退 / 快进 5 秒'],
-                ['→ ×3', '连按 3 次 → 跳过 90 秒（OP/ED）'],
+                ['→ ×3', '连按 3 次 → 跳过 80 秒（OP/ED）'],
                 ['Ctrl + ←/→', '快退 / 快进 10 秒'],
                 ['↑ / ↓', '音量增减 5%'],
                 ['F', '全屏切换'],

@@ -91,13 +91,7 @@ export default function Player({
     subtitleDisplayTracks: [], // will be updated later
   })
 
-  // 全屏状态 ref（keydown handler 空依赖下访问最新值，Esc 退出全屏用）
-  const isFullscreenRef = useRef(playback.isFullscreen)
-  useEffect(() => {
-    isFullscreenRef.current = playback.isFullscreen
-  }, [playback.isFullscreen])
-
-  // OP/ED 跳过（快捷键模式：连按 3 次 → 跳过 90 秒）
+  // OP/ED 跳过（快捷键模式：连按 3 次 → 跳过 80 秒）
   const skiptimes = useSkipTimes()
   // keydown handler 空依赖，经 ref 访问最新开关
   const skipShortcutEnabledRef = useRef(skiptimes.skipShortcutEnabled)
@@ -267,11 +261,10 @@ export default function Player({
 
       switch (e.key) {
         case 'Escape':
-          // 退出全屏（KeyboardHelp 面板开着时由它优先关闭，此处只处理全屏）
-          if (isFullscreenRef.current) {
-            e.preventDefault()
-            window.electronAPI.exitFullscreen()
-          }
+          // 退出全屏（主进程自带 isFullScreen 检查，非全屏时为 no-op；
+          // KeyboardHelp 面板开着时由它优先关闭，此处只处理全屏）
+          e.preventDefault()
+          window.electronAPI.exitFullscreen()
           break
         case ' ':
           e.preventDefault()
@@ -290,15 +283,16 @@ export default function Player({
         case 'ArrowRight':
           e.preventDefault()
           {
-            // 三连按右键（600ms 窗口）= 跳过 90 秒（OP/ED 固定时长）；开关关闭时回退普通快进
+            // 三连按右键（600ms 窗口）= 跳过 80 秒（OP/ED 固定时长，前两次已各快进 5 秒，
+            // 合计约 85 秒）；开关关闭时回退普通快进
             const now = Date.now()
             rightPressesRef.current = rightPressesRef.current.filter((t) => now - t < 600)
             rightPressesRef.current.push(now)
             if (rightPressesRef.current.length >= 3) {
               rightPressesRef.current = []
               if (skipShortcutEnabledRef.current) {
-                v.currentTime = Math.min(v.duration || 0, v.currentTime + 90)
-                showToast('⏭ 已跳过 90 秒')
+                v.currentTime = Math.min(v.duration || 0, v.currentTime + 80)
+                showToast('⏭ 已跳过 80 秒')
                 break
               }
             }
@@ -618,6 +612,7 @@ export default function Player({
         className="relative w-full h-full"
         onMouseMove={playback.resetHideTimer}
         onClick={playback.togglePlay}
+        onDoubleClick={playback.togglePlay}
       >
         <VideoDisplay
           ref={(handle: VideoDisplayHandle | null) => {
@@ -821,7 +816,7 @@ export default function Player({
           onVolumeNormalizationToggle={() =>
             audio.handleVolumeNormalizationToggle(playback.videoRef.current)
           }
-          // OP/ED 跳过（快捷键模式）：合并开关按钮，开启后连按 3 次 → 跳过 90 秒
+          // OP/ED 跳过（快捷键模式）：合并开关按钮，开启后连按 3 次 → 跳过 80 秒
           skipShortcutEnabled={skiptimes.skipShortcutEnabled}
           onSkipShortcutToggle={skiptimes.toggleSkipShortcut}
           enhanceEnabled={enh.enhanceEnabled}
