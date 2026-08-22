@@ -190,7 +190,12 @@ void main() {
 // ---- WebGL 工具 ----
 
 function createShader(gl: WebGLRenderingContext, type: number, src: string): WebGLShader | null {
-  const shader = gl.createShader(type)!
+  const shader = gl.createShader(type)
+  // context lost 等异常下 createShader 返回 null，调用方跳过该 pass 而不是崩溃
+  if (!shader) {
+    console.warn('[AniBox] createShader failed (context lost?)')
+    return null
+  }
   gl.shaderSource(shader, src)
   gl.compileShader(shader)
   if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
@@ -220,9 +225,14 @@ function createProgram(
   return prog
 }
 
-// 全屏四边形
+// 全屏四边形（TRIANGLE_FAN 4 顶点；x,y=位置，u,v=纹理坐标）
+// 方向约定：源纹理经 UNPACK_FLIP_Y_WEBGL 上传后 v=1 为视频顶部，故屏幕顶部采样 (0,1)。
+// 多 pass 管线中"顶部→顶部"恒定传递，避免每级 FBO 渲染翻转一次导致不同预设方向不一致。
 const QUAD_VERTS = new Float32Array([
-  -1, -1, 0, 1, -1, 1, 0, 1, 1, 1, 0, 1, -1, -1, 0, 1, -1, 1, 1, 0, 1, 1, 1, 0,
+  -1, -1, 0, 0, // 左下 ← 视频底部左
+  -1, 1, 0, 1, // 左上 ← 视频顶部左
+  1, 1, 1, 1, // 右上 ← 视频顶部右
+  1, -1, 1, 0, // 右下 ← 视频底部右
 ])
 
 // ---- Pipeline Pass ----
@@ -230,6 +240,8 @@ const QUAD_VERTS = new Float32Array([
 interface PipelinePass {
   program: WebGLProgram
   uniforms: Record<string, WebGLUniformLocation>
+  /** 自定义 uniform 的数值（预设配置，与 uniforms 的 location 一一对应） */
+  uniformValues: Record<string, number>
   fb: WebGLFramebuffer | null
   texture: WebGLTexture | null
   needsTime: boolean
@@ -318,6 +330,8 @@ export class VideoProcessor {
   private disposed = false
   private needsRebuild = true
   private quadBuf: WebGLBuffer | null = null
+  /** 直通渲染 program：最终输出到画布 / A/B 对比原生半区，避免复用后处理 shader 造成双重叠加 */
+  private passThroughProgram: WebGLProgram | null = null
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
@@ -387,8 +401,17 @@ export class VideoProcessor {
     if (!this.video || this.video.videoWidth === 0) return
     const cfg = PRESETS[this._preset]
     this._scale = cfg.upscale ? cfg.upscaleMul : 1.0
-    this._outputWidth = Math.round(this.video.videoWidth * this._scale)
-    this._outputHeight = Math.round(this.video.videoHeight * this._scale)
+    let w = Math.round(this.video.videoWidth * this._scale)
+    let h = Math.round(this.video.videoHeight * this._scale)
+    // 防爆显存：限制最大输出宽度（1080p×2=3840 会超，多个 pass 大 FBO 易崩溃），超出按比例降
+    const MAX_OUTPUT_W = 2560
+    if (w > MAX_OUTPUT_W) {
+      const k = MAX_OUTPUT_W / w
+      w = Math.round(w * k)
+      h = Math.round(h * k)
+    }
+    this._outputWidth = w
+    this._outputHeight = h
   }
 
   private toggleCanvas(show: boolean) {
@@ -425,17 +448,30 @@ export class VideoProcessor {
 
   private disposeGL() {
     this.stop()
+    // 关键：不要主动调用 WEBGL_lose_context！
+    // 同一 canvas 再次 getContext('webgl') 返回的是同一个已丢失的上下文，
+    // 后续 createShader 全部返回 null 导致崩溃。仅释放 GL 资源 + JS 引用，
+    // 让 context 存活复用，buildPipeline 在同一 context 上重建 program/纹理/buffer。
     if (this.gl) {
       const gl = this.gl
-      const ext = gl.getExtension('WEBGL_lose_context')
-      if (ext) ext.loseContext()
+      for (const p of this.passes) {
+        if (p.program) gl.deleteProgram(p.program)
+        if (p.fb) gl.deleteFramebuffer(p.fb)
+        if (p.texture) gl.deleteTexture(p.texture)
+      }
+      if (this.srcTexture) gl.deleteTexture(this.srcTexture)
+      if (this.outputFb) gl.deleteFramebuffer(this.outputFb)
+      if (this.outputTexture) gl.deleteTexture(this.outputTexture)
+      if (this.passThroughProgram) gl.deleteProgram(this.passThroughProgram)
+      if (this.quadBuf) gl.deleteBuffer(this.quadBuf)
     }
     this.gl = null
     this.passes = []
     this.srcTexture = null
     this.outputFb = null
     this.outputTexture = null
-    this.quadBuf = null // 关键：清除旧上下文的 buffer
+    this.passThroughProgram = null
+    this.quadBuf = null
   }
 
   private buildPipeline() {
@@ -453,12 +489,12 @@ export class VideoProcessor {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
 
-    // 构建管线 passes
+    // 构建管线 passes（uniformValues 为数值，location 在创建 program 后解析）
     const passes: {
       name: string
       frag: string
       enabled: boolean
-      uniforms: Record<string, any>
+      uniformValues: Record<string, number>
       needsTime: boolean
     }[] = []
 
@@ -467,7 +503,7 @@ export class VideoProcessor {
         name: 'upscale',
         frag: UPSCALE_FRAG,
         enabled: true,
-        uniforms: { u_strength: cfg.upscaleMul },
+        uniformValues: { u_strength: cfg.upscaleMul },
         needsTime: false,
       })
     }
@@ -477,7 +513,7 @@ export class VideoProcessor {
         name: 'deband',
         frag: DEBAND_FRAG,
         enabled: true,
-        uniforms: { u_amount: cfg.debandAmount },
+        uniformValues: { u_amount: cfg.debandAmount },
         needsTime: true,
       })
     }
@@ -487,7 +523,7 @@ export class VideoProcessor {
         name: 'sharpen',
         frag: SHARPEN_FRAG,
         enabled: true,
-        uniforms: { u_amount: cfg.sharpenAmount },
+        uniformValues: { u_amount: cfg.sharpenAmount },
         needsTime: false,
       })
     }
@@ -497,7 +533,7 @@ export class VideoProcessor {
         name: 'fxaa',
         frag: FXAA_FRAG,
         enabled: true,
-        uniforms: { u_amount: cfg.fxaaAmount },
+        uniformValues: { u_amount: cfg.fxaaAmount },
         needsTime: false,
       })
     }
@@ -507,7 +543,7 @@ export class VideoProcessor {
         name: 'color',
         frag: COLOR_FRAG,
         enabled: true,
-        uniforms: {
+        uniformValues: {
           u_saturation: cfg.saturation,
           u_contrast: cfg.contrast,
           u_brightness: cfg.brightness,
@@ -525,7 +561,7 @@ export class VideoProcessor {
         name: 'passthrough',
         frag: PASSTHROUGH_FRAG,
         enabled: true,
-        uniforms: {},
+        uniformValues: {},
         needsTime: false,
       })
     }
@@ -535,7 +571,8 @@ export class VideoProcessor {
       if (!prog) continue
 
       const uniforms: Record<string, WebGLUniformLocation> = {}
-      for (const [k] of Object.entries(pass.uniforms)) {
+      // 自定义 uniform（数值来自预设配置）
+      for (const [k] of Object.entries(pass.uniformValues)) {
         const loc = gl.getUniformLocation(prog, k)
         if (loc) uniforms[k] = loc
       }
@@ -561,6 +598,7 @@ export class VideoProcessor {
       this.passes.push({
         program: prog,
         uniforms,
+        uniformValues: pass.uniformValues,
         fb,
         texture: tex,
         needsTime: pass.needsTime,
@@ -585,6 +623,9 @@ export class VideoProcessor {
 
     this.canvas.width = w
     this.canvas.height = h
+
+    // 直通 program：最终画布输出 / A/B 原生半区（不复用后处理 shader，避免双重叠加）
+    this.passThroughProgram = createProgram(gl, VERTEX_SHADER, PASSTHROUGH_FRAG)
   }
 
   private loop = () => {
@@ -612,9 +653,13 @@ export class VideoProcessor {
     const srcH = this.video.videoHeight
 
     // 上传视频帧到源纹理
+    // UNPACK_FLIP_Y_WEBGL：垂直翻转存储，使 v=1 为视频顶部，
+    // 与 QUAD_VERTS（顶部采样 v=1）配合保证多 pass 管线方向不翻转
     if (this.srcTexture) {
       gl.bindTexture(gl.TEXTURE_2D, this.srcTexture)
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true)
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.video)
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false)
     }
 
     // 设置视口
@@ -645,13 +690,10 @@ export class VideoProcessor {
 
       if (pass.needsTime && pass.uniforms['u_time']) gl.uniform1f(pass.uniforms['u_time'], time)
 
-      // 自定义 uniform
-      for (const [k, v] of Object.entries(pass.uniforms)) {
-        if (k === 'u_src' || k === 'u_texelSize' || k === 'u_time') continue
-        const loc = gl.getUniformLocation(pass.program, k)
-        if (loc !== null) {
-          if (typeof v === 'number') gl.uniform1f(loc, v)
-        }
+      // 自定义 uniform（值来自预设配置，location 已缓存）
+      for (const [k, v] of Object.entries(pass.uniformValues)) {
+        const loc = pass.uniforms[k]
+        if (loc) gl.uniform1f(loc, v)
       }
 
       this.drawQuad(gl)
@@ -660,47 +702,47 @@ export class VideoProcessor {
       prevH = h
     }
 
-    // 最终渲染到画布
+    // 最终渲染到画布（直通 program，不再叠加后处理 shader）
     gl.bindFramebuffer(gl.FRAMEBUFFER, null)
     gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight)
     gl.clear(gl.COLOR_BUFFER_BIT)
+
+    if (!this.passThroughProgram) {
+      this.animId = requestAnimationFrame(this.loop)
+      return
+    }
 
     // 如果 A/B 模式，并排显示：左=原生，右=增强
     if (this._abMode && prevTex && this.srcTexture) {
       const dw = gl.drawingBufferWidth
       const dh = gl.drawingBufferHeight
       const halfW = dw / 2
+      // 每半区 contain：以半宽为基准，按内容比例计算高度并垂直居中，避免拉伸畸形
+      const aspect = srcW > 0 && srcH > 0 ? srcW / srcH : 16 / 9
+      const halfH = Math.min(dh, halfW / aspect)
+      const y = Math.max(0, (dh - halfH) / 2)
 
-      // 左半：原生
-      gl.viewport(0, 0, halfW, dh)
-
-      // 使用最后一个 pass 的 program 做直通渲染（已有 context）
-      const lastPass = this.passes[this.passes.length - 1]
-      if (lastPass) {
-        gl.useProgram(lastPass.program)
-        gl.activeTexture(gl.TEXTURE0)
-        gl.bindTexture(gl.TEXTURE_2D, this.srcTexture)
-        if (lastPass.uniforms['u_src']) gl.uniform1i(lastPass.uniforms['u_src'], 0)
-        if (lastPass.uniforms['u_texelSize'])
-          gl.uniform2f(lastPass.uniforms['u_texelSize'], 1.0 / srcW, 1.0 / srcH)
-        this.drawQuad(gl)
-      }
+      // 左半：原生（直通，未经后处理）
+      gl.viewport(0, y, halfW, halfH)
+      gl.useProgram(this.passThroughProgram)
+      gl.activeTexture(gl.TEXTURE0)
+      gl.bindTexture(gl.TEXTURE_2D, this.srcTexture)
+      gl.uniform1i(gl.getUniformLocation(this.passThroughProgram, 'u_src'), 0)
+      this.drawQuad(gl)
 
       // 右半：增强
-      gl.viewport(halfW, 0, dw - halfW, dh)
+      gl.viewport(halfW, y, halfW, halfH)
+      gl.useProgram(this.passThroughProgram)
       gl.activeTexture(gl.TEXTURE0)
       gl.bindTexture(gl.TEXTURE_2D, prevTex)
-      if (lastPass?.uniforms['u_src']) gl.uniform1i(lastPass.uniforms['u_src'], 0)
-      if (lastPass?.uniforms['u_texelSize'])
-        gl.uniform2f(lastPass.uniforms['u_texelSize'], 1.0 / w, 1.0 / h)
+      gl.uniform1i(gl.getUniformLocation(this.passThroughProgram, 'u_src'), 0)
       this.drawQuad(gl)
     } else {
       // 正常模式：全屏增强
-      gl.useProgram(this.passes[this.passes.length - 1]?.program || this.passes[0]?.program)
+      gl.useProgram(this.passThroughProgram)
       gl.activeTexture(gl.TEXTURE0)
       gl.bindTexture(gl.TEXTURE_2D, prevTex)
-      const lastU = this.passes[this.passes.length - 1]?.uniforms
-      if (lastU?.['u_src']) gl.uniform1i(lastU['u_src'], 0)
+      gl.uniform1i(gl.getUniformLocation(this.passThroughProgram, 'u_src'), 0)
       this.drawQuad(gl)
     }
 

@@ -146,6 +146,28 @@ export default function Player({
     playback.videoRef as React.RefObject<HTMLVideoElement | null>,
   )
 
+  // 增强画布 contain 显示：objectFit 对 canvas 无效，手动按容器尺寸等比缩放并居中
+  useEffect(() => {
+    const canvas = enh.enhanceCanvasRef.current
+    if (!canvas) return
+    const container = canvas.parentElement as HTMLElement | null
+    if (!container) return
+    const update = () => {
+      if (!canvas.width || !canvas.height) return
+      const cw = container.clientWidth
+      const ch = container.clientHeight
+      if (!cw || !ch) return
+      const scale = Math.min(cw / canvas.width, ch / canvas.height)
+      canvas.style.width = `${Math.floor(canvas.width * scale)}px`
+      canvas.style.height = `${Math.floor(canvas.height * scale)}px`
+    }
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(container)
+    ro.observe(canvas) // canvas.width/height 变化（预设切换）时重算
+    return () => ro.disconnect()
+  }, [enh.enhanceCanvasRef])
+
   // 音频管线
   const audio = useAudio(filePath)
 
@@ -690,11 +712,11 @@ export default function Player({
           onConfigChange={danmaku.handleDanmakuConfigChange}
         />
 
-        {/* Anime4K 增强画布 */}
+        {/* Anime4K 增强画布（尺寸由 contain 计算 effect 设置，居中显示） */}
         <canvas
           ref={enh.enhanceCanvasRef}
-          className="absolute inset-0 w-full h-full"
-          style={{ display: enh.enhanceEnabled ? 'block' : 'none', objectFit: 'contain' }}
+          className="absolute inset-0 m-auto"
+          style={{ display: enh.enhanceEnabled ? 'block' : 'none' }}
         />
 
         {/* 截图用隐藏 canvas */}
