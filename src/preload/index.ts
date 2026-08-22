@@ -284,6 +284,27 @@ const electronAPI = {
 
   subtitleSetStyle: (style: any): Promise<void> => ipcRenderer.invoke('subtitle:setStyle', style),
 
+  // 全局播放偏好（设置页「播放」tab）
+  getPlaybackSettings: (): Promise<{
+    defaultVolume: number
+    defaultSpeed: number
+    autoNextEp: boolean
+    saveProgressInterval: number
+    skipShortcutDefault: boolean
+  }> => ipcRenderer.invoke('settings:getPlayback'),
+
+  setPlaybackSettings: (settings: {
+    defaultVolume?: number
+    defaultSpeed?: number
+    autoNextEp?: boolean
+    saveProgressInterval?: number
+    skipShortcutDefault?: boolean
+  }): Promise<void> => ipcRenderer.invoke('settings:setPlayback', settings),
+
+  // 应用版本信息（关于页显示）
+  getAppVersion: (): Promise<{ version: string; electron: string }> =>
+    ipcRenderer.invoke('app:getVersion'),
+
   // Whisper 语音识别
   whisperStatus: (): Promise<{
     available: boolean

@@ -101,6 +101,14 @@ interface StoreData {
   }>
   /** 扫描根目录列表（多根扫描） */
   scanRoots: string[]
+  /** 全局播放偏好（设置页「播放」tab，持久化） */
+  playbackSettings: {
+    defaultVolume: number // 默认音量 0-100
+    defaultSpeed: number // 默认倍速
+    autoNextEp: boolean // 播放结束时自动播下一集
+    saveProgressInterval: number // 进度保存间隔（秒）
+    skipShortcutDefault: boolean // 默认开启 OP/ED 跳过（连按 3 次 → 跳过 80 秒）
+  }
 }
 
 let data: StoreData = {
@@ -124,6 +132,13 @@ let data: StoreData = {
   favorites: [],
   playlists: [],
   scanRoots: [],
+  playbackSettings: {
+    defaultVolume: 80,
+    defaultSpeed: 1,
+    autoNextEp: true,
+    saveProgressInterval: 5,
+    skipShortcutDefault: false,
+  },
 }
 let loaded = false
 let storeReady = false
@@ -163,6 +178,9 @@ function ensureReady(): void {
       data.favorites = raw.favorites || []
       data.playlists = raw.playlists || []
       data.scanRoots = raw.scanRoots || []
+      if (raw.playbackSettings) {
+        data.playbackSettings = { ...data.playbackSettings, ...raw.playbackSettings }
+      }
     }
   } catch (err) {
     // JSON 损坏时备份原始文件，避免静默丢数据
@@ -196,6 +214,13 @@ function ensureReady(): void {
       favorites: [],
       playlists: [],
       scanRoots: [],
+      playbackSettings: {
+        defaultVolume: 80,
+        defaultSpeed: 1,
+        autoNextEp: true,
+        saveProgressInterval: 5,
+        skipShortcutDefault: false,
+      },
     }
   }
   storeReady = true
@@ -641,5 +666,26 @@ export function removeScanRoot(root: string): void {
 export function setScanRoots(roots: string[]): void {
   ensureReady()
   data.scanRoots = roots
+  save()
+}
+
+// === Playback Settings（全局播放偏好） ===
+
+export interface PlaybackSettingsData {
+  defaultVolume: number
+  defaultSpeed: number
+  autoNextEp: boolean
+  saveProgressInterval: number
+  skipShortcutDefault: boolean
+}
+
+export function getPlaybackSettings(): PlaybackSettingsData {
+  ensureReady()
+  return { ...data.playbackSettings }
+}
+
+export function setPlaybackSettings(settings: Partial<PlaybackSettingsData>): void {
+  ensureReady()
+  data.playbackSettings = { ...data.playbackSettings, ...settings }
   save()
 }

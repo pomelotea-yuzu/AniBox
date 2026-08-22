@@ -57,11 +57,12 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
     dualSubtitleGap: 4,
   })
 
-  // 播放偏好
+  // 播放偏好（持久化到 anibox-store.json playbackSettings）
   const [defaultVolume, setDefaultVolume] = useState(80)
   const [defaultSpeed, setDefaultSpeed] = useState(1)
   const [autoNextEp, setAutoNextEp] = useState(true)
   const [saveProgressInterval, setSaveProgressInterval] = useState(5)
+  const [skipShortcutDefault, setSkipShortcutDefault] = useState(false)
 
   // AI API
   const [apiKey, setApiKey] = useState('')
@@ -75,6 +76,8 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
   const [qbSavepath, setQbSavepath] = useState('')
   const [qbStatus, setQbStatus] = useState('')
   const [qbSaved, setQbSaved] = useState(false)
+  // 应用版本（关于页）
+  const [appInfo, setAppInfo] = useState<{ version: string; electron: string } | null>(null)
 
   // 加载当前设置
   useEffect(() => {
@@ -102,6 +105,24 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
         }
       })
       .catch(() => {})
+    // 播放偏好
+    window.electronAPI
+      .getPlaybackSettings()
+      .then((s) => {
+        if (s) {
+          setDefaultVolume(s.defaultVolume)
+          setDefaultSpeed(s.defaultSpeed)
+          setAutoNextEp(s.autoNextEp)
+          setSaveProgressInterval(s.saveProgressInterval)
+          setSkipShortcutDefault(s.skipShortcutDefault)
+        }
+      })
+      .catch(() => {})
+    // 应用版本
+    window.electronAPI
+      .getAppVersion()
+      .then((v) => setAppInfo(v || null))
+      .catch(() => {})
   }, [visible])
 
   // 保存字幕样式
@@ -112,6 +133,20 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
       window.electronAPI.subtitleSetStyle(merged).catch(() => {})
     },
     [subStyle],
+  )
+
+  // 播放偏好：改动即存（store 层 500ms debounce 落盘）
+  const savePlayback = useCallback(
+    (partial: {
+      defaultVolume?: number
+      defaultSpeed?: number
+      autoNextEp?: boolean
+      saveProgressInterval?: number
+      skipShortcutDefault?: boolean
+    }) => {
+      window.electronAPI.setPlaybackSettings(partial).catch(() => {})
+    },
+    [],
   )
 
   // Esc 关闭
@@ -314,7 +349,11 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
                   min="20"
                   max="100"
                   value={defaultVolume}
-                  onChange={(e) => setDefaultVolume(Number(e.target.value))}
+                  onChange={(e) => {
+                    const v = Number(e.target.value)
+                    setDefaultVolume(v)
+                    savePlayback({ defaultVolume: v })
+                  }}
                   className="w-full accent-anibox-accent"
                 />
               </div>
@@ -324,7 +363,10 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
                   {[0.5, 0.75, 1, 1.25, 1.5, 2].map((s) => (
                     <button
                       key={s}
-                      onClick={() => setDefaultSpeed(s)}
+                      onClick={() => {
+                        setDefaultSpeed(s)
+                        savePlayback({ defaultSpeed: s })
+                      }}
                       className={`px-2 py-1 text-xs rounded border transition-colors ${
                         defaultSpeed === s
                           ? 'border-anibox-accent text-anibox-accent bg-anibox-accent/5'
@@ -340,11 +382,31 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
                 <input
                   type="checkbox"
                   checked={autoNextEp}
-                  onChange={(e) => setAutoNextEp(e.target.checked)}
+                  onChange={(e) => {
+                    setAutoNextEp(e.target.checked)
+                    savePlayback({ autoNextEp: e.target.checked })
+                  }}
                   className="accent-anibox-accent w-4 h-4"
                 />
                 <span className="text-xs text-anibox-text">自动播放下一集</span>
               </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={skipShortcutDefault}
+                  onChange={(e) => {
+                    setSkipShortcutDefault(e.target.checked)
+                    savePlayback({ skipShortcutDefault: e.target.checked })
+                  }}
+                  className="accent-anibox-accent w-4 h-4"
+                />
+                <span className="text-xs text-anibox-text">默认开启 OP/ED 跳过</span>
+              </label>
+              <p className="text-[10px] text-anibox-text-muted leading-relaxed">
+                开启后每次播放默认启用「⏭ 跳过」：播放中连按 3 次
+                <kbd className="px-1 py-0.5 bg-anibox-bg rounded text-[10px] font-mono">→</kbd>
+                跳过 80 秒（含前两次快进，总效果约 90 秒）。仍可在控制条随时手动开关。
+              </p>
               <div>
                 <label className="text-xs text-anibox-text-muted block mb-1">
                   进度保存间隔 ({saveProgressInterval} 秒)
@@ -354,7 +416,11 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
                   min="1"
                   max="30"
                   value={saveProgressInterval}
-                  onChange={(e) => setSaveProgressInterval(Number(e.target.value))}
+                  onChange={(e) => {
+                    const v = Number(e.target.value)
+                    setSaveProgressInterval(v)
+                    savePlayback({ saveProgressInterval: v })
+                  }}
                   className="w-full accent-anibox-accent"
                 />
               </div>
@@ -524,7 +590,7 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
 
           {/* === 关于 === */}
           {tab === 'about' && (
-            <div className="text-center space-y-3 py-4">
+            <div className="text-center space-y-4 py-4">
               <div className="w-16 h-16 rounded-2xl bg-anibox-bg border border-anibox-border mx-auto flex items-center justify-center">
                 <svg
                   width="32"
@@ -540,16 +606,36 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
                   <circle cx="8" cy="6.5" r="0.8" fill="currentColor" stroke="none" />
                 </svg>
               </div>
-              <h3 className="text-sm font-semibold text-anibox-text">AniBox</h3>
-              <p className="text-xs text-anibox-text-muted">本地番剧库管理 & 播放器</p>
+              <div>
+                <h3 className="text-sm font-semibold text-anibox-text">AniBox</h3>
+                <p className="text-xs text-anibox-text-muted mt-0.5">本地番剧库管理 & 播放器</p>
+              </div>
+              <div className="flex flex-wrap justify-center gap-1.5 max-w-[420px] mx-auto">
+                {[
+                  'HTML5 + libmpv + mpv 三引擎',
+                  'Anime4K 实时超分',
+                  'AI 翻译 · DeepSeek',
+                  '新番时间表',
+                  '弹幕',
+                  '双语字幕',
+                  'OP/ED 一键跳过',
+                  'AniList + Bangumi 刮削',
+                  'AnimeGarden 资源下载',
+                ].map((f) => (
+                  <span
+                    key={f}
+                    className="text-[10px] px-2 py-1 rounded-full bg-anibox-bg border border-anibox-border text-anibox-text-muted"
+                  >
+                    {f}
+                  </span>
+                ))}
+              </div>
               <p className="text-[11px] text-anibox-text-muted/60">
-                Electron 33 · React 19 · Tailwind CSS
-                <br />
-                莫兰迪配色 · Anime4K 画质增强
-                <br />
-                HTML5 Video + mpv 双引擎
+                Electron {appInfo?.electron || '33'} · React 19 · Tailwind CSS
               </p>
-              <p className="text-[10px] text-anibox-text-muted/40">v0.1.0 · 2026</p>
+              <p className="text-[10px] text-anibox-text-muted/40">
+                v{appInfo?.version || '1.1.4'} · 2026 · MIT License
+              </p>
             </div>
           )}
         </div>

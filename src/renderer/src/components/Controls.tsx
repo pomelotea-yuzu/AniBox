@@ -232,6 +232,10 @@ export default function Controls({
   const [showEpisodePanel, setShowEpisodePanel] = useState(false)
   const [customSpeed, setCustomSpeed] = useState('')
   const [showVolumeSlider, setShowVolumeSlider] = useState(false)
+  // 弹幕输入（受控，避免 getElementById 跨组件取值/多实例 id 冲突）
+  const [danmakuText, setDanmakuText] = useState('')
+  const [danmakuColor, setDanmakuColor] = useState('#FFFFFF')
+  const [danmakuMode, setDanmakuMode] = useState('scroll')
   const speedMenuRef = useRef<HTMLDivElement>(null)
   const subtitleMenuRef = useRef<HTMLDivElement>(null)
   const audioMenuRef = useRef<HTMLDivElement>(null)
@@ -1190,14 +1194,14 @@ export default function Controls({
                   <div className="flex gap-1">
                     <input
                       type="color"
-                      defaultValue="#FFFFFF"
+                      value={danmakuColor}
+                      onChange={(e) => setDanmakuColor(e.target.value)}
                       className="w-7 h-6 bg-transparent border border-neutral-600 rounded cursor-pointer shrink-0"
-                      id="danmaku-color"
                     />
                     <select
-                      defaultValue="scroll"
+                      value={danmakuMode}
+                      onChange={(e) => setDanmakuMode(e.target.value)}
                       className="bg-white/5 border border-neutral-600 rounded px-1 text-[11px] text-white shrink-0"
-                      id="danmaku-mode"
                     >
                       <option value="scroll">滚动</option>
                       <option value="top">顶部</option>
@@ -1206,26 +1210,21 @@ export default function Controls({
                     <input
                       type="text"
                       placeholder="说点什么..."
+                      value={danmakuText}
+                      onChange={(e) => setDanmakuText(e.target.value)}
                       className="flex-1 bg-white/5 border border-neutral-600 rounded px-2 py-0.5 text-[11px] text-white placeholder:text-white/30 focus:outline-none focus:border-anibox-accent"
-                      id="danmaku-input"
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          const i = e.target as HTMLInputElement
-                          const c = document.getElementById('danmaku-color') as HTMLInputElement
-                          const m = document.getElementById('danmaku-mode') as HTMLSelectElement
-                          onSendDanmaku(i.value, c?.value || '#FFFFFF', m?.value || 'scroll')
-                          i.value = ''
+                        if (e.key === 'Enter' && danmakuText.trim()) {
+                          onSendDanmaku(danmakuText.trim(), danmakuColor, danmakuMode)
+                          setDanmakuText('')
                         }
                       }}
                     />
                     <button
                       onClick={() => {
-                        const i = document.getElementById('danmaku-input') as HTMLInputElement
-                        const c = document.getElementById('danmaku-color') as HTMLInputElement
-                        const m = document.getElementById('danmaku-mode') as HTMLSelectElement
-                        if (i && c && m) {
-                          onSendDanmaku(i.value, c.value || '#FFFFFF', m.value || 'scroll')
-                          i.value = ''
+                        if (danmakuText.trim()) {
+                          onSendDanmaku(danmakuText.trim(), danmakuColor, danmakuMode)
+                          setDanmakuText('')
                         }
                       }}
                       className="text-[11px] px-2 bg-anibox-accent hover:bg-anibox-accent-hover text-white rounded shrink-0"

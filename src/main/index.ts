@@ -1165,6 +1165,20 @@ function registerIpcHandlers(): void {
     store.setSubtitleStyle(style)
   })
 
+  // 全局播放偏好（设置页「播放」tab）
+  ipcMain.handle('settings:getPlayback', () => {
+    return store.getPlaybackSettings()
+  })
+
+  ipcMain.handle('settings:setPlayback', (_e, settings: any) => {
+    store.setPlaybackSettings(settings)
+  })
+
+  // 应用版本信息（关于页显示；与 package.json version 同步）
+  ipcMain.handle('app:getVersion', () => {
+    return { version: app.getVersion(), electron: process.versions.electron }
+  })
+
   // ===== Whisper 语音识别 =====
   ipcMain.handle('whisper:status', () => {
     return { ...getWhisperStatus(), defaultPaths: getDefaultWhisperPaths() }

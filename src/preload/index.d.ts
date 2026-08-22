@@ -163,6 +163,21 @@ export interface ElectronAPI {
     dualSubtitleGap: number
   }>
   subtitleSetStyle: (style: any) => Promise<void>
+  getPlaybackSettings: () => Promise<{
+    defaultVolume: number
+    defaultSpeed: number
+    autoNextEp: boolean
+    saveProgressInterval: number
+    skipShortcutDefault: boolean
+  }>
+  setPlaybackSettings: (settings: {
+    defaultVolume?: number
+    defaultSpeed?: number
+    autoNextEp?: boolean
+    saveProgressInterval?: number
+    skipShortcutDefault?: boolean
+  }) => Promise<void>
+  getAppVersion: () => Promise<{ version: string; electron: string }>
   audioGetPrefs: (
     seriesId: string,
   ) => Promise<{ audioIndex: number; audioDelay: number; language?: string } | null>

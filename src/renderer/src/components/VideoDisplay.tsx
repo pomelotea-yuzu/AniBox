@@ -95,7 +95,7 @@ const VideoDisplay = forwardRef<VideoDisplayHandle, VideoDisplayProps>(
           visibility: 'hidden',
           pointerEvents: 'none',
         }}
-        preload="auto"
+        preload="metadata"
         muted
       />
     )

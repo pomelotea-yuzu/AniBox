@@ -122,6 +122,10 @@ export function useSubtitles(opts: UseSubtitlesOptions) {
     loadSubtitles()
     return () => {
       cancelled = true
+      // 卸载/重跑时回收本批 blob URL（Player 按 filePath 重挂载，逐集泄漏会累积内存）
+      // 竞态安全：取消标记生效后异步回调不会再 push 新 URL
+      for (const url of blobUrlsRef.current) URL.revokeObjectURL(url)
+      blobUrlsRef.current = []
     }
   }, [subtitleTracks, filePath])
 

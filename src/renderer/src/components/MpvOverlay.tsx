@@ -80,7 +80,7 @@ export default function MpvOverlay({
 
     return () => {
       offMpvEventRef.current = null
-      window.electronAPI.mpvQuit()
+      window.electronAPI.mpvQuit().catch(() => {})
       offMpvEvent()
       window.removeEventListener('click', onClick)
     }
@@ -147,7 +147,10 @@ export default function MpvOverlay({
                   ? 'bg-anibox-accent/20 text-anibox-accent'
                   : 'hover:bg-anibox-accent/10 text-anibox-text'
               }`}
-              onClick={() => handleCommand(['set_property', 'sid', 'no'])}
+              onClick={(e) => {
+                e.stopPropagation()
+                handleCommand(['set_property', 'sid', 'no'])
+              }}
             >
               关闭字幕
             </button>
@@ -159,7 +162,10 @@ export default function MpvOverlay({
                     ? 'bg-anibox-accent/20 text-anibox-accent'
                     : 'hover:bg-anibox-accent/10 text-anibox-text'
                 }`}
-                onClick={() => handleCommand(['set_property', 'sid', t.id])}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleCommand(['set_property', 'sid', t.id])
+                }}
               >
                 {t.title || t.lang || `轨道 ${t.id}`}
                 <span className="text-[10px] text-anibox-text-muted/60 ml-1">
@@ -184,7 +190,10 @@ export default function MpvOverlay({
                     ? 'bg-anibox-accent/20 text-anibox-accent'
                     : 'hover:bg-anibox-accent/10 text-anibox-text'
                 }`}
-                onClick={() => handleCommand(['set_property', 'aid', t.id])}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleCommand(['set_property', 'aid', t.id])
+                }}
               >
                 {t.title || t.lang || `音轨 ${t.id}`}
               </button>

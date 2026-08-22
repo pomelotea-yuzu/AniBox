@@ -34,6 +34,8 @@ export default function App() {
 
   const playbackRef = useRef({ position: 0, duration: 0, isPlaying: false })
   const currentEpIndexRef = useRef(-1)
+  // 全局播放偏好（进度保存间隔；播放器内默认音量/倍速/自动下一集由 Player/MpvCanvas 自行读取）
+  const playbackSettingsRef = useRef<any>(null)
   // 音频编码兼容性缓存：key = 集文件路径，value = HTML5 是否可播放。
   // 避免连播/切集时逐集重复检测导致「跳一下」（问题 #3）。
   const audioSupportCacheRef = useRef<Map<string, boolean>>(new Map())
@@ -53,6 +55,16 @@ export default function App() {
       }
       setView('empty')
     })()
+  }, [])
+
+  // 加载全局播放偏好（进度保存间隔用）
+  useEffect(() => {
+    window.electronAPI
+      .getPlaybackSettings()
+      .then((s) => {
+        if (s) playbackSettingsRef.current = s
+      })
+      .catch(() => {})
   }, [])
 
   // 扫描所有根目录
@@ -279,10 +291,12 @@ export default function App() {
 
   useEffect(() => {
     if (!currentVideo) return
+    // 进度保存间隔读全局设置（设置页「播放」tab；默认 5s）
+    const intervalMs = Math.max(1, playbackSettingsRef.current?.saveProgressInterval || 5) * 1000
     const interval = setInterval(() => {
       if (playbackRef.current.position > 0)
         window.electronAPI.savePosition(currentVideo.filePath, playbackRef.current.position)
-    }, 5000)
+    }, intervalMs)
     return () => clearInterval(interval)
   }, [currentVideo])
 

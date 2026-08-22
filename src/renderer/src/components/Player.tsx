@@ -75,6 +75,10 @@ export default function Player({
   })
   const showToast = useCallback((msg: string) => toast.localShowToast(msg), [toast.localShowToast])
 
+  // 全局播放偏好：挂载时异步拉取，供 usePlayback（默认音量/倍速/自动下一集）与
+  // OP/ED 默认开关使用；keydown handler 空依赖下经 ref 访问最新值
+  const playbackSettingsRef = useRef<any>(null)
+
   // 核心播放
   const playback = usePlayback({
     filePath,
@@ -89,10 +93,42 @@ export default function Player({
     onPlayStateChange,
     showToast,
     subtitleDisplayTracks: [], // will be updated later
+    settingsRef: playbackSettingsRef,
   })
 
   // OP/ED 跳过（快捷键模式：连按 3 次 → 跳过 80 秒）
   const skiptimes = useSkipTimes()
+
+  // 全局播放偏好：挂载时异步拉取，供 usePlayback（默认音量/倍速/自动下一集）与
+  // OP/ED 默认开关使用；keydown handler 空依赖下经 ref 访问最新值
+  useEffect(() => {
+    let cancelled = false
+    window.electronAPI
+      .getPlaybackSettings()
+      .then((s) => {
+        if (cancelled || !s) return
+        playbackSettingsRef.current = s
+        // 默认开启 OP/ED 跳过（设置页「播放」tab）
+        if (s.skipShortcutDefault) skiptimes.setSkipShortcutEnabled(true)
+        // 竞争兜底：若 loadedmetadata 早于设置返回触发（onMetaLoaded 已按 100%/1x 应用），
+        // 这里视频已就绪时再补一次默认音量/倍速
+        const v = playback.videoRef.current
+        if (v && v.readyState >= 1) {
+          const vol = typeof s.defaultVolume === 'number' ? s.defaultVolume / 100 : 1
+          if (v.muted) v.muted = false
+          v.volume = vol
+          v.playbackRate = typeof s.defaultSpeed === 'number' ? s.defaultSpeed : 1
+          playback.setVolume(vol)
+          playback.setPlaybackRate(v.playbackRate)
+        }
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [skiptimes.setSkipShortcutEnabled])
+
   // keydown handler 空依赖，经 ref 访问最新开关
   const skipShortcutEnabledRef = useRef(skiptimes.skipShortcutEnabled)
   useEffect(() => {
@@ -282,6 +318,14 @@ export default function Player({
           break
         case 'ArrowRight':
           e.preventDefault()
+          if (e.repeat) {
+            // 长按重复：只做普通快进，不参与三连按判定（否则长按会误触发 OP/ED 跳过、且 seek 被抑制）
+            if (e.shiftKey) v.currentTime = Math.min(v.duration || 0, v.currentTime + 0.1)
+            else if (e.ctrlKey || e.metaKey)
+              v.currentTime = Math.min(v.duration || 0, v.currentTime + 10)
+            else v.currentTime = Math.min(v.duration || 0, v.currentTime + 5)
+            break
+          }
           {
             // 三连按右键（600ms 窗口）= 跳过 80 秒（OP/ED 固定时长，前两次已各快进 5 秒，
             // 合计约 85 秒）；开关关闭时回退普通快进
@@ -793,7 +837,7 @@ export default function Player({
           onAspectCycle={extras.cycleAspectRatio}
           onScreenshot={extras.handleScreenshot}
           onPiP={extras.handlePiP}
-          isPiP={extras.isPiP}
+          isPiP={playback.isPiP}
           playMode={playMode}
           onCyclePlayMode={onCyclePlayMode}
           loopA={extras.loopA}

@@ -89,6 +89,8 @@ export default function MpvCanvas({
   const [audioDelay, setAudioDelay] = useState(0)
   // OP/ED 快捷键跳过开关（libmpv 独立维护，与 HTML5 的 useSkipTimes 语义一致）
   const [skipShortcutEnabled, setSkipShortcutEnabled] = useState(false)
+  // 全局播放偏好（设置页「播放」tab；默认音量/自动下一集/进度保存间隔）
+  const playbackSettingsRef = useRef<any>(null)
 
   // 容器尺寸变化 / 帧尺寸变化时重算 canvas 显示尺寸（contain 等比放大）
   useEffect(() => {
@@ -177,6 +179,11 @@ export default function MpvCanvas({
   // AB 循环（mpv 原生 ab-loop-a / ab-loop-b 属性）
   const loopARef = useRef<number | null>(null)
   const loopBRef = useRef<number | null>(null)
+  // state 镜像：ProgressBar 高亮需即时刷新（ref 变化不触发渲染）
+  const [abLoop, setAbLoop] = useState<{ a: number | null; b: number | null }>({
+    a: null,
+    b: null,
+  })
 
   // 进度记忆：libmpv 也要保存播放进度（供首页「继续观看」使用），与 HTML5 播放器保持一致。
   // 之前 libmpv 链路完全不写进度，导致重进软件后「继续观看」没有上次播放记录。
@@ -190,9 +197,21 @@ export default function MpvCanvas({
       const p = timePosRef.current
       if (p > 0) window.electronAPI.savePosition(filePath, p).catch(() => {})
     }
-    const timer = setInterval(saveProgress, 5000)
+    // 进度保存间隔读全局设置（异步加载，默认 5s 兜底；加载完成后重建定时器）
+    let timer: ReturnType<typeof setInterval> | null = null
+    const start = (ms: number) => {
+      if (timer) clearInterval(timer)
+      timer = setInterval(saveProgress, ms)
+    }
+    start(5000)
+    window.electronAPI
+      .getPlaybackSettings()
+      .then((s) => {
+        if (s?.saveProgressInterval) start(Math.max(1, s.saveProgressInterval) * 1000)
+      })
+      .catch(() => {})
     return () => {
-      clearInterval(timer)
+      if (timer) clearInterval(timer)
       saveProgress() // 卸载前保存最终进度（返回/切集/连播到下一集都会触发）
     }
   }, [filePath])
@@ -213,6 +232,12 @@ export default function MpvCanvas({
     if (playModeRef.current === 'loop-one') {
       // 单集循环：重新加载当前文件（不重启进程）
       window.electronAPI.mpvCommand(['loadfile', filePath, 'replace']).catch(() => {})
+      // end-file(eof) 与 eof-reached 可能各触发一次，延迟重置去重标记避免重复 loadfile
+      setTimeout(() => {
+        endTriggeredRef.current = false
+      }, 800)
+    } else if (playbackSettingsRef.current?.autoNextEp === false) {
+      // 自动下一集已关闭：停在结尾（keep-open=yes 生效），不切集、不关闭播放器
       endTriggeredRef.current = false
     } else if (onNextEpisodeRef.current) {
       offMpvEventRef.current?.()
@@ -258,6 +283,25 @@ export default function MpvCanvas({
     handleCommand(['set_property', 'mute', next ? 'yes' : 'no'])
   }, [handleCommand])
 
+  // 应用全局播放偏好：默认音量（mpv volume）+ 默认开启 OP/ED 跳过
+  useEffect(() => {
+    let cancelled = false
+    window.electronAPI
+      .getPlaybackSettings()
+      .then((s) => {
+        if (cancelled || !s) return
+        playbackSettingsRef.current = s
+        if (s.skipShortcutDefault) setSkipShortcutEnabled(true)
+        if (typeof s.defaultVolume === 'number' && s.defaultVolume >= 0) {
+          setVolumeAll(s.defaultVolume)
+        }
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [setVolumeAll])
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
@@ -287,6 +331,12 @@ export default function MpvCanvas({
         handleCommandRef.current(['seek', `-${step}`, 'relative'])
       } else if (k === 'ArrowRight') {
         e.preventDefault()
+        // 长按重复：只做普通快进，不参与三连按判定（否则长按会误触发 OP/ED 跳过、且 seek 被抑制）
+        if (e.repeat) {
+          const step = e.ctrlKey ? 10 : 5
+          handleCommandRef.current(['seek', String(step), 'relative'])
+          return
+        }
         // 三连按右键（600ms 窗口）= 跳过 80 秒（受 ⏭ 开关控制，前两次已各快进 5 秒），未连按时普通快进
         const now = Date.now()
         rightPressesRef.current = rightPressesRef.current.filter((t) => now - t < 600)
@@ -356,11 +406,13 @@ export default function MpvCanvas({
         if (loopARef.current !== null) {
           loopARef.current = null
           loopBRef.current = null
+          setAbLoop({ a: null, b: null })
           handleCommandRef.current(['set_property', 'ab-loop-a', 'no'])
           showToastMsg('AB 循环已取消')
         } else {
           loopARef.current = t
           loopBRef.current = null
+          setAbLoop({ a: t, b: null })
           handleCommandRef.current(['set_property', 'ab-loop-a', String(t)])
           showToastMsg(`A 点: ${fmt(t)}`)
         }
@@ -369,6 +421,7 @@ export default function MpvCanvas({
         const t = timePosRef.current
         if (loopARef.current !== null && t > loopARef.current) {
           loopBRef.current = t
+          setAbLoop({ a: loopARef.current, b: t })
           handleCommandRef.current(['set_property', 'ab-loop-b', String(t)])
           showToastMsg(`B 点: ${fmt(t)} — AB 循环中`)
         }
@@ -905,8 +958,8 @@ export default function MpvCanvas({
         onAudioChange={handleAudioChange}
         onCyclePlayMode={() => onCyclePlayModeRef.current?.()}
         playMode={playMode}
-        loopA={loopARef.current}
-        loopB={loopBRef.current}
+        loopA={abLoop.a}
+        loopB={abLoop.b}
         previewTime={hoverTime}
         previewImage={previewImage}
         onPreviewHover={handlePreviewHover}

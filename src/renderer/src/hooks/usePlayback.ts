@@ -18,6 +18,8 @@ interface UsePlaybackOptions {
   onPlayStateChange: (isPlaying: boolean) => void
   showToast: (msg: string) => void
   subtitleDisplayTracks: SubtitleTrackInfo[]
+  /** 全局播放偏好（设置页「播放」tab；读取默认音量/倍速/自动下一集） */
+  settingsRef?: React.RefObject<any | null>
 }
 
 export function usePlayback(opts: UsePlaybackOptions) {
@@ -354,14 +356,17 @@ export function usePlayback(opts: UsePlaybackOptions) {
     const onMetaLoaded = () => {
       console.log('[AniBox] loadedmetadata:', v.duration, v.videoWidth, 'x', v.videoHeight)
       setIsLoading(false)
-      // 确保音量和静音状态正常（防止浏览器意外静音）
-      if (v.muted || v.volume === 0) {
-        console.warn('[AniBox] Video muted or zero volume on load, resetting')
-        v.muted = false
-        v.volume = 1
-        setIsMuted(false)
-        setVolume(1)
-      }
+      // 应用全局默认音量（设置页「播放」tab），并防止浏览器意外静音
+      const ps = opts.settingsRef?.current
+      const defaultVol = typeof ps?.defaultVolume === 'number' ? ps.defaultVolume / 100 : 1
+      v.muted = false
+      v.volume = defaultVol
+      setIsMuted(false)
+      setVolume(defaultVol)
+      // 应用默认倍速
+      const defaultSpeed = typeof ps?.defaultSpeed === 'number' ? ps.defaultSpeed : 1
+      v.playbackRate = defaultSpeed
+      setPlaybackRate(defaultSpeed)
       if (v.videoWidth === 0 && v.videoHeight === 0) {
         console.warn('[AniBox] Zero-dimension, falling back to mpv')
         setVideoError('编码不兼容，切换 mpv 播放...')
@@ -440,7 +445,9 @@ export function usePlayback(opts: UsePlaybackOptions) {
         v.play().catch(() => {})
         return
       }
-      if (onNextEpisode && nextEpisodeTitle) {
+      // 自动播放下一集受全局设置控制（设置页「播放」tab → 自动播放下一集）
+      const autoNext = opts.settingsRef?.current?.autoNextEp ?? true
+      if (autoNext && onNextEpisode && nextEpisodeTitle) {
         showToast(`下一话: ${nextEpisodeTitle}`)
         setTimeout(() => onNextEpisode(), 400)
       }
