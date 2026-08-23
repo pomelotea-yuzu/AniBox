@@ -148,7 +148,7 @@ let data: StoreData = {
   },
   streamSettings: {
     enabled: false,
-    port: 8321,
+    port: 17830,
     requireToken: true,
     token: '',
   },
@@ -239,7 +239,7 @@ function ensureReady(): void {
       },
       streamSettings: {
         enabled: false,
-        port: 8321,
+        port: 17830,
         requireToken: true,
         token: '',
       },

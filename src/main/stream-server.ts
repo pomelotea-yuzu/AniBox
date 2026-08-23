@@ -412,22 +412,33 @@ export function handleRequest(req: IncomingMessage, res: ServerResponse): void {
 
 // ---------- 生命周期 ----------
 
-/** 启动服务器。listen 完成（或失败）后才 resolve，保证调用方拿到的是真实运行状态 */
+/**
+ * 启动服务器。listen 完成（或失败）后才 resolve，保证调用方拿到的是真实运行状态。
+ * Windows 上 EACCES 常见原因是端口落在系统保留段（Hyper-V/WSL 动态范围，如 8291-8390），
+ * 与 EADDRINUSE 一样自动 +1 跳端口，成功后把实际端口回写 store。
+ */
+const MAX_PORT_RETRY = 200
+
 export function startStreamServer(cfg: { port: number }): Promise<StreamServerState> {
   if (server) return Promise.resolve(state)
-  const base = cfg.port || 8321
+  const base = cfg.port || 17830
   server = createServer(handleRequest)
   return new Promise((resolve) => {
     server!.on('error', (e: NodeJS.ErrnoException) => {
-      if (e.code === 'EADDRINUSE') {
-        // 端口被占用 → 自动 +1 重试（最多 10 次）
+      if (e.code === 'EADDRINUSE' || e.code === 'EACCES') {
+        // 端口被占用/被系统保留 → 自动 +1 重试（最多 200 次，足以跳过保留段）
         const next = (state.port || base) + 1
-        if (next <= base + 10) {
+        if (next <= base + MAX_PORT_RETRY) {
           stopStreamServer()
           state = { running: true, port: next, urls: [] }
           resolve(startStreamServer({ port: next }))
         } else {
-          state = { running: false, port: 0, urls: [], error: `端口 ${base}~${base + 10} 均被占用` }
+          state = {
+            running: false,
+            port: 0,
+            urls: [],
+            error: `端口 ${base}~${base + MAX_PORT_RETRY} 均不可用（可能被系统保留），请在设置里换个端口`,
+          }
           server = null
           resolve(state)
         }
@@ -441,6 +452,15 @@ export function startStreamServer(cfg: { port: number }): Promise<StreamServerSt
       const addr = server?.address()
       const port = typeof addr === 'object' && addr ? addr.port : base
       state = { running: true, port, urls: getLanUrls(port) }
+      if (port !== cfg.port) {
+        // 自动跳过了被占/被保留端口 → 回写 store，下次启动直接用可用端口
+        try {
+          store.setStreamSettings({ port })
+        } catch {
+          /* ok */
+        }
+        console.log(`[AniBox] 局域网串流: 端口 ${cfg.port} 不可用，已自动改用 ${port}`)
+      }
       console.log('[AniBox] 局域网串流已启动:', state.urls.join(', '))
       resolve(state)
     })
