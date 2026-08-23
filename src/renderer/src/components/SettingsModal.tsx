@@ -861,7 +861,7 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
                 Electron {appInfo?.electron || '33'} · React 19 · Tailwind CSS
               </p>
               <p className="text-[10px] text-anibox-text-muted/40">
-                v{appInfo?.version || '1.1.4'} · 2026 · MIT License
+                v{appInfo?.version || '1.2.0'} · 2026 · MIT License
               </p>
             </div>
           )}
