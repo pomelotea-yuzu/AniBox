@@ -90,7 +90,7 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
     urls: string[]
     error?: string
   }>({ running: false, port: 0, urls: [] })
-  const [streamSaved, setStreamSaved] = useState(false)
+  const [streamSaved, setStreamSaved] = useState('') // 当前已复制的 URL（只高亮被点击的那一个）
   const [cacheInfo, setCacheInfo] = useState('')
   const [engineInfo, setEngineInfo] = useState<any>(null)
 
@@ -736,18 +736,20 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
                         key={u}
                         onClick={() => {
                           navigator.clipboard?.writeText(u).catch(() => {})
-                          setStreamSaved(true)
-                          setTimeout(() => setStreamSaved(false), 1500)
+                          setStreamSaved(u)
+                          setTimeout(() => setStreamSaved(''), 1500)
                         }}
                         className="w-full flex items-center justify-between px-3 py-2 text-xs bg-anibox-bg border border-anibox-border rounded-lg text-anibox-accent font-mono hover:border-anibox-accent/40 transition-colors"
                       >
                         <span>{u}</span>
-                        <span className="text-anibox-text-muted">{streamSaved ? '✓ 已复制' : '复制'}</span>
+                        <span className="text-anibox-text-muted">{streamSaved === u ? '✓ 已复制' : '复制'}</span>
                       </button>
                     ))}
                   </div>
                   <p className="text-[10px] text-anibox-text-muted mt-1">
                     手机与电脑需在同一局域网；若无法访问，请允许 Windows 防火墙放行该端口。
+                    <br />
+                    有多个地址时，选<b className="text-anibox-text">手机能连上的那个</b>（虚拟网卡/有线网卡地址手机通常访问不了）。
                   </p>
                 </div>
               )}

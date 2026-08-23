@@ -377,6 +377,8 @@ function renderPlayer(hash){
   }
 
   video.addEventListener("error", ()=>{
+    const err = video.error;
+    const info = err ? `（code=${err.code}${err.message ? " · " + err.message : ""}）` : "";
     if(cur.srcKind === "direct"){
       // 原文件直连失败（如 HEVC 编码的 mp4）→ 走探测 + 适配
       cur.srcKind = "stream";
@@ -386,7 +388,7 @@ function renderPlayer(hash){
       usingTranscode = true; cur.streamMode = "transcode";
       startStreamPipeline("transcode");
     } else {
-      showErr("该视频无法在浏览器中播放（可能是编码不兼容）");
+      showErr("该视频无法在浏览器中播放（可能是编码不兼容）" + info);
     }
   });
 

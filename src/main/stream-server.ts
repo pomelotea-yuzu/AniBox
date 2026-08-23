@@ -75,14 +75,22 @@ function mimeOf(fp: string): string {
 
 // ---------- 工具 ----------
 
+/** 虚拟网卡关键词（VirtualBox/VMware/Hyper-V/WSL/Docker/蓝牙等，手机通常连不上，不展示） */
+const VIRTUAL_NIC = [
+  'virtualbox', 'vmware', 'hyper-v', 'hyperv', 'vether', 'vethernet',
+  'wsl', 'docker', 'tap-', 'tunnel', 'loopback', 'bluetooth', 'vpn',
+  'taptap', 'tun', 'zerotier', 'tailscale', 'nordvpn', 'wireguard',
+]
+
 export function getLanUrls(port: number): string[] {
   const urls: string[] = []
   try {
-    for (const infos of Object.values(networkInterfaces())) {
+    for (const [name, infos] of Object.entries(networkInterfaces())) {
       for (const info of infos || []) {
-        if (info.family === 'IPv4' && !info.internal) {
-          urls.push(`http://${info.address}:${port}`)
-        }
+        if (info.family !== 'IPv4' || info.internal) continue
+        const n = name.toLowerCase()
+        if (VIRTUAL_NIC.some((k) => n.includes(k))) continue
+        urls.push(`http://${info.address}:${port}`)
       }
     }
   } catch {

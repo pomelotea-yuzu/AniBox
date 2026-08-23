@@ -304,26 +304,24 @@ export async function ensurePlayable(
   filePath: string,
   mode: StreamMode = 'auto',
 ): Promise<PlayableResult> {
-  const probe = await probeFile(filePath)
   const ext = (filePath.split('.').pop() || '').toLowerCase()
+  let probe: ProbeResult | null = null
 
-  if (mode !== 'transcode') {
-    if (isDirectPlayable(probe, ext)) {
-      return { kind: 'direct', mode: 'direct', path: filePath, probe }
-    }
-    // probe 失败（mpv 探测不可用）但扩展名浏览器原生支持 → 保守直出试播
-    if (!probe && DIRECT_EXT.has(ext)) {
+  if (mode === 'transcode') {
+    // 强制重编码：不需要探测，直接跑 transcode 任务
+  } else if (DIRECT_EXT.has(ext)) {
+    // mp4/webm 等浏览器原生容器：probe 判断编码（h264 直出 / HEVC 转码）
+    probe = await probeFile(filePath)
+    if (isDirectPlayable(probe, ext) || !probe) {
+      // 可直出，或探测失败（保守直出试播，播不了网页会 error 降级）
       return { kind: 'direct', mode: 'direct', path: filePath, probe }
     }
   }
+  // 非原生容器（mkv/avi/ts 等）：不 probe，auto 直接 remux（copy 快、无损；
+  // 产物若手机播不了（如 HEVC mkv + Android），网页会 error 自动降级转码）
 
-  // 编码决策：probe 成功看编码（h264 系 → remux 快；HEVC 等 → transcode）；
-  // probe 失败时无法判断编码，auto 默认 remux（copy 快、成功率高，产物播不了网页会 error 降级转码）
   const effMode: 'remux' | 'transcode' =
-    mode === 'remux' ||
-    (mode === 'auto' && (!probe || ['h264', 'avc1', 'vp8', 'vp9', 'av01', 'av1'].includes(probe.videoCodec)))
-      ? 'remux'
-      : 'transcode'
+    mode === 'remux' || mode === 'auto' ? 'remux' : 'transcode'
 
   const out = join(cacheDir(), cacheKey(filePath, effMode))
   if (existsSync(out) && statSync(out).size > 1024) {
