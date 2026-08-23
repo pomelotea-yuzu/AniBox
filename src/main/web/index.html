@@ -75,6 +75,8 @@ video{flex:1;width:100%;object-fit:contain;background:#000}
 .pbar .btns .pbtn{font-size:18px}
 .ov{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;
   background:rgba(0,0,0,.72);color:var(--text);z-index:5}
+.tap-play{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:6;
+  background:rgba(0,0,0,.55);color:#fff;font-size:20px;font-weight:600;letter-spacing:2px;cursor:pointer}
 .ov .ring{width:34px;height:34px;border:3px solid var(--surface2);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 .ov .pt{font-size:13px}
@@ -258,28 +260,33 @@ function renderPlayer(hash){
   video.autoplay = true; // iPad Safari 需 autoplay 或用户手势后的 play() 才能开播
   video.controls = false; video.preload = "auto";
   wrap.appendChild(video);
-  // 点击画面切换播放/暂停（兜底：万一 autoplay 被 Safari 拒绝，点一下即可播放）
+  // 点击画面切换播放/暂停
+  let tapLayer = null;
   function tryPlay(){
     const p = video.play();
     if(p && p.catch){
       p.catch(()=>{
-        // 有声播放被 Safari 策略拒绝（异步转封装后手势失效）→ 静音播放兜底（Safari 一定允许），用户点击后恢复声音
-        if(!video.muted){
-          video.muted = true;
-          const p2 = video.play();
-          if(p2 && p2.catch) p2.catch(()=>{});
-          toast("已静音播放，点击画面开启声音");
+        // 有声播放被 Safari 策略拒绝（异步转封装后手势已失效）→ 显示"点击播放"层，
+        // 用户点一下即在手势内 play()（成功后整个页面解锁，后续自动播放都正常）
+        if(!tapLayer){
+          tapLayer = el("div","tap-play","▶ 点击播放");
+          tapLayer.addEventListener("click", ()=>{
+            video.muted = false;
+            video.play().catch(()=>{});
+            if(tapLayer){ tapLayer.remove(); tapLayer = null; }
+          });
+          wrap.appendChild(tapLayer);
         }
       });
     }
   }
+  function hideTapLayer(){ if(tapLayer){ tapLayer.remove(); tapLayer = null; } }
   video.addEventListener("click", ()=>{
+    hideTapLayer();
     if(video.paused){
-      if(video.muted) video.muted = false; // 用户手势内恢复声音
       tryPlay();
     } else {
-      if(video.muted){ video.muted = false; toast("声音已开启"); }
-      else video.pause();
+      video.pause();
     }
   });
   const ov = el("div","ov","");
@@ -296,13 +303,9 @@ function renderPlayer(hash){
   video.addEventListener("play", updatePlayIcon);
   video.addEventListener("pause", updatePlayIcon);
   playBtn.addEventListener("click", ()=>{
-    if(video.paused){
-      if(video.muted) video.muted = false;
-      tryPlay();
-    } else {
-      if(video.muted){ video.muted = false; toast("声音已开启"); }
-      else video.pause();
-    }
+    hideTapLayer();
+    if(video.paused) tryPlay();
+    else video.pause();
   });
   const prevBtn = mkBtn('‹', "", ()=> stepEp(-1));
   const nextBtn = mkBtn('›', "", ()=> stepEp(1));
