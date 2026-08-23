@@ -155,11 +155,15 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
       .streamEngineInfo()
       .then((e) => setEngineInfo(e))
       .catch(() => {})
-    // 下载 ffmpeg 期间轮询进度
+    // 下载 ffmpeg 期间轮询进度 + 同步服务器状态（防止"启动中"显示卡住）
     const poll = setInterval(() => {
       window.electronAPI
         .streamEngineInfo()
         .then((e) => setEngineInfo(e))
+        .catch(() => {})
+      window.electronAPI
+        .streamGetState()
+        .then((s) => setStreamState(s))
         .catch(() => {})
     }, 1500)
     return () => clearInterval(poll)

@@ -1185,7 +1185,7 @@ function registerIpcHandlers(): void {
     return { ...s, state: getStreamServerState() }
   })
 
-  ipcMain.handle('stream:setSettings', (_e, patch: any) => {
+  ipcMain.handle('stream:setSettings', async (_e, patch: any) => {
     const prev = store.getStreamSettings()
     store.setStreamSettings(patch)
     const cur = store.getStreamSettings()
@@ -1193,7 +1193,7 @@ function registerIpcHandlers(): void {
     const restartNeeded = patch.port !== undefined || patch.enabled !== undefined
     if (restartNeeded) {
       stopStreamServer()
-      if (cur.enabled) startStreamServer({ port: cur.port })
+      if (cur.enabled) await startStreamServer({ port: cur.port })
     }
     return { ...cur, state: getStreamServerState(), changed: prev.port !== cur.port || prev.enabled !== cur.enabled }
   })
@@ -1932,9 +1932,9 @@ app.whenReady().then(async () => {
   registerProtocol()
   registerIpcHandlers()
   startRssServer()
-  // 局域网串流：设置页开启过则随应用自启
+  // 局域网串流：设置页开启过则随应用自启（异步启动，不阻塞窗口创建）
   if (store.getStreamSettings().enabled) {
-    startStreamServer({ port: store.getStreamSettings().port })
+    startStreamServer({ port: store.getStreamSettings().port }).catch(() => {})
   }
   createWindow()
 

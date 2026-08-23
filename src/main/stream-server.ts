@@ -412,34 +412,39 @@ export function handleRequest(req: IncomingMessage, res: ServerResponse): void {
 
 // ---------- 生命周期 ----------
 
-export function startStreamServer(cfg: { port: number }): StreamServerState {
-  if (server) return state
+/** 启动服务器。listen 完成（或失败）后才 resolve，保证调用方拿到的是真实运行状态 */
+export function startStreamServer(cfg: { port: number }): Promise<StreamServerState> {
+  if (server) return Promise.resolve(state)
   const base = cfg.port || 8321
   server = createServer(handleRequest)
-  server.on('error', (e: NodeJS.ErrnoException) => {
-    if (e.code === 'EADDRINUSE') {
-      // 端口被占用 → 自动 +1 重试（最多 10 次）
-      const next = (state.port || base) + 1
-      if (next <= base + 10) {
-        stopStreamServer()
-        state = { running: true, port: next, urls: [] }
-        startStreamServer({ port: next })
+  return new Promise((resolve) => {
+    server!.on('error', (e: NodeJS.ErrnoException) => {
+      if (e.code === 'EADDRINUSE') {
+        // 端口被占用 → 自动 +1 重试（最多 10 次）
+        const next = (state.port || base) + 1
+        if (next <= base + 10) {
+          stopStreamServer()
+          state = { running: true, port: next, urls: [] }
+          resolve(startStreamServer({ port: next }))
+        } else {
+          state = { running: false, port: 0, urls: [], error: `端口 ${base}~${base + 10} 均被占用` }
+          server = null
+          resolve(state)
+        }
       } else {
-        state = { running: false, port: 0, urls: [], error: `端口 ${base}~${base + 10} 均被占用` }
+        state = { running: false, port: 0, urls: [], error: e.message }
         server = null
+        resolve(state)
       }
-    } else {
-      state = { running: false, port: 0, urls: [], error: e.message }
-      server = null
-    }
+    })
+    server!.listen(base, '0.0.0.0', () => {
+      const addr = server?.address()
+      const port = typeof addr === 'object' && addr ? addr.port : base
+      state = { running: true, port, urls: getLanUrls(port) }
+      console.log('[AniBox] 局域网串流已启动:', state.urls.join(', '))
+      resolve(state)
+    })
   })
-  server.listen(base, '0.0.0.0', () => {
-    const addr = server?.address()
-    const port = typeof addr === 'object' && addr ? addr.port : base
-    state = { running: true, port, urls: getLanUrls(port) }
-    console.log('[AniBox] 局域网串流已启动:', state.urls.join(', '))
-  })
-  return state
 }
 
 export function stopStreamServer(): void {
