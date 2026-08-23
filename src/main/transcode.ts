@@ -277,7 +277,8 @@ function cacheKey(filePath: string, mode: string): string {
     /* ok */
   }
   const h = createHash('md5').update(filePath).digest('hex').substring(0, 12)
-  return `${h}_${Math.floor(mtime)}_${mode}.mp4`
+  // v2：fragmented mp4 参数（frag_keyframe+empty_moov），旧 faststart 缓存失效重转
+  return `${h}_${Math.floor(mtime)}_${mode}_v2.mp4`
 }
 
 /** 浏览器原生支持直出的扩展名（probe 失败时按扩展名保守直出，播不了网页会 error 降级转码） */
@@ -413,7 +414,8 @@ async function runJob(filePath: string, out: string, mode: 'remux' | 'transcode'
             '-map', '0:a?',
             '-map_metadata', '0',
             '-c', 'copy',
-            '-movflags', '+faststart',
+            // fragmented mp4：Safari 流式播放兼容性最佳（faststart 对 iPad Safari 不友好，实测黑屏）
+            '-movflags', 'frag_keyframe+empty_moov+default_base_moof',
             out,
           ]
         : [
@@ -426,7 +428,7 @@ async function runJob(filePath: string, out: string, mode: 'remux' | 'transcode'
             '-crf', '23',
             '-c:a', 'aac',
             '-b:a', '192k',
-            '-movflags', '+faststart',
+            '-movflags', 'frag_keyframe+empty_moov+default_base_moof',
             out,
           ]
 
