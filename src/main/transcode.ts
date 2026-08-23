@@ -280,6 +280,9 @@ function cacheKey(filePath: string, mode: string): string {
   return `${h}_${Math.floor(mtime)}_${mode}.mp4`
 }
 
+/** 浏览器原生支持直出的扩展名（probe 失败时按扩展名保守直出，播不了网页会 error 降级转码） */
+const DIRECT_EXT = new Set(['mp4', 'm4v', 'mov', 'webm', 'ogv', 'ogg', '3gp'])
+
 /** 判断浏览器（手机 Safari/Chrome 保守交集）能否原生直出 */
 function isDirectPlayable(p: ProbeResult | null, ext: string): boolean {
   if (!p) return false
@@ -304,12 +307,21 @@ export async function ensurePlayable(
   const probe = await probeFile(filePath)
   const ext = (filePath.split('.').pop() || '').toLowerCase()
 
-  if (mode !== 'transcode' && isDirectPlayable(probe, ext)) {
-    return { kind: 'direct', mode: 'direct', path: filePath, probe }
+  if (mode !== 'transcode') {
+    if (isDirectPlayable(probe, ext)) {
+      return { kind: 'direct', mode: 'direct', path: filePath, probe }
+    }
+    // probe 失败（mpv 探测不可用）但扩展名浏览器原生支持 → 保守直出试播
+    if (!probe && DIRECT_EXT.has(ext)) {
+      return { kind: 'direct', mode: 'direct', path: filePath, probe }
+    }
   }
 
+  // 编码决策：probe 成功看编码（h264 系 → remux 快；HEVC 等 → transcode）；
+  // probe 失败时无法判断编码，auto 默认 remux（copy 快、成功率高，产物播不了网页会 error 降级转码）
   const effMode: 'remux' | 'transcode' =
-    mode === 'remux' || (mode === 'auto' && probe && ['h264', 'avc1', 'vp8', 'vp9', 'av01', 'av1'].includes(probe.videoCodec))
+    mode === 'remux' ||
+    (mode === 'auto' && (!probe || ['h264', 'avc1', 'vp8', 'vp9', 'av01', 'av1'].includes(probe.videoCodec)))
       ? 'remux'
       : 'transcode'
 

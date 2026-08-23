@@ -155,20 +155,26 @@ function probeViaMpv(filePath: string): Promise<ProbeResult | null> {
       })
     }, 400)
 
-    // 三个属性都拿齐（或轨道列表拿到后短等 lavf/duration 回包）即收工
+    // 收工策略：track-list 到手后等 lavf/duration 也回来（缺一不可），1.2s 兜底
+    let doneTimer: NodeJS.Timeout | null = null
     let doneCalled = false
-    function tryDone(): void {
+    function scheduleFinish(ms: number): void {
       if (doneCalled) return
       if (trackList === null) return
-      // 轨道列表已到手，lavf/duration 可能稍慢，给 300ms 窗口
+      if (doneTimer) clearTimeout(doneTimer)
       doneCalled = true
       const tracks = trackList
-      setTimeout(() => {
+      doneTimer = setTimeout(() => {
         finish(buildResult(tracks, lavfType, duration))
-      }, 300)
+      }, ms)
+    }
+    function tryDone(): void {
+      // 三个属性全部就位 → 立即收工；否则等 1.2s 兜底
+      if (trackList !== null && lavfType && duration > 0) scheduleFinish(0)
+      else if (trackList !== null && !doneCalled) scheduleFinish(1200)
     }
 
-    const timeout = setTimeout(() => finish(null), 10000)
+    const timeout = setTimeout(() => finish(null), 6000)
   })
 }
 

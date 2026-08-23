@@ -109,10 +109,14 @@ function fmtSec(s){
 async function api(path, opts={}){
   const sep = path.includes("?") ? "&" : "?";
   const url = path + sep + "key=" + encodeURIComponent(TOKEN);
-  const r = await fetch(url, opts);
-  if(!r.ok) throw new Error("HTTP " + r.status);
-  const ct = r.headers.get("content-type")||"";
-  return ct.includes("json") ? r.json() : r.text();
+  const ctrl = new AbortController();
+  const timer = setTimeout(()=>ctrl.abort(), 30000); // 30s 超时，防止"分析文件"无限等待
+  try{
+    const r = await fetch(url, Object.assign({}, opts, { signal: ctrl.signal }));
+    if(!r.ok) throw new Error("HTTP " + r.status);
+    const ct = r.headers.get("content-type")||"";
+    return ct.includes("json") ? r.json() : r.text();
+  } finally { clearTimeout(timer); }
 }
 function vurl(path){ // 视频/封面 URL（无需 token 注入路径里，由 fetch 带 key；img/video 直接拼）
   const sep = path.includes("?") ? "&" : "?";
@@ -240,7 +244,7 @@ async function renderDetail(id){
 }
 
 /* ---------- 播放器 ---------- */
-let cur = { ep:null, subs:[], streamMode:"auto", state:"idle" };
+let cur = { ep:null, subs:[], streamMode:"auto", state:"idle", srcKind:"" };
 function renderPlayer(hash){
   const q = new URLSearchParams(hash.split("?")[1]||"");
   const path = q.get("p")||"";
@@ -251,8 +255,14 @@ function renderPlayer(hash){
   const wrap = el("div","player-wrap");
   const video = document.createElement("video");
   video.playsInline = true; video.setAttribute("webkit-playsinline","");
+  video.autoplay = true; // iPad Safari 需 autoplay 或用户手势后的 play() 才能开播
   video.controls = false; video.preload = "auto";
   wrap.appendChild(video);
+  // 点击画面切换播放/暂停（兜底：万一 autoplay 被 Safari 拒绝，点一下即可播放）
+  video.addEventListener("click", ()=>{
+    if(video.paused) video.play().catch(()=>{});
+    else video.pause();
+  });
   const ov = el("div","ov","");
   ov.appendChild(el("div","ring"));
   const pt = el("div","pt","准备播放…"); ov.appendChild(pt);
@@ -260,6 +270,13 @@ function renderPlayer(hash){
   wrap.appendChild(ov);
   const bar = el("div","pbar");
   const mkBtn = (html, cls, fn) => { const b = el("button", cls, ""); b.innerHTML = html; b.addEventListener("click", fn); return b; };
+  const PLAY_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4l13 8-13 8z"/></svg>';
+  const PAUSE_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>';
+  const playBtn = el("button","pbtn",PLAY_SVG);
+  const updatePlayIcon = ()=>{ playBtn.innerHTML = video.paused ? PLAY_SVG : PAUSE_SVG; };
+  video.addEventListener("play", updatePlayIcon);
+  video.addEventListener("pause", updatePlayIcon);
+  playBtn.addEventListener("click", ()=>{ if(video.paused) video.play().catch(()=>{}); else video.pause(); });
   const prevBtn = mkBtn('‹', "", ()=> stepEp(-1));
   const nextBtn = mkBtn('›', "", ()=> stepEp(1));
   const speedBtn = el("button","speed","1.0x"); speedBtn.addEventListener("click", ()=>{
@@ -271,7 +288,7 @@ function renderPlayer(hash){
   const autoBtn = el("button","","自动连播");
   const setAuto = (on)=>{ autoBtn.textContent = on ? "连播·开" : "连播·关"; autoBtn.classList.toggle("on", on); };
   autoBtn.addEventListener("click", ()=>{ const on = !(localStorage.getItem("anibox_autonext") !== "0"); setAuto(!on); localStorage.setItem("anibox_autonext", !on ? "1":"0"); });
-  bar.append(prevBtn, speedBtn, subBtn, autoBtn, nextBtn);
+  bar.append(playBtn, prevBtn, speedBtn, subBtn, autoBtn, nextBtn);
   wrap.appendChild(bar);
   app.appendChild(wrap);
 
@@ -297,18 +314,30 @@ function renderPlayer(hash){
 
   /* 播放主流程 */
   async function start(){
+    const ext = (path.split('.').pop()||"").toLowerCase();
+    const directExts = ['mp4','m4v','mov','webm','ogv','ogg','3gp'];
+    if(directExts.includes(ext)){
+      // 浏览器原生支持的格式：直接直连原文件，秒开，不做任何探测/转码
+      playPath(path, "direct");
+      return;
+    }
+    // mkv 等其他格式：走探测 → 直出/转封装/转码
+    startStreamPipeline("auto");
+  }
+
+  async function startStreamPipeline(mode){
     ov.classList.remove("hidden");
-    pt.textContent = "分析文件…";
+    pt.textContent = "分析文件…"; pd.textContent = "";
     try{
-      const r = await api("/api/stream?path=" + encodeURIComponent(path) + "&mode=auto");
-      cur.streamMode = r.mode || "auto";
+      const r = await api("/api/stream?path=" + encodeURIComponent(path) + "&mode=" + encodeURIComponent(mode));
+      cur.streamMode = r.mode || mode;
       if(r.kind === "error"){ showErr(r.message || "无法播放该文件"); return; }
       if(r.kind === "working"){
         pt.textContent = r.mode === "transcode" ? "正在转码（编码不兼容，首次较慢）…" : "正在转封装…";
         pd.textContent = r.progress>0 ? Math.round(r.progress*100)+"%" : "首次播放需要几秒到几十秒，之后秒开";
         await pollStream();
       } else {
-        playPath(r.path);
+        playPath(r.path, "stream");
       }
     }catch(e){ showErr("请求失败: " + e.message); }
   }
@@ -327,7 +356,7 @@ function renderPlayer(hash){
       await new Promise(r=>setTimeout(r, 1200));
       try{
         const st = await api("/api/stream-status?path=" + encodeURIComponent(path) + "&mode=" + encodeURIComponent(mode));
-        if(st.state === "done" && st.cachePath){ playPath(st.cachePath); return; }
+        if(st.state === "done" && st.cachePath){ playPath(st.cachePath, "stream"); return; }
         if(st.state === "error"){ showErr(st.error || "转码失败"); return; }
         if(st.progress>0){ pd.textContent = "正在转码 " + Math.round(st.progress*100) + "%（首次较慢，之后秒开）"; }
         else pd.textContent = "正在处理…";
@@ -337,24 +366,25 @@ function renderPlayer(hash){
   }
 
   let usingTranscode = false;
-  function playPath(p){
+  function playPath(p, srcKind){
+    cur.srcKind = srcKind || "stream";
     ov.classList.remove("hidden");
     pt.textContent = "加载视频…"; pd.textContent = "";
     const src = vurl("/api/video?path=" + encodeURIComponent(p));
     video.src = src;
     video.load();
+    video.play().catch(()=>{}); // iPad Safari 需显式 play()
   }
 
   video.addEventListener("error", ()=>{
-    if(!usingTranscode && cur.streamMode !== "transcode"){
-      // 直出/转封装仍不兼容（如 Android+HEVC）→ 强制重编码
+    if(cur.srcKind === "direct"){
+      // 原文件直连失败（如 HEVC 编码的 mp4）→ 走探测 + 适配
+      cur.srcKind = "stream";
+      startStreamPipeline("auto");
+    } else if(!usingTranscode){
+      // 转封装产物仍失败（如 Android+HEVC）→ 强制重编码
       usingTranscode = true; cur.streamMode = "transcode";
-      pt.textContent = "当前格式不兼容，切换到转码…"; pd.textContent = "";
-      api("/api/stream?path=" + encodeURIComponent(path) + "&mode=transcode").then(r=>{
-        if(r.kind === "working"){ pt.textContent = "正在转码…"; pd.textContent = ""; pollStream(); }
-        else if(r.kind === "cache"){ playPath(r.path); }
-        else showErr("无法生成兼容版本");
-      }).catch(()=>{});
+      startStreamPipeline("transcode");
     } else {
       showErr("该视频无法在浏览器中播放（可能是编码不兼容）");
     }
@@ -362,6 +392,8 @@ function renderPlayer(hash){
 
   video.addEventListener("loadedmetadata", async ()=>{
     ov.classList.add("hidden");
+    // 元数据就绪后兜底启动播放（覆盖 autoplay 被 Safari 策略拒绝的情况）
+    video.play().catch(()=>{});
     // 恢复进度
     try{
       const p = await api("/api/progress?path=" + encodeURIComponent(path));
