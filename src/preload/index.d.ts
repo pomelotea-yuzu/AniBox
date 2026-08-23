@@ -177,6 +177,24 @@ export interface ElectronAPI {
     saveProgressInterval?: number
     skipShortcutDefault?: boolean
   }) => Promise<void>
+  // 局域网串流
+  streamGetSettings: () => Promise<any>
+  streamSetSettings: (patch: {
+    enabled?: boolean
+    port?: number
+    requireToken?: boolean
+    token?: string
+  }) => Promise<any>
+  streamGetState: () => Promise<{
+    running: boolean
+    port: number
+    urls: string[]
+    error?: string
+  }>
+  streamCacheInfo: () => Promise<{ cacheMB: number }>
+  streamCacheClean: (maxMB?: number) => Promise<{ removed: number; freedMB: number }>
+  streamEngineInfo: () => Promise<any>
+  streamFfmpegRetry: () => Promise<any>
   getAppVersion: () => Promise<{ version: string; electron: string }>
   audioGetPrefs: (
     seriesId: string,

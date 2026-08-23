@@ -38,7 +38,6 @@ import { configureAI, translateWithAI, getAIKey } from './ai-translate'
 import { translateLocal } from './anime-dict'
 import {
   setWhisperConfig,
-  isWhisperAvailable,
   getWhisperStatus,
   getDefaultWhisperPaths,
   transcribeWithWhisper,
@@ -72,6 +71,12 @@ import {
   deleteRssFeed,
   startRssServer,
 } from './animegarden'
+import {
+  startStreamServer,
+  stopStreamServer,
+  getStreamServerState,
+} from './stream-server'
+import { cleanStreamCache, getStreamCacheSizeMB, getEngineInfo, resetFfmpegDownload } from './transcode'
 
 // === 硬件加速 & GPU 配置 ===
 // Windows 系统级 HEVC 硬解码（Media Foundation）
@@ -1174,6 +1179,44 @@ function registerIpcHandlers(): void {
     store.setPlaybackSettings(settings)
   })
 
+  // ===== 局域网串流 =====
+  ipcMain.handle('stream:getSettings', () => {
+    const s = store.getStreamSettings()
+    return { ...s, state: getStreamServerState() }
+  })
+
+  ipcMain.handle('stream:setSettings', (_e, patch: any) => {
+    const prev = store.getStreamSettings()
+    store.setStreamSettings(patch)
+    const cur = store.getStreamSettings()
+    // 端口/开关变化时重启服务器（token 变化无需重启，校验实时读 store）
+    const restartNeeded = patch.port !== undefined || patch.enabled !== undefined
+    if (restartNeeded) {
+      stopStreamServer()
+      if (cur.enabled) startStreamServer({ port: cur.port })
+    }
+    return { ...cur, state: getStreamServerState(), changed: prev.port !== cur.port || prev.enabled !== cur.enabled }
+  })
+
+  ipcMain.handle('stream:getState', () => getStreamServerState())
+
+  ipcMain.handle('stream:cacheInfo', () => {
+    return { cacheMB: getStreamCacheSizeMB() }
+  })
+
+  ipcMain.handle('stream:cacheClean', (_e, maxMB: number) => {
+    return cleanStreamCache(maxMB || 2048)
+  })
+
+  ipcMain.handle('stream:engineInfo', () => {
+    return getEngineInfo()
+  })
+
+  ipcMain.handle('stream:ffmpegRetry', () => {
+    resetFfmpegDownload()
+    return getEngineInfo()
+  })
+
   // 应用版本信息（关于页显示；与 package.json version 同步）
   ipcMain.handle('app:getVersion', () => {
     return { version: app.getVersion(), electron: process.versions.electron }
@@ -1493,7 +1536,7 @@ function registerIpcHandlers(): void {
   ipcMain.handle('ai:translate', async (_e, text: string, from: string, to: string) => {
     try {
       return await translateWithAI(text, from, to)
-    } catch (e: any) {
+    } catch {
       return text
     }
   })
@@ -1786,7 +1829,9 @@ function registerIpcHandlers(): void {
           JSON.stringify({ timestamp: Date.now(), data: payload }, null, 2),
           'utf-8',
         )
-      } catch {}
+      } catch {
+        /* ok */
+      }
       return { ok: true, fromCache: false, ...payload }
     } catch (err: any) {
       console.error('[AniBox] season:fetchTimeline error:', err)
@@ -1795,7 +1840,9 @@ function registerIpcHandlers(): void {
           readFileSync(join(app.getPath('userData'), 'season-cache.json'), 'utf-8'),
         )
         return { ok: true, fromCache: true, stale: true, ...fb.data }
-      } catch {}
+      } catch {
+        /* ok */
+      }
       return { ok: false, error: err.message || '网络请求失败', anime: [] }
     }
   })
@@ -1885,6 +1932,10 @@ app.whenReady().then(async () => {
   registerProtocol()
   registerIpcHandlers()
   startRssServer()
+  // 局域网串流：设置页开启过则随应用自启
+  if (store.getStreamSettings().enabled) {
+    startStreamServer({ port: store.getStreamSettings().port })
+  }
   createWindow()
 
   app.on('activate', () => {
@@ -1896,6 +1947,7 @@ app.on('window-all-closed', () => {
   libmpvQuit()
   mpvKill()
   stopWatching()
+  stopStreamServer()
   flushStore()
   if (process.platform !== 'darwin') app.quit()
 })
@@ -1903,5 +1955,6 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   libmpvQuit()
   stopWatching()
+  stopStreamServer()
   flushStore()
 })

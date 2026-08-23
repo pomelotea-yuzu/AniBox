@@ -301,6 +301,22 @@ const electronAPI = {
     skipShortcutDefault?: boolean
   }): Promise<void> => ipcRenderer.invoke('settings:setPlayback', settings),
 
+  // 局域网串流
+  streamGetSettings: (): Promise<any> => ipcRenderer.invoke('stream:getSettings'),
+  streamSetSettings: (patch: {
+    enabled?: boolean
+    port?: number
+    requireToken?: boolean
+    token?: string
+  }): Promise<any> => ipcRenderer.invoke('stream:setSettings', patch),
+  streamGetState: (): Promise<{ running: boolean; port: number; urls: string[]; error?: string }> =>
+    ipcRenderer.invoke('stream:getState'),
+  streamCacheInfo: (): Promise<{ cacheMB: number }> => ipcRenderer.invoke('stream:cacheInfo'),
+  streamCacheClean: (maxMB?: number): Promise<{ removed: number; freedMB: number }> =>
+    ipcRenderer.invoke('stream:cacheClean', maxMB),
+  streamEngineInfo: (): Promise<any> => ipcRenderer.invoke('stream:engineInfo'),
+  streamFfmpegRetry: (): Promise<any> => ipcRenderer.invoke('stream:ffmpegRetry'),
+
   // 应用版本信息（关于页显示）
   getAppVersion: (): Promise<{ version: string; electron: string }> =>
     ipcRenderer.invoke('app:getVersion'),

@@ -109,6 +109,13 @@ interface StoreData {
     saveProgressInterval: number // 进度保存间隔（秒）
     skipShortcutDefault: boolean // 默认开启 OP/ED 跳过（连按 3 次 → 跳过 80 秒）
   }
+  /** 局域网串流（设置页「串流」tab） */
+  streamSettings: {
+    enabled: boolean // 服务器是否启用
+    port: number // HTTP 端口
+    requireToken: boolean // 是否要求访问口令
+    token: string // 访问口令（URL ?key=xxx）
+  }
 }
 
 let data: StoreData = {
@@ -138,6 +145,12 @@ let data: StoreData = {
     autoNextEp: true,
     saveProgressInterval: 5,
     skipShortcutDefault: false,
+  },
+  streamSettings: {
+    enabled: false,
+    port: 8321,
+    requireToken: true,
+    token: '',
   },
 }
 let loaded = false
@@ -181,6 +194,9 @@ function ensureReady(): void {
       if (raw.playbackSettings) {
         data.playbackSettings = { ...data.playbackSettings, ...raw.playbackSettings }
       }
+      if (raw.streamSettings) {
+        data.streamSettings = { ...data.streamSettings, ...raw.streamSettings }
+      }
     }
   } catch (err) {
     // JSON 损坏时备份原始文件，避免静默丢数据
@@ -220,6 +236,12 @@ function ensureReady(): void {
         autoNextEp: true,
         saveProgressInterval: 5,
         skipShortcutDefault: false,
+      },
+      streamSettings: {
+        enabled: false,
+        port: 8321,
+        requireToken: true,
+        token: '',
       },
     }
   }
@@ -688,4 +710,41 @@ export function setPlaybackSettings(settings: Partial<PlaybackSettingsData>): vo
   ensureReady()
   data.playbackSettings = { ...data.playbackSettings, ...settings }
   save()
+}
+
+// === Stream Settings（局域网串流） ===
+
+export interface StreamSettingsData {
+  enabled: boolean
+  port: number
+  requireToken: boolean
+  token: string
+}
+
+export function getStreamSettings(): StreamSettingsData {
+  ensureReady()
+  return { ...data.streamSettings }
+}
+
+export function setStreamSettings(settings: Partial<StreamSettingsData>): void {
+  ensureReady()
+  data.streamSettings = { ...data.streamSettings, ...settings }
+  save()
+}
+
+/** 确保存在访问口令（首次获取时自动生成随机 token） */
+export function ensureStreamToken(): string {
+  ensureReady()
+  if (!data.streamSettings.token) {
+    data.streamSettings.token = randomToken()
+    save()
+  }
+  return data.streamSettings.token
+}
+
+function randomToken(): string {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
+  let t = ''
+  for (let i = 0; i < 6; i++) t += chars[Math.floor(Math.random() * chars.length)]
+  return t
 }

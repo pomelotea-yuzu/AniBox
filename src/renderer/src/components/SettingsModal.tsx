@@ -38,7 +38,7 @@ const SHORTCUTS = [
   { key: '?', desc: '快捷键帮助' },
 ]
 
-type Tab = 'theme' | 'subtitle' | 'playback' | 'shortcuts' | 'api' | 'download' | 'about'
+type Tab = 'theme' | 'subtitle' | 'playback' | 'shortcuts' | 'api' | 'download' | 'stream' | 'about'
 
 export default function SettingsModal({ visible, onClose }: SettingsModalProps) {
   const { theme, themeList, setTheme } = useTheme()
@@ -78,6 +78,21 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
   const [qbSaved, setQbSaved] = useState(false)
   // 应用版本（关于页）
   const [appInfo, setAppInfo] = useState<{ version: string; electron: string } | null>(null)
+
+  // 局域网串流
+  const [streamEnabled, setStreamEnabled] = useState(false)
+  const [streamPort, setStreamPort] = useState(8321)
+  const [streamRequireToken, setStreamRequireToken] = useState(true)
+  const [streamToken, setStreamToken] = useState('')
+  const [streamState, setStreamState] = useState<{
+    running: boolean
+    port: number
+    urls: string[]
+    error?: string
+  }>({ running: false, port: 0, urls: [] })
+  const [streamSaved, setStreamSaved] = useState(false)
+  const [cacheInfo, setCacheInfo] = useState('')
+  const [engineInfo, setEngineInfo] = useState<any>(null)
 
   // 加载当前设置
   useEffect(() => {
@@ -123,6 +138,31 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
       .getAppVersion()
       .then((v) => setAppInfo(v || null))
       .catch(() => {})
+    // 局域网串流
+    window.electronAPI
+      .streamGetSettings()
+      .then((s) => {
+        if (s) {
+          setStreamEnabled(!!s.enabled)
+          setStreamPort(s.port || 8321)
+          setStreamRequireToken(s.requireToken !== false)
+          setStreamToken(s.token || '')
+          if (s.state) setStreamState(s.state)
+        }
+      })
+      .catch(() => {})
+    window.electronAPI
+      .streamEngineInfo()
+      .then((e) => setEngineInfo(e))
+      .catch(() => {})
+    // 下载 ffmpeg 期间轮询进度
+    const poll = setInterval(() => {
+      window.electronAPI
+        .streamEngineInfo()
+        .then((e) => setEngineInfo(e))
+        .catch(() => {})
+    }, 1500)
+    return () => clearInterval(poll)
   }, [visible])
 
   // 保存字幕样式
@@ -149,6 +189,16 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
     [],
   )
 
+  // 串流设置：改动即存，主进程按需重启服务器并回传最新状态
+  const saveStream = useCallback((patch: { enabled?: boolean; port?: number; requireToken?: boolean; token?: string }) => {
+    window.electronAPI
+      .streamSetSettings(patch)
+      .then((r) => {
+        if (r?.state) setStreamState(r.state)
+      })
+      .catch(() => {})
+  }, [])
+
   // Esc 关闭
   useEffect(() => {
     if (!visible) return
@@ -168,6 +218,7 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
     { key: 'shortcuts', label: '快捷键' },
     { key: 'api', label: 'API' },
     { key: 'download', label: '下载' },
+    { key: 'stream', label: '串流' },
     { key: 'about', label: '关于' },
   ]
 
@@ -585,6 +636,176 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
                 <b className="text-anibox-accent">添加订阅后需保持 AniBox 运行</b>；
                 自动下载还需在 qBittorrent 中为该订阅设置下载规则。
               </p>
+            </div>
+          )}
+
+          {/* === 串流（局域网 HTTP） === */}
+          {tab === 'stream' && (
+            <div className="space-y-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={streamEnabled}
+                  onChange={(e) => {
+                    const v = e.target.checked
+                    setStreamEnabled(v)
+                    saveStream({ enabled: v })
+                  }}
+                  className="accent-anibox-accent w-4 h-4"
+                />
+                <span className="text-xs text-anibox-text">启用局域网串流</span>
+              </label>
+              <p className="text-[10px] text-anibox-text-muted leading-relaxed">
+                开启后手机连同一 WiFi，浏览器打开下方地址即可浏览番剧库并播放。
+                <br />
+                mp4/webm 直接播放；mkv 自动转封装（秒级）；HEVC 等不兼容编码自动转码（首次较慢，之后缓存）。
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-anibox-text-muted block mb-1">端口</label>
+                  <input
+                    type="number"
+                    min="1024"
+                    max="65535"
+                    value={streamPort}
+                    onChange={(e) => {
+                      const v = Number(e.target.value)
+                      setStreamPort(v)
+                      saveStream({ port: v })
+                    }}
+                    className="w-full px-3 py-2 text-sm bg-anibox-bg border border-anibox-border rounded-lg text-anibox-text focus:outline-none focus:border-anibox-accent"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-anibox-text-muted block mb-1">状态</label>
+                  <p
+                    className={`px-3 py-2 text-sm rounded-lg border ${
+                      streamState.running
+                        ? 'text-emerald-500 border-emerald-500/30 bg-emerald-500/5'
+                        : 'text-anibox-text-muted border-anibox-border bg-anibox-bg'
+                    }`}
+                  >
+                    {streamState.error
+                      ? `✗ ${streamState.error}`
+                      : streamState.running
+                        ? `● 运行中 · 端口 ${streamState.port}`
+                        : '○ 未启动'}
+                  </p>
+                </div>
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={streamRequireToken}
+                  onChange={(e) => {
+                    const v = e.target.checked
+                    setStreamRequireToken(v)
+                    saveStream({ requireToken: v })
+                  }}
+                  className="accent-anibox-accent w-4 h-4"
+                />
+                <span className="text-xs text-anibox-text">要求访问口令</span>
+              </label>
+              {streamRequireToken && (
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 px-3 py-2 text-sm bg-anibox-bg border border-anibox-border rounded-lg text-anibox-text font-mono">
+                    {streamToken || '—'}
+                  </code>
+                  <button
+                    onClick={() => {
+                      const t = Math.random().toString(36).slice(2, 8)
+                      setStreamToken(t)
+                      saveStream({ token: t })
+                    }}
+                    className="px-3 py-2 text-xs rounded-lg border border-anibox-border text-anibox-text-muted hover:text-anibox-text hover:border-anibox-accent/40 transition-colors"
+                  >
+                    重置
+                  </button>
+                </div>
+              )}
+              {streamState.urls.length > 0 && (
+                <div>
+                  <label className="text-xs text-anibox-text-muted block mb-1">访问地址（点按复制）</label>
+                  <div className="space-y-1.5">
+                    {streamState.urls.map((u) => (
+                      <button
+                        key={u}
+                        onClick={() => {
+                          navigator.clipboard?.writeText(u).catch(() => {})
+                          setStreamSaved(true)
+                          setTimeout(() => setStreamSaved(false), 1500)
+                        }}
+                        className="w-full flex items-center justify-between px-3 py-2 text-xs bg-anibox-bg border border-anibox-border rounded-lg text-anibox-accent font-mono hover:border-anibox-accent/40 transition-colors"
+                      >
+                        <span>{u}</span>
+                        <span className="text-anibox-text-muted">{streamSaved ? '✓ 已复制' : '复制'}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-anibox-text-muted mt-1">
+                    手机与电脑需在同一局域网；若无法访问，请允许 Windows 防火墙放行该端口。
+                  </p>
+                </div>
+              )}
+              {!streamState.urls.length && (
+                <p className="text-[10px] text-anibox-text-muted">
+                  {streamEnabled ? '服务器启动中…' : '启用串流后这里会显示局域网访问地址'}
+                </p>
+              )}
+              <div className="border-t border-anibox-border/40 pt-3">
+                <label className="text-xs text-anibox-text-muted block mb-1">转码引擎 (ffmpeg)</label>
+                <div className="flex items-center gap-2">
+                  {engineInfo?.ffmpeg ? (
+                    <span className="text-[11px] text-emerald-500">✓ 可用{engineInfo.ffmpegPath ? ` · ${engineInfo.ffmpegPath}` : ''}</span>
+                  ) : engineInfo?.download?.state === 'downloading' ? (
+                    <span className="text-[11px] text-anibox-accent">
+                      正在下载 {Math.round((engineInfo.download.progress || 0) * 100)}%（约 80MB，仅首次需要）…
+                    </span>
+                  ) : (
+                    <span className="text-[11px] text-amber-500">
+                      {engineInfo?.download?.state === 'error'
+                        ? `下载失败：${engineInfo.download.message || '未知错误'}`
+                        : '未检测到，mkv/HEVC 转码需要 ffmpeg（首次播放时自动下载）'}
+                    </span>
+                  )}
+                  {engineInfo && !engineInfo.ffmpeg && (
+                    <button
+                      onClick={async () => {
+                        const r = await window.electronAPI.streamFfmpegRetry()
+                        setEngineInfo(r)
+                      }}
+                      className="px-2 py-1 text-[11px] rounded-lg border border-anibox-border text-anibox-text-muted hover:text-anibox-text transition-colors"
+                    >
+                      重试下载
+                    </button>
+                  )}
+                </div>
+                <label className="text-xs text-anibox-text-muted block mb-1 mt-3">转码缓存</label>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={async () => {
+                      const r = await window.electronAPI.streamCacheInfo()
+                      setCacheInfo(r ? `当前缓存 ${r.cacheMB} MB` : '')
+                    }}
+                    className="px-3 py-1.5 text-xs rounded-lg border border-anibox-border text-anibox-text-muted hover:text-anibox-text transition-colors"
+                  >
+                    查看
+                  </button>
+                  <button
+                    onClick={async () => {
+                      const r = await window.electronAPI.streamCacheClean(100)
+                      setCacheInfo(r ? `✓ 已清理 ${r.removed} 个文件，释放 ${r.freedMB} MB` : '✗ 清理失败')
+                    }}
+                    className="px-3 py-1.5 text-xs rounded-lg border border-anibox-border text-anibox-text-muted hover:text-anibox-text transition-colors"
+                  >
+                    清理缓存
+                  </button>
+                  {cacheInfo && <span className="text-[11px] text-anibox-text-muted">{cacheInfo}</span>}
+                </div>
+                <p className="text-[10px] text-anibox-text-muted/60 mt-1">
+                  转封装/转码产物存储在 userData/stream-cache，同一文件再次播放秒开。
+                </p>
+              </div>
             </div>
           )}
 

@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#101318">
+<title>AniBox 串流</title>
+<style>
+:root{
+  --bg:#101318; --surface:#171b22; --surface2:#1e232c; --border:#2a313c;
+  --text:#e8ebf0; --muted:#8b93a3; --accent:#7f9bd4; --accent2:#5d7bb3;
+  --ok:#7fb98a; --warn:#d4a06f; --err:#d46f6f;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;font-size:14px;line-height:1.5}
+#app{max-width:820px;margin:0 auto;min-height:100%}
+button{font-family:inherit;border:none;background:none;color:inherit;cursor:pointer}
+img{display:block}
+.hidden{display:none!important}
+
+/* ---------- header ---------- */
+.hd{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:10px;padding:12px 14px;
+  background:rgba(16,19,24,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--border)}
+.hd .back{font-size:20px;color:var(--muted);padding:2px 8px}
+.hd .ttl{font-size:15px;font-weight:600;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hd .sub{font-size:11px;color:var(--muted)}
+.search{flex:1;display:flex;align-items:center;background:var(--surface);border:1px solid var(--border);
+  border-radius:8px;padding:6px 10px;color:var(--muted)}
+.search input{flex:1;background:none;border:none;outline:none;color:var(--text);font-size:13px;margin-left:6px}
+
+/* ---------- 首页 grid ---------- */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:12px;padding:14px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;cursor:pointer;transition:transform .12s}
+.card:active{transform:scale(.97)}
+.card .cov{position:relative;aspect-ratio:3/4;background:var(--surface2)}
+.card .cov img{width:100%;height:100%;object-fit:cover}
+.card .cov .ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:26px;color:var(--muted)}
+.card .prog{position:absolute;left:0;right:0;bottom:0;height:3px;background:rgba(255,255,255,.15)}
+.card .prog i{display:block;height:100%;background:var(--accent)}
+.card .info{padding:8px 9px}
+.card .name{font-size:12.5px;font-weight:500;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:34px}
+.card .meta{font-size:10.5px;color:var(--muted);margin-top:4px;display:flex;gap:6px;align-items:center}
+.card .meta .tag{padding:1px 5px;border-radius:4px;background:var(--surface2);border:1px solid var(--border)}
+
+/* ---------- 详情 ---------- */
+.hero{display:flex;gap:14px;padding:14px;background:var(--surface);border-bottom:1px solid var(--border)}
+.hero .cov{width:96px;aspect-ratio:3/4;border-radius:8px;overflow:hidden;background:var(--surface2);flex-shrink:0}
+.hero .cov img{width:100%;height:100%;object-fit:cover}
+.hero .info{flex:1;min-width:0}
+.hero .t{font-size:16px;font-weight:600;margin-bottom:4px}
+.hero .d{font-size:11px;color:var(--muted);line-height:1.6}
+.hero .d b{color:var(--text);font-weight:500}
+.ep-list{padding:8px 14px 20px}
+.ep{display:flex;align-items:center;gap:10px;padding:11px 6px;border-bottom:1px solid var(--border);cursor:pointer}
+.ep:active{background:var(--surface)}
+.ep .no{width:34px;height:34px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--muted);flex-shrink:0}
+.ep .nm{flex:1;font-size:12.5px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ep .st{font-size:10.5px;color:var(--muted);flex-shrink:0}
+.ep .st.w{color:var(--ok)}
+.ep .play{width:30px;height:30px;border-radius:50%;background:var(--accent);color:#0d1116;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.ep .play svg{width:13px;height:13px}
+
+/* ---------- 播放器 ---------- */
+.player-wrap{position:fixed;inset:0;background:#000;z-index:50;display:flex;flex-direction:column}
+video{flex:1;width:100%;object-fit:contain;background:#000}
+.pbar{position:relative;height:44px;display:flex;align-items:center}
+.pbar .btns{display:flex;align-items:center;gap:2px;padding:0 8px;flex-shrink:0}
+.pbar .btns button{color:var(--text);font-size:14px;padding:8px 10px;border-radius:8px}
+.pbar .btns button:active{background:var(--surface2)}
+.pbar .btns button.on{color:var(--accent)}
+.pbar .btns .speed{font-size:12px;font-weight:600;min-width:44px}
+.pbar .btns .pbtn{font-size:18px}
+.ov{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;
+  background:rgba(0,0,0,.72);color:var(--text);z-index:5}
+.ov .ring{width:34px;height:34px;border:3px solid var(--surface2);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.ov .pt{font-size:13px}
+.ov .pd{font-size:11px;color:var(--muted)}
+.ov .err{font-size:13px;color:var(--err);text-align:center;padding:0 30px;line-height:1.6}
+.toast{position:fixed;left:50%;bottom:70px;transform:translateX(-50%);background:rgba(0,0,0,.85);
+  color:#fff;font-size:12.5px;padding:8px 14px;border-radius:20px;z-index:99;opacity:0;transition:opacity .25s;pointer-events:none;max-width:80%}
+.toast.show{opacity:1}
+.empty{text-align:center;color:var(--muted);padding:60px 20px;font-size:13px}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div class="toast" id="toast"></div>
+<script>
+const TOKEN = "__ANIBOX_TOKEN__";
+const $ = (s, el=document) => el.querySelector(s);
+const el = (tag, cls, txt) => { const e = document.createElement(tag); if(cls)e.className=cls; if(txt!=null)e.textContent=txt; return e; };
+
+function toast(msg){
+  const t = $("#toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(t._h); t._h = setTimeout(()=>t.classList.remove("show"), 2000);
+}
+function fmtSec(s){
+  if(!isFinite(s)||s<=0) return "";
+  s = Math.floor(s);
+  const h = Math.floor(s/3600), m = Math.floor(s%3600/60), sec = s%60;
+  return h>0 ? `${h}:${String(m).padStart(2,"0")}:${String(sec).padStart(2,"0")}`
+             : `${m}:${String(sec).padStart(2,"0")}`;
+}
+async function api(path, opts={}){
+  const sep = path.includes("?") ? "&" : "?";
+  const url = path + sep + "key=" + encodeURIComponent(TOKEN);
+  const r = await fetch(url, opts);
+  if(!r.ok) throw new Error("HTTP " + r.status);
+  const ct = r.headers.get("content-type")||"";
+  return ct.includes("json") ? r.json() : r.text();
+}
+function vurl(path){ // 视频/封面 URL（无需 token 注入路径里，由 fetch 带 key；img/video 直接拼）
+  const sep = path.includes("?") ? "&" : "?";
+  return path + sep + "key=" + encodeURIComponent(TOKEN);
+}
+
+/* ---------- 数据 ---------- */
+let LIB = null; // { series: [], episodes: {} }
+async function loadLib(){
+  if(!LIB){
+    LIB = await api("/api/library");
+    LIB.series.sort((a,b)=> (b.meta?.year||0)-(a.meta?.year||0) || (b.watched?.total||0)-(a.watched?.total||0));
+  }
+  return LIB;
+}
+
+/* ---------- 路由 ---------- */
+function route(){
+  const h = location.hash || "#/";
+  if(h.startsWith("#/series/")) renderDetail(decodeURIComponent(h.slice(9)));
+  else if(h.startsWith("#/play")) renderPlayer(h);
+  else renderHome();
+}
+window.addEventListener("hashchange", route);
+
+/* ---------- 首页 ---------- */
+async function renderHome(){
+  const app = $("#app"); app.innerHTML = "";
+  const hd = el("div","hd");
+  hd.appendChild(el("span","ttl","AniBox 串流"));
+  const sc = el("div","search");
+  sc.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>';
+  const inp = el("input"); inp.placeholder="搜索番剧…"; sc.appendChild(inp);
+  hd.appendChild(sc);
+  app.appendChild(hd);
+  const list = el("div","grid");
+  app.appendChild(list);
+  let kw = "";
+  inp.addEventListener("input", ()=>{ kw = inp.value.trim().toLowerCase(); paint(); });
+
+  async function paint(){
+    let lib;
+    try{ lib = await loadLib(); }catch(e){ list.innerHTML=""; list.appendChild(el("div","empty","无法连接 AniBox 服务，请确认电脑端已开启串流")); return; }
+    list.innerHTML = "";
+    const items = lib.series.filter(s => !kw || (s.title||"").toLowerCase().includes(kw));
+    if(!items.length){ list.appendChild(el("div","empty", kw ? "没有匹配的番剧" : "库是空的，先在电脑端扫描番剧")); return; }
+    for(const s of items){
+      const card = el("div","card");
+      card.addEventListener("click", ()=> location.hash = "#/series/" + encodeURIComponent(s.id));
+      const cov = el("div","cov");
+      const ph = el("div","ph","🎞"); cov.appendChild(ph);
+      const img = document.createElement("img");
+      img.alt = "";
+      const tryRemote = ()=>{ if(s.coverUrl){ img.src = s.coverUrl; img.onerror = ()=>{}; } };
+      if(s.coverPath){ img.src = vurl("/api/cover?path=" + encodeURIComponent(s.coverPath)); img.onerror = tryRemote; }
+      else if(s.coverUrl){ img.src = s.coverUrl; }
+      cov.appendChild(img);
+      const w = s.watched, total = w?.total||0, done = w?.watched||0;
+      if(total>0){
+        const prog = el("div","prog");
+        const bar = el("i"); bar.style.width = Math.min(100, Math.round(done/total*100)) + "%"; prog.appendChild(bar);
+        cov.appendChild(prog);
+      }
+      card.appendChild(cov);
+      const info = el("div","info");
+      info.appendChild(el("div","name", s.title || "未命名"));
+      const meta = el("div","meta");
+      if(s.meta?.year) meta.appendChild(el("span","tag", String(s.meta.year)));
+      meta.appendChild(el("span","tag", `${done}/${total} 集`));
+      info.appendChild(meta);
+      card.appendChild(info);
+      list.appendChild(card);
+    }
+  }
+  paint();
+}
+
+/* ---------- 详情 ---------- */
+async function renderDetail(id){
+  const app = $("#app"); app.innerHTML = "";
+  const lib = await loadLib();
+  const s = lib.series.find(x=>x.id===id);
+  if(!s){ app.appendChild(el("div","empty","未找到该番剧")); return; }
+  const eps = (lib.episodes[s.id]||[]).slice().sort((a,b)=>a.epNumber-b.epNumber);
+  const hd = el("div","hd");
+  const back = el("button","back","‹"); back.addEventListener("click",()=>location.hash="#/");
+  hd.appendChild(back); hd.appendChild(el("span","ttl", s.title||"详情"));
+  app.appendChild(hd);
+  const hero = el("div","hero");
+  const cov = el("div","cov");
+  const img = document.createElement("img"); img.alt="";
+  if(s.coverPath){ img.src = vurl("/api/cover?path=" + encodeURIComponent(s.coverPath)); img.onerror = ()=>{ if(s.coverUrl) img.src = s.coverUrl; }; }
+  else if(s.coverUrl){ img.src = s.coverUrl; }
+  cov.appendChild(img); hero.appendChild(cov);
+  const info = el("div","info");
+  info.appendChild(el("div","t", s.title || "未命名"));
+  const m = s.meta||{};
+  const dline = [];
+  if(m.year) dline.push(`<b>${m.year}</b>年`);
+  if(m.rating) dline.push(`评分 <b>${m.rating}</b>`);
+  if(m.studio) dline.push(`<b>${m.studio}</b>`);
+  if(m.genres?.length) dline.push(m.genres.slice(0,3).join(" / "));
+  info.appendChild(el("div","d", dline.join(" · ") || "暂无简介"));
+  if(m.synopsis){ const sy = el("div","d"); sy.style.marginTop="6px"; sy.style.maxHeight="3.2em"; sy.style.overflow="hidden"; sy.textContent = m.synopsis; info.appendChild(sy); }
+  hero.appendChild(info);
+  app.appendChild(hero);
+  const list = el("div","ep-list");
+  if(!eps.length) list.appendChild(el("div","empty","该番剧暂无剧集"));
+  for(const ep of eps){
+    const row = el("div","ep");
+    row.addEventListener("click", ()=> location.hash = "#/play?p=" + encodeURIComponent(ep.filePath) + "&id=" + encodeURIComponent(id) + "&ep=" + ep.epNumber);
+    row.appendChild(el("div","no", String(ep.epNumber)));
+    row.appendChild(el("div","nm", ep.fileName));
+    const st = el("div","st");
+    if(ep.progress?.completed){ st.textContent = "已看"; st.classList.add("w"); }
+    else if(ep.progress?.position>0) st.textContent = "看到 " + fmtSec(ep.progress.position);
+    else st.textContent = "";
+    row.appendChild(st);
+    const pb = el("div","play");
+    pb.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4l13 8-13 8z"/></svg>';
+    row.appendChild(pb);
+    list.appendChild(row);
+  }
+  app.appendChild(list);
+}
+
+/* ---------- 播放器 ---------- */
+let cur = { ep:null, subs:[], streamMode:"auto", state:"idle" };
+function renderPlayer(hash){
+  const q = new URLSearchParams(hash.split("?")[1]||"");
+  const path = q.get("p")||"";
+  const seriesId = q.get("id")||"";
+  const epNo = Number(q.get("ep"))||0;
+  if(!path){ location.hash = "#/"; return; }
+  const app = $("#app"); app.innerHTML = "";
+  const wrap = el("div","player-wrap");
+  const video = document.createElement("video");
+  video.playsInline = true; video.setAttribute("webkit-playsinline","");
+  video.controls = false; video.preload = "auto";
+  wrap.appendChild(video);
+  const ov = el("div","ov","");
+  ov.appendChild(el("div","ring"));
+  const pt = el("div","pt","准备播放…"); ov.appendChild(pt);
+  const pd = el("div","pd",""); ov.appendChild(pd);
+  wrap.appendChild(ov);
+  const bar = el("div","pbar");
+  const mkBtn = (html, cls, fn) => { const b = el("button", cls, ""); b.innerHTML = html; b.addEventListener("click", fn); return b; };
+  const prevBtn = mkBtn('‹', "", ()=> stepEp(-1));
+  const nextBtn = mkBtn('›', "", ()=> stepEp(1));
+  const speedBtn = el("button","speed","1.0x"); speedBtn.addEventListener("click", ()=>{
+    const opts = [0.5,0.75,1,1.25,1.5,2]; const i = opts.indexOf(video.playbackRate);
+    const v = i>=0 ? opts[(i+1)%opts.length] : 1; video.playbackRate = v; speedBtn.textContent = v+"x";
+    localStorage.setItem("anibox_speed", String(v));
+  });
+  const subBtn = mkBtn('字', "", ()=> toggleSubs());
+  const autoBtn = el("button","","自动连播");
+  const setAuto = (on)=>{ autoBtn.textContent = on ? "连播·开" : "连播·关"; autoBtn.classList.toggle("on", on); };
+  autoBtn.addEventListener("click", ()=>{ const on = !(localStorage.getItem("anibox_autonext") !== "0"); setAuto(!on); localStorage.setItem("anibox_autonext", !on ? "1":"0"); });
+  bar.append(prevBtn, speedBtn, subBtn, autoBtn, nextBtn);
+  wrap.appendChild(bar);
+  app.appendChild(wrap);
+
+  const resume = localStorage.getItem("anibox_speed");
+  if(resume){ const r = parseFloat(resume); if(r) video.playbackRate = r; speedBtn.textContent = r+"x"; }
+  setAuto(localStorage.getItem("anibox_autonext") !== "0");
+
+  let epList = [];
+  async function loadEpList(){
+    try{
+      const lib = await loadLib();
+      epList = (lib.episodes[seriesId]||[]).slice().sort((a,b)=>a.epNumber-b.epNumber);
+    }catch(e){ /* ok */ }
+  }
+  loadEpList();
+
+  function stepEp(dir){
+    const i = epList.findIndex(e=>e.epNumber===epNo);
+    const n = epList[i+dir];
+    if(n) location.hash = "#/play?p=" + encodeURIComponent(n.filePath) + "&id=" + encodeURIComponent(seriesId) + "&ep=" + n.epNumber;
+    else toast(dir>0 ? "已经是最后一集" : "已经是第一集");
+  }
+
+  /* 播放主流程 */
+  async function start(){
+    ov.classList.remove("hidden");
+    pt.textContent = "分析文件…";
+    try{
+      const r = await api("/api/stream?path=" + encodeURIComponent(path) + "&mode=auto");
+      cur.streamMode = r.mode || "auto";
+      if(r.kind === "error"){ showErr(r.message || "无法播放该文件"); return; }
+      if(r.kind === "working"){
+        pt.textContent = r.mode === "transcode" ? "正在转码（编码不兼容，首次较慢）…" : "正在转封装…";
+        pd.textContent = r.progress>0 ? Math.round(r.progress*100)+"%" : "首次播放需要几秒到几十秒，之后秒开";
+        await pollStream();
+      } else {
+        playPath(r.path);
+      }
+    }catch(e){ showErr("请求失败: " + e.message); }
+  }
+
+  function showErr(msg){
+    ov.innerHTML = "";
+    ov.appendChild(el("div","err", msg));
+    const back = el("button","","返回列表"); back.style.cssText="margin-top:14px;background:var(--accent);color:#0d1116;padding:9px 22px;border-radius:20px;font-size:13px";
+    back.addEventListener("click", ()=> location.hash = "#/series/" + encodeURIComponent(seriesId));
+    ov.appendChild(back);
+  }
+
+  async function pollStream(){
+    const mode = cur.streamMode || "auto";
+    for(let i=0;i<900;i++){
+      await new Promise(r=>setTimeout(r, 1200));
+      try{
+        const st = await api("/api/stream-status?path=" + encodeURIComponent(path) + "&mode=" + encodeURIComponent(mode));
+        if(st.state === "done" && st.cachePath){ playPath(st.cachePath); return; }
+        if(st.state === "error"){ showErr(st.error || "转码失败"); return; }
+        if(st.progress>0){ pd.textContent = "正在转码 " + Math.round(st.progress*100) + "%（首次较慢，之后秒开）"; }
+        else pd.textContent = "正在处理…";
+      }catch(e){ /* 网络抖动重试 */ }
+    }
+    showErr("处理超时，请重试");
+  }
+
+  let usingTranscode = false;
+  function playPath(p){
+    ov.classList.remove("hidden");
+    pt.textContent = "加载视频…"; pd.textContent = "";
+    const src = vurl("/api/video?path=" + encodeURIComponent(p));
+    video.src = src;
+    video.load();
+  }
+
+  video.addEventListener("error", ()=>{
+    if(!usingTranscode && cur.streamMode !== "transcode"){
+      // 直出/转封装仍不兼容（如 Android+HEVC）→ 强制重编码
+      usingTranscode = true; cur.streamMode = "transcode";
+      pt.textContent = "当前格式不兼容，切换到转码…"; pd.textContent = "";
+      api("/api/stream?path=" + encodeURIComponent(path) + "&mode=transcode").then(r=>{
+        if(r.kind === "working"){ pt.textContent = "正在转码…"; pd.textContent = ""; pollStream(); }
+        else if(r.kind === "cache"){ playPath(r.path); }
+        else showErr("无法生成兼容版本");
+      }).catch(()=>{});
+    } else {
+      showErr("该视频无法在浏览器中播放（可能是编码不兼容）");
+    }
+  });
+
+  video.addEventListener("loadedmetadata", async ()=>{
+    ov.classList.add("hidden");
+    // 恢复进度
+    try{
+      const p = await api("/api/progress?path=" + encodeURIComponent(path));
+      if(p && p.position > 5 && p.position < video.duration - 10){
+        video.currentTime = p.position;
+      }
+    }catch(e){ /* ok */ }
+    // 加载字幕
+    loadSubs();
+  });
+  video.addEventListener("play", ()=>{ ov.classList.add("hidden"); });
+  video.addEventListener("pause", ()=> saveProgress());
+  video.addEventListener("ended", ()=>{
+    saveProgress(true);
+    if(localStorage.getItem("anibox_autonext") !== "0") stepEp(1);
+  });
+  setInterval(saveProgress, 5000);
+  window.addEventListener("beforeunload", saveProgress);
+  document.addEventListener("visibilitychange", ()=>{ if(document.hidden) saveProgress(); });
+
+  let savedFor = "";
+  async function saveProgress(force){
+    const p = path; if(!p || p===savedFor && !force) return;
+    savedFor = p;
+    try{ await api("/api/progress", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ path: p, position: video.currentTime||0 }) }); }catch(e){}
+  }
+
+  /* 字幕 */
+  let subOn = true;
+  async function loadSubs(){
+    try{
+      const subs = await api("/api/subs?path=" + encodeURIComponent(path));
+      cur.subs = subs;
+      if(!subs.length) return;
+      const t = document.createElement("track");
+      t.kind = "subtitles"; t.label = subs[0].label || "字幕"; t.srclang = subs[0].language || "zh";
+      t.src = vurl("/api/sub?path=" + encodeURIComponent(subs[0].filePath));
+      video.appendChild(t);
+      subBtn.classList.add("on");
+    }catch(e){ /* 无字幕 */ }
+  }
+  function toggleSubs(){
+    subOn = !subOn;
+    const t = video.querySelector("track");
+    if(!t){ toast("该集没有外挂字幕"); subOn = true; return; }
+    t.track.mode = subOn ? "showing" : "hidden";
+    subBtn.classList.toggle("on", subOn);
+  }
+
+  start();
+}
+
+/* ---------- 启动 ---------- */
+route();
+</script>
+</body>
+</html>
