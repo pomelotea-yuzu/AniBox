@@ -417,6 +417,17 @@ function renderPlayer(hash){
   }
 
   let usingTranscode = false;
+  // 后台预转封装下一集（fire-and-forget），切集时秒开
+  function prewarmNext(){
+    if(!epList.length || cur.prewarmed) return;
+    const i = epList.findIndex(e=>e.epNumber===epNo);
+    const n = epList[i+1];
+    if(!n) return;
+    cur.prewarmed = true;
+    setTimeout(()=>{
+      api("/api/stream?path=" + encodeURIComponent(n.filePath) + "&mode=auto").catch(()=>{});
+    }, 4000); // 延迟 4s，避免抢占当前集播放带宽
+  }
   function playPath(p, srcKind){
     cur.srcKind = srcKind || "stream";
     ov.classList.remove("hidden");
@@ -447,6 +458,7 @@ function renderPlayer(hash){
     ov.classList.add("hidden");
     // 元数据就绪后兜底启动播放（覆盖 autoplay 被 Safari 策略拒绝的情况）
     tryPlay();
+    prewarmNext(); // 后台预转下一集
     // 恢复进度
     try{
       const p = await api("/api/progress?path=" + encodeURIComponent(path));
