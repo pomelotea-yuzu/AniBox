@@ -1,6 +1,6 @@
 # AniBox
 
-本地番剧库管理器 + 播放器。扫描番剧目录自动生成海报墙，新番时间表追更，还能**搜索想要的番剧并一键下载 BT 资源**，点击即播。
+本地番剧库管理器 + 播放器。扫描番剧目录自动生成海报墙，新番时间表追更，还能**搜索想要的番剧并一键下载 BT 资源**，点击即播。**局域网串流**让手机 / iPad 打开浏览器就能看电脑里的番剧。
 
 ## 项目地址
 
@@ -14,6 +14,7 @@
 1. 下载 `AniBox-x.y.z-portable-x64.zip`（见上方 Releases 页），解压后双击 `AniBox.exe`
 2. 首次使用点 **手动添加** 选择番剧目录（或直接「搜索番剧」在线找资源）
 3. 可选：在 **设置 → 下载** 配置 qBittorrent WebUI，解锁「一键下载 / 追番」
+4. **手机/iPad 看番**：**设置 → 串流** 勾选「启用局域网串流」→ 手机连同一 WiFi → 浏览器打开显示的地址（形如 `http://192.168.x.x:17830`）→ 选番剧开看，无需安装 App
 
 **开发者**
 ```bash
@@ -27,6 +28,7 @@ pnpm package      # 打包
 
 > 环境要求：Windows 10/11，Node.js ≥ 20（pnpm 11 要求）与 pnpm ≥ 11。
 > 运行期需要 `libmpv-2.dll` 与 `mpv.exe` 与应用一同分发（内嵌播放与兜底播放引擎）。
+> 局域网串流的 mkv/HEVC 转码依赖 `ffmpeg.exe`：应用会自动检测（应用目录 / PATH / userData），缺失时自动下载，也可手动放置到应用目录。
 
 ---
 
@@ -65,6 +67,16 @@ pnpm package      # 打包
   - **封面简介自动写入** — 追番成功后自动把该番封面与简介写入保存目录（`.anibox/cover.jpg` + `metadata.json`），番剧库刷新即显示
 - **版本自适应** — qBittorrent WebUI 客户端兼容 4.x / 5.x 差异（path 语义、登录响应格式）
 
+### 局域网串流（1.2.0 新增）
+- **手机/iPad 直接看番** — 电脑端「设置 → 串流」一键开启，手机浏览器访问地址即可浏览番剧库并播放，免安装 App
+- **格式自动适配** — mp4/webm 秒开直出；mkv 自动转封装（`-c copy` 不重编码、画质无损，1~2 秒）；HEVC 自动转码（iPhone 直出，Android 自动重编码）
+- **转码引擎零配置** — 自动检测 ffmpeg（应用目录 / PATH / userData），缺失时自动下载（BtbN / gyan.dev 镜像），也可手动放置
+- **产物缓存** — 转封装/转码结果缓存于 `userData/stream-cache`，同一集再次播放秒开，可一键清理
+- **下一集预转封装** — 播放中后台预热下一集，切集秒开
+- **进度双向同步** — 手机看到一半，电脑接着看
+- **外挂字幕** — srt / ass 自动转 VTT 显示（与视频同目录、文件名含集号）
+- **访问安全** — 默认开启访问口令（链接自动携带）；仅暴露扫描根目录内的文件；端口被占自动跳转
+
 ### 播放器
 - **HTML5 video 为主** — 支持 30+ 视频格式（mp4/mkv/ts/rmvb 等），4K 走硬解
 - **libmpv 内嵌播放** — 编码/字幕不兼容时自动切换：mpv-2.dll + koffi 软渲染取帧，单窗口内显示（画面/字幕/控制条不割裂），1080p 流畅
@@ -96,10 +108,10 @@ pnpm package      # 打包
 - **过滤** — 关键词+正则过滤
 
 ### 其他
-- **OP/ED 智能跳过** — 双点区间标记，所有同系列剧集自动沿用
+- **OP/ED 智能跳过** — 快捷键模式：连按 3 次右方向键跳过 90 秒（OP/ED 固定时长），控制条一键开关
 - **音轨管理** — 自动检测多音轨，按系列记忆偏好，音频延迟+音量均衡
 - **莫兰迪配色主题** — 5 套主题（暖燕麦/冷亚麻/玫瑰灰/橄榄暮/薰衣雾），ThemeProvider + CSS 变量驱动
-- **全局设置** — 主题/字幕/播放/快捷键/API/下载/关于 7 个 Tab 设置页
+- **全局设置** — 主题/字幕/播放/快捷键/API/下载/串流/关于 8 个 Tab 设置页
 - **快捷键** — 30+ 键盘快捷键覆盖所有操作，`?` 键呼出帮助面板
 
 ---
@@ -155,6 +167,7 @@ AniBox → **设置 → 下载**：
 | 桌面框架 | Electron 33 + electron-vite |
 | 前端 | React 19 + TypeScript + Tailwind CSS |
 | 播放 | HTML5 video（主）+ libmpv 内嵌软渲染（koffi FFI 取帧 → WebGL 显示）+ mpv.exe 回退 |
+| 局域网串流 | Node.js 内置 http（Range 流式）+ mpv IPC 编码探测 + ffmpeg 转封装/转码（fragmented mp4） |
 | 存储 | JSON 文件（anibox-store.json，debounce 写入 + 原子保存） |
 | 扫描 | Node.js fs 递归 + 跨文件夹合并算法 |
 | 搜索 | AniList GraphQL（番剧库）+ Bangumi v0（中文转原名兜底） |
@@ -192,7 +205,7 @@ F:/收藏/
 
 ```
 anibox/
-├─ src/main/       Electron 主进程：扫描、元数据/字幕/弹幕抓取、libmpv bridge、qBittorrent 联动
+├─ src/main/       Electron 主进程：扫描、元数据/字幕/弹幕抓取、libmpv bridge、qBittorrent 联动、局域网串流（stream-server / video-probe / transcode）
 ├─ src/preload/    预加载脚本（IPC 桥，contextBridge 暴露 window.electronAPI）
 ├─ src/renderer/   React 渲染进程：海报墙、播放器（Player/MpvCanvas）、时间表、搜索、设置
 ├─ resources/      应用图标等静态资源
@@ -249,9 +262,10 @@ pnpm package
 | [Hugging Face](https://huggingface.co) | opus-mt 离线翻译模型（国内走 hf-mirror.com 镜像） | https://huggingface.co |
 | [whisper.cpp](https://github.com/ggerganov/whisper.cpp) | Whisper 离线语音识别 | https://github.com/ggerganov/whisper.cpp |
 | [mpv](https://mpv.io) | 播放器兜底引擎（libmpv 内嵌软渲染 + mpv.exe 回退） | https://mpv.io |
+| [FFmpeg](https://ffmpeg.org) | 局域网串流转封装/转码（静态构建：BtbN / gyan.dev） | https://ffmpeg.org |
 
 所有在线服务的 API Key 均仅存储在本地（`userData/` 下 JSON 文件），不会上传。
 
 ---
 
-*最后更新: 2026-08-13*
+*最后更新: 2026-08-23（v1.2.0）*
