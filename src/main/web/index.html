@@ -34,7 +34,7 @@ img{display:block}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;cursor:pointer;transition:transform .12s}
 .card:active{transform:scale(.97)}
 .card .cov{position:relative;aspect-ratio:3/4;background:var(--surface2)}
-.card .cov img{width:100%;height:100%;object-fit:cover}
+.card .cov img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .card .cov .ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:26px;color:var(--muted)}
 .card .prog{position:absolute;left:0;right:0;bottom:0;height:3px;background:rgba(255,255,255,.15)}
 .card .prog i{display:block;height:100%;background:var(--accent)}
@@ -259,9 +259,28 @@ function renderPlayer(hash){
   video.controls = false; video.preload = "auto";
   wrap.appendChild(video);
   // 点击画面切换播放/暂停（兜底：万一 autoplay 被 Safari 拒绝，点一下即可播放）
+  function tryPlay(){
+    const p = video.play();
+    if(p && p.catch){
+      p.catch(()=>{
+        // 有声播放被 Safari 策略拒绝（异步转封装后手势失效）→ 静音播放兜底（Safari 一定允许），用户点击后恢复声音
+        if(!video.muted){
+          video.muted = true;
+          const p2 = video.play();
+          if(p2 && p2.catch) p2.catch(()=>{});
+          toast("已静音播放，点击画面开启声音");
+        }
+      });
+    }
+  }
   video.addEventListener("click", ()=>{
-    if(video.paused) video.play().catch(()=>{});
-    else video.pause();
+    if(video.paused){
+      if(video.muted) video.muted = false; // 用户手势内恢复声音
+      tryPlay();
+    } else {
+      if(video.muted){ video.muted = false; toast("声音已开启"); }
+      else video.pause();
+    }
   });
   const ov = el("div","ov","");
   ov.appendChild(el("div","ring"));
@@ -276,7 +295,15 @@ function renderPlayer(hash){
   const updatePlayIcon = ()=>{ playBtn.innerHTML = video.paused ? PLAY_SVG : PAUSE_SVG; };
   video.addEventListener("play", updatePlayIcon);
   video.addEventListener("pause", updatePlayIcon);
-  playBtn.addEventListener("click", ()=>{ if(video.paused) video.play().catch(()=>{}); else video.pause(); });
+  playBtn.addEventListener("click", ()=>{
+    if(video.paused){
+      if(video.muted) video.muted = false;
+      tryPlay();
+    } else {
+      if(video.muted){ video.muted = false; toast("声音已开启"); }
+      else video.pause();
+    }
+  });
   const prevBtn = mkBtn('‹', "", ()=> stepEp(-1));
   const nextBtn = mkBtn('›', "", ()=> stepEp(1));
   const speedBtn = el("button","speed","1.0x"); speedBtn.addEventListener("click", ()=>{
@@ -373,7 +400,7 @@ function renderPlayer(hash){
     const src = vurl("/api/video?path=" + encodeURIComponent(p));
     video.src = src;
     video.load();
-    video.play().catch(()=>{}); // iPad Safari 需显式 play()
+    tryPlay(); // iPad Safari 需显式 play()；被拒时自动静音播放兜底
   }
 
   video.addEventListener("error", ()=>{
@@ -395,7 +422,7 @@ function renderPlayer(hash){
   video.addEventListener("loadedmetadata", async ()=>{
     ov.classList.add("hidden");
     // 元数据就绪后兜底启动播放（覆盖 autoplay 被 Safari 策略拒绝的情况）
-    video.play().catch(()=>{});
+    tryPlay();
     // 恢复进度
     try{
       const p = await api("/api/progress?path=" + encodeURIComponent(path));
