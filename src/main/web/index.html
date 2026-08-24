@@ -643,7 +643,10 @@ function renderPlayer(hash){
   const mkBtn = (html, cls, title, fn) => { const b = el("button", cls, ""); b.innerHTML = html; if(title) b.title = title; b.addEventListener("click", fn); return b; };
 
   // 播放 / 暂停
-  const playBtn = el("button","pbtn",SVG.play);
+  const playBtn = mkBtn(SVG.play, "pbtn", "播放/暂停", ()=>{
+    hideTapLayer();
+    if(video.paused) tryPlay(); else video.pause();
+  });
   const updatePlayIcon = ()=>{ playBtn.innerHTML = video.paused ? SVG.play : SVG.pause; };
   video.addEventListener("play", updatePlayIcon);
   video.addEventListener("pause", updatePlayIcon);
@@ -875,6 +878,18 @@ function renderPlayer(hash){
   });
   seek.addEventListener("change", ()=>{
     if(isFinite(video.duration) && video.duration){
+      if(cur.live){
+        // 实时转码中：seek 超出已转完区域会失败，限制在已缓冲范围附近
+        try{
+          const b = video.buffered;
+          const max = b.length ? b.end(b.length-1) : video.currentTime;
+          if(Number(seek.value) > max + 15){
+            toast("该位置还没转码完成，稍候再试");
+            seeking = false;
+            return;
+          }
+        }catch(e){ /* ignore */ }
+      }
       video.currentTime = Number(seek.value);
     }
     seeking = false;
@@ -994,6 +1009,13 @@ function renderPlayer(hash){
       const r = await api("/api/stream?path=" + encodeURIComponent(path) + "&mode=" + encodeURIComponent(mode));
       cur.streamMode = r.mode || mode;
       if(r.kind === "error"){ showErr(r.message || "无法播放该文件"); return; }
+      if(r.kind === "live"){
+        // 实时播放：产物已可读，边转边播（无需等待完成）
+        pt.textContent = "开始播放（转码进行中）…"; pd.textContent = "";
+        playPath(r.path, "live");
+        watchLive(r.mode || mode);
+        return;
+      }
       if(r.kind === "working"){
         pt.textContent = r.mode === "transcode" ? "正在转码（编码不兼容，首次较慢）…" : "正在转封装…";
         pd.textContent = r.progress>0 ? Math.round(r.progress*100)+"%" : "首次播放需要几秒到几十秒，之后秒开";
@@ -1018,6 +1040,7 @@ function renderPlayer(hash){
       await new Promise(r=>setTimeout(r, 1200));
       try{
         const st = await api("/api/stream-status?path=" + encodeURIComponent(path) + "&mode=" + encodeURIComponent(mode));
+        if(st.state === "live" && st.cachePath){ playPath(st.cachePath, "live"); watchLive(mode); return; }
         if(st.state === "done" && st.cachePath){ playPath(st.cachePath, "stream"); return; }
         if(st.state === "error"){ showErr(st.error || "转码失败"); return; }
         if(st.progress>0){ pd.textContent = "正在转码 " + Math.round(st.progress*100) + "%（首次较慢，之后秒开）"; }
@@ -1025,6 +1048,18 @@ function renderPlayer(hash){
       }catch(e){ /* 网络抖动重试 */ }
     }
     showErr("处理超时，请重试");
+  }
+
+  /* 实时播放：后台轮询任务直到完成/失败（播放同一路径，转完即成为缓存，秒开复用） */
+  async function watchLive(mode){
+    for(let i=0;i<1200;i++){
+      await new Promise(r=>setTimeout(r, 1500));
+      try{
+        const st = await api("/api/stream-status?path=" + encodeURIComponent(path) + "&mode=" + encodeURIComponent(mode));
+        if(st.state === "error"){ showErr(st.error || "转码失败"); return; }
+        if(st.state === "done") return;
+      }catch(e){ /* 网络抖动重试 */ }
+    }
   }
 
   let usingTranscode = false;
@@ -1040,6 +1075,7 @@ function renderPlayer(hash){
   }
   function playPath(p, srcKind){
     cur.srcKind = srcKind || "stream";
+    cur.live = srcKind === "live";
     ov.classList.remove("hidden");
     pt.textContent = "加载视频…"; pd.textContent = "";
     const src = vurl("/api/video?path=" + encodeURIComponent(p));
@@ -1051,6 +1087,11 @@ function renderPlayer(hash){
   video.addEventListener("error", ()=>{
     const err = video.error;
     const info = err ? `（code=${err.code}${err.message ? " · " + err.message : ""}）` : "";
+    if(cur.live){
+      // 实时转码流中断（编码不兼容等），不再降级循环
+      showErr("实时转码播放中断" + info);
+      return;
+    }
     if(cur.srcKind === "direct"){
       cur.srcKind = "stream";
       startStreamPipeline("auto");

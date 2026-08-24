@@ -32,7 +32,7 @@ export interface StreamJob {
 }
 
 export interface PlayableResult {
-  kind: 'direct' | 'cache' | 'working' | 'error'
+  kind: 'direct' | 'cache' | 'live' | 'working' | 'error'
   /** 实际采用的模式：direct / remux / transcode（网页按它轮询 stream-status） */
   mode?: 'direct' | 'remux' | 'transcode'
   path?: string
@@ -40,6 +40,9 @@ export interface PlayableResult {
   message?: string
   probe?: ProbeResult | null
 }
+
+/** 产物达到该大小即可开始实时播放（fragmented mp4 的 ftyp+moov 在文件头，几百 KB 即可解析） */
+const LIVE_MIN_BYTES = 512 * 1024
 
 const jobs = new Map<string, StreamJob>()
 
@@ -334,22 +337,41 @@ export async function ensurePlayable(
   if (job) {
     if (job.state === 'done') return { kind: 'cache', mode: effMode, path: job.cachePath, probe }
     if (job.state === 'error') return { kind: 'error', mode: effMode, message: job.error || '转码失败', probe }
+    // 任务进行中：产物已可读 → 实时播放（边转边播），否则等网页轮询
+    if (isLiveReady(job.cachePath)) {
+      return { kind: 'live', mode: effMode, path: job.cachePath, probe, progress: job.progress }
+    }
     return { kind: 'working', mode: effMode, progress: job.progress, probe }
   }
 
   const promise = runJob(filePath, out, effMode, probe)
+  // 不 await 完成（后台继续跑，状态经 jobs/getStreamStatus 查询）
+  promise.catch(() => {})
   job = { state: 'working', progress: 0, cachePath: out, promise }
   jobs.set(key, job)
-  const path = await promise
-  const final = jobs.get(key)
-  if (!final) return { kind: 'error', mode: effMode, message: '转码任务异常', probe }
-  if (final.state === 'error') return { kind: 'error', mode: effMode, message: final.error || '转码失败', probe }
-  return { kind: 'cache', mode: effMode, path, probe, progress: 1 }
+
+  // 等产物写入到可播大小（fragmented mp4 头部写完即可解析），最多 6s
+  const deadline = Date.now() + 6000
+  while (Date.now() < deadline) {
+    if (isLiveReady(out)) {
+      return { kind: 'live', mode: effMode, path: out, probe, progress: job.progress }
+    }
+    await new Promise((r) => setTimeout(r, 100))
+  }
+  return { kind: 'working', mode: effMode, progress: job.progress, probe }
 }
 
-/** 查询任务状态（网页端轮询用） */
+function isLiveReady(out: string): boolean {
+  try {
+    return existsSync(out) && statSync(out).size >= LIVE_MIN_BYTES
+  } catch {
+    return false
+  }
+}
+
+/** 查询任务状态（网页端轮询用）。state: idle/working/live/done/error（live=产物可读，可实时播放） */
 export function getStreamStatus(filePath: string, mode: StreamMode = 'auto'): {
-  state: 'idle' | 'working' | 'done' | 'error'
+  state: 'idle' | 'working' | 'live' | 'done' | 'error'
   progress: number
   cachePath?: string
   error?: string
@@ -360,6 +382,9 @@ export function getStreamStatus(filePath: string, mode: StreamMode = 'auto'): {
     if (job) {
       if (job.state === 'done') return { state: 'done', progress: 1, cachePath: job.cachePath }
       if (job.state === 'error') return { state: 'error', progress: job.progress, error: job.error }
+      if (isLiveReady(job.cachePath)) {
+        return { state: 'live', progress: job.progress, cachePath: job.cachePath }
+      }
       return { state: 'working', progress: job.progress }
     }
     const out = join(cacheDir(), cacheKey(filePath, m))

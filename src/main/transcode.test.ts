@@ -15,7 +15,7 @@ vi.mock('electron', () => ({
   app: { getPath: () => TEST_DIR },
 }))
 
-const { ensurePlayable, findFfmpeg, hasFfmpeg } = await import('./transcode')
+const { ensurePlayable, getStreamStatus, findFfmpeg, hasFfmpeg } = await import('./transcode')
 
 const VIDEO = 'D:\\VEDIO\\Counter-Strike 2 - 2026-07-28 20-06-48.mp4'
 
@@ -34,16 +34,25 @@ describe.skipIf(!existsSync(VIDEO) || !hasFfmpeg())('transcode pipeline (real en
     expect(hasFfmpeg()).toBe(true)
   })
 
-  it('remuxes a real file into a cache mp4', async () => {
+  it('remuxes a real file into a cache mp4 (live-first, then cache)', async () => {
+    // 实时播放模式：产物可读即返回 live（边转边播），无需等待完整
     const r = await ensurePlayable(VIDEO, 'remux')
-    expect(r.kind).toBe('cache')
+    expect(['live', 'cache']).toContain(r.kind)
     expect(r.mode).toBe('remux')
-    expect(existsSync(r.path as string)).toBe(true)
-    expect(statSync(r.path as string).size).toBeGreaterThan(1024)
+    if (r.path) {
+      expect(existsSync(r.path)).toBe(true)
+    }
+    // 等任务完成，产物应完整且二次调用命中缓存
+    const deadline = Date.now() + 150000
+    while (Date.now() < deadline) {
+      const st = getStreamStatus(VIDEO, 'remux')
+      if (st.state === 'done') break
+      if (st.state === 'error') throw new Error('remux failed: ' + st.error)
+      await new Promise((res) => setTimeout(res, 1000))
+    }
+    const r2 = await ensurePlayable(VIDEO, 'remux')
+    expect(r2.kind).toBe('cache')
+    expect(existsSync(r2.path as string)).toBe(true)
+    expect(statSync(r2.path as string).size).toBeGreaterThan(1024)
   }, 180000)
-
-  it('second call hits the cache instantly', async () => {
-    const r = await ensurePlayable(VIDEO, 'remux')
-    expect(r.kind).toBe('cache')
-  })
 })
