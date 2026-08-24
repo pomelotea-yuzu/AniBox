@@ -47,8 +47,12 @@ export interface PlayableResult {
   probe?: ProbeResult | null
 }
 
-/** 产物达到该大小即可开始实时播放（fragmented mp4 的 ftyp+moov 在文件头，几百 KB 即可解析） */
-const LIVE_MIN_BYTES = 512 * 1024
+/**
+ * 产物达到该大小即可开始实时播放（fragmented mp4 的 ftyp+moov 在文件头，几百 KB 即可解析）。
+ * 2MB ≈ 转码 20~30 秒视频：首段太短（512KB 只有几秒）会频繁触发 Safari 边界续播，
+ * 造成"第一段很短 + 卡壳 + 尾部无声"的体验问题
+ */
+const LIVE_MIN_BYTES = 2 * 1024 * 1024
 
 // ---------- 硬件编码器探测 ----------
 

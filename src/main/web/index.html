@@ -1144,6 +1144,12 @@ function renderPlayer(hash){
     loadSubs();
   });
   video.addEventListener("play", ()=>{ ov.classList.add("hidden"); });
+  video.addEventListener("playing", ()=>{ ov.classList.add("hidden"); });
+  video.addEventListener("waiting", ()=>{
+    // 转码跟上/边界续播时的缓冲等待：显示轻提示，不误报错误
+    ov.classList.remove("hidden");
+    pt.textContent = "缓冲中…"; pd.textContent = "";
+  });
   video.addEventListener("pause", ()=> saveProgress());
   /* 正常播完：按播放模式处理（切集/循环/停止） */
   function handleNormalEnded(){
@@ -1170,8 +1176,33 @@ function renderPlayer(hash){
   }
 
   /* 实时转码播放到当前产物边界（Safari 不会自动续拉增量文件，触发 ended）：
-     检查转码状态 → 未完成则重新加载从末尾续播，绝不误判为"一集播完" */
+     检查转码状态 → 未完成则直接 seek 从末尾附近续播（不整体 reload，无卡壳），
+     绝不误判为"一集播完" */
+  let lastLiveEndedAt = 0;
+  function reloadContinue(last, back){
+    video.load();
+    const onMeta = ()=>{
+      video.removeEventListener("loadedmetadata", onMeta);
+      try{
+        if(last > 2 && isFinite(video.duration) && last < video.duration - 1){
+          video.currentTime = last - back;
+        }
+      }catch(e){ /* ignore */ }
+      video.play().catch(()=>{});
+    };
+    video.addEventListener("loadedmetadata", onMeta);
+    setTimeout(()=>{ if(video.readyState > 0) video.play().catch(()=>{}); }, 3000);
+  }
   async function liveEnded(){
+    const now = Date.now();
+    if(now - lastLiveEndedAt < 1500){
+      // 1.5s 内再次 ended：seek 后 Safari 没拉到新数据 → 用 reload 强制重新拉流
+      lastLiveEndedAt = now;
+      const l = isFinite(video.currentTime) ? video.currentTime : 0;
+      reloadContinue(l, Math.min(2, l > 2 ? 2 : l));
+      return;
+    }
+    lastLiveEndedAt = now;
     let st = null;
     try{
       st = await api("/api/stream-status?path=" + encodeURIComponent(path) + "&mode=" + encodeURIComponent(cur.streamMode || "auto"));
@@ -1182,19 +1213,15 @@ function renderPlayer(hash){
       cur.live = false;
     }
     const last = isFinite(video.currentTime) ? video.currentTime : 0;
-    video.load();
-    const onMeta = ()=>{
-      video.removeEventListener("loadedmetadata", onMeta);
-      try{
-        if(last > 3 && isFinite(video.duration) && last < video.duration - 1){
-          video.currentTime = last - 3;
-        }
-      }catch(e){ /* ignore */ }
+    // 回退 2 秒：落在关键帧缓冲区内，音频同步正常；不整段重播
+    const back = Math.min(2, last > 2 ? 2 : last);
+    try{
+      // 优先 seek 续播：Safari 会重新发 Range 请求拉新数据，无需重新加载解析
+      video.currentTime = Math.max(0, last - back);
       video.play().catch(()=>{});
-    };
-    video.addEventListener("loadedmetadata", onMeta);
-    // 兜底：metadata 未触发也尝试播放
-    setTimeout(()=>{ if(video.readyState > 0) video.play().catch(()=>{}); }, 3000);
+    }catch(e){
+      reloadContinue(last, back);
+    }
   }
 
   video.addEventListener("ended", ()=>{
