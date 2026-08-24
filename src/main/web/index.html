@@ -160,7 +160,9 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;backgr
 .tap-play{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:6;
   background:rgba(0,0,0,.55);color:#fff;font-size:20px;font-weight:600;letter-spacing:2px;cursor:pointer}
 .pl-back{position:absolute;top:10px;left:10px;z-index:8;display:flex;align-items:center;gap:3px;
-  background:rgba(0,0,0,.45);color:#fff;font-size:13px;padding:6px 12px;border-radius:18px;backdrop-filter:blur(4px)}
+  background:rgba(0,0,0,.45);color:#fff;font-size:13px;padding:6px 12px;border-radius:18px;backdrop-filter:blur(4px);
+  transition:opacity .35s ease,transform .35s ease}
+.pl-back.hide{opacity:0;transform:translateY(-8px);pointer-events:none}
 .pl-back:active{background:rgba(0,0,0,.7)}
 .ov .ring{width:34px;height:34px;border:3px solid rgba(255,255,255,.18);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -856,20 +858,24 @@ function renderPlayer(hash){
   wrap.appendChild(bar);
   app.appendChild(wrap);
 
-  /* 控制条自动隐藏：播放中 3s 无操作隐藏；暂停/加载/菜单打开时保持显示 */
+  /* 控制条自动隐藏：播放中 3s 无操作隐藏；暂停/加载/菜单打开时保持显示（返回按钮跟随） */
   let ctrlTimer = null;
+  function setCtrlVisible(v){
+    bar.classList.toggle("hide", !v);
+    backBtn.classList.toggle("hide", !v);
+  }
   function pokeCtrl(){
-    bar.classList.remove("hide");
+    setCtrlVisible(true);
     clearTimeout(ctrlTimer);
     if(!video.paused && !openMenu){
-      ctrlTimer = setTimeout(()=> bar.classList.add("hide"), 3000);
+      ctrlTimer = setTimeout(()=> setCtrlVisible(false), 3000);
     }
   }
   wrap.addEventListener("pointermove", pokeCtrl);
   wrap.addEventListener("touchstart", pokeCtrl);
   wrap.addEventListener("pointerdown", pokeCtrl);
   video.addEventListener("play", ()=>{ pokeCtrl(); });
-  video.addEventListener("pause", ()=>{ bar.classList.remove("hide"); clearTimeout(ctrlTimer); });
+  video.addEventListener("pause", ()=>{ setCtrlVisible(true); clearTimeout(ctrlTimer); });
 
   /* 进度条交互（拖动中不实时跳转，松手定位）+ 缓冲进度 */
   let seeking = false;
