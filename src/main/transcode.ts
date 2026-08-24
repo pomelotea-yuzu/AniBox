@@ -298,6 +298,16 @@ function isDirectPlayable(p: ProbeResult | null, ext: string): boolean {
   return goodContainer && goodCodec && goodAudio && ext !== 'mkv'
 }
 
+/**
+ * 需要转码（remux copy 无法保证浏览器可播）：
+ * 仅 h264 走 remux copy；HEVC（尤其 10bit，Safari 不支持 → 有声音没画面）、
+ * AV1/VP9 等一律转码 libx264（iOS Safari/Android Chrome 均兼容 8bit h264）
+ */
+function needsTranscode(p: ProbeResult): boolean {
+  const vc = (p.videoCodec || '').toLowerCase()
+  return !(vc.includes('h264') || vc.includes('avc'))
+}
+
 // ---------- 任务 ----------
 
 /**
@@ -321,11 +331,21 @@ export async function ensurePlayable(
       return { kind: 'direct', mode: 'direct', path: filePath, probe }
     }
   }
-  // 非原生容器（mkv/avi/ts 等）：不 probe，auto 直接 remux（copy 快、无损；
-  // 产物若手机播不了（如 HEVC mkv + Android），网页会 error 自动降级转码）
 
-  const effMode: 'remux' | 'transcode' =
-    mode === 'remux' || mode === 'auto' ? 'remux' : 'transcode'
+  // 决定产物模式：auto 时非原生容器先探测视频编码——
+  // HEVC/AV1/VP9 等 Safari/Android 解不了（remux copy 后"有声音没画面"），
+  // 一律走 libx264 转码保证兼容；仅 h264 走 remux copy（快、无损）
+  let effMode: 'remux' | 'transcode'
+  if (mode === 'transcode') effMode = 'transcode'
+  else if (mode === 'remux') effMode = 'remux'
+  else {
+    if (!DIRECT_EXT.has(ext)) {
+      probe = probe || (await probeFile(filePath).catch(() => null))
+      effMode = probe && needsTranscode(probe) ? 'transcode' : 'remux'
+    } else {
+      effMode = 'remux'
+    }
+  }
 
   const out = join(cacheDir(), cacheKey(filePath, effMode))
   if (existsSync(out) && statSync(out).size > 1024) {
