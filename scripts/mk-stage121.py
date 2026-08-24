@@ -1,11 +1,14 @@
 # -*- coding: utf-8 -*-
-"""组装 stage121：stage113 的裁剪 node_modules + 新 out/ + 新 package.json（版本 1.2.1）"""
+"""组装 stage{N}：从上一个 stage 自举复制裁剪 node_modules + 新 out/ + 新 package.json。
+用法：改 SRC_STAGE/DST_STAGE（或加参数），打包命令：python scripts/mk-stage121.py [src_stage] [dst_stage]
+"""
 import os
 import shutil
+import sys
 import time
 
-SRC_STAGE = r"D:\AniBox\anibox\stage113"
-DST_STAGE = r"D:\AniBox\anibox\stage121"
+SRC_STAGE = sys.argv[1] if len(sys.argv) > 1 else r"D:\AniBox\anibox\stage121"
+DST_STAGE = sys.argv[2] if len(sys.argv) > 2 else r"D:\AniBox\anibox\stage121"
 SRC_OUT = r"D:\AniBox\anibox\out"
 SRC_PKG = r"D:\AniBox\anibox\package.json"
 
@@ -14,7 +17,7 @@ if os.path.exists(DST_STAGE):
     shutil.rmtree(DST_STAGE, ignore_errors=True)
 os.makedirs(DST_STAGE, exist_ok=True)
 
-print("复制 node_modules ...", flush=True)
+print("复制 node_modules（自举自 %s）..." % os.path.basename(SRC_STAGE), flush=True)
 shutil.copytree(os.path.join(SRC_STAGE, "node_modules"), os.path.join(DST_STAGE, "node_modules"))
 print("  node_modules 完成 (%.0fs)" % (time.time() - t0), flush=True)
 
@@ -35,4 +38,4 @@ def dirsize(p):
     return s
 
 
-print("DONE: stage121 %.0f MB, %.0fs" % (dirsize(DST_STAGE) / 1024 / 1024, time.time() - t0))
+print("DONE: %s %.0f MB, %.0fs" % (os.path.basename(DST_STAGE), dirsize(DST_STAGE) / 1024 / 1024, time.time() - t0))
