@@ -1200,6 +1200,12 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('stream:getState', () => getStreamServerState())
 
+  // 主题同步：渲染进程切换主题时通知主进程（串流网页注入时跟随主应用）
+  ipcMain.handle('stream:syncTheme', (_e, theme: string) => {
+    if (typeof theme === 'string' && theme) store.setStreamSettings({ theme })
+    return store.getStreamSettings().theme
+  })
+
   ipcMain.handle('stream:cacheInfo', () => {
     return { cacheMB: getStreamCacheSizeMB() }
   })

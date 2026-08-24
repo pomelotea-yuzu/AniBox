@@ -89,12 +89,62 @@ afterAll(() => {
 })
 
 describe('stream server handler', () => {
-  it('serves the web UI with token injected', async () => {
+  it('serves the web UI with token and theme injected', async () => {
     const res = await call('/')
     expect(res.statusCode).toBe(200)
     const html = res.body.toString()
     expect(html).toContain('AniBox 串流')
     expect(html).not.toContain('__ANIBOX_TOKEN__')
+    expect(html).not.toContain('__ANIBOX_THEME__')
+  })
+
+  it('injects the configured stream theme', async () => {
+    store.setStreamSettings({ theme: 'sakura' })
+    const res = await call('/')
+    const html = res.body.toString()
+    expect(html).toContain('"sakura"')
+    store.setStreamSettings({ theme: 'warm-oat' })
+  })
+
+  it('returns scan roots for folder browsing', async () => {
+    const res = await call('/api/roots?key=x')
+    expect(res.statusCode).toBe(200)
+    const roots = JSON.parse(res.body.toString())
+    expect(Array.isArray(roots)).toBe(true)
+    expect(roots.some((r: any) => r.path === TEST_DIR && r.exists)).toBe(true)
+  })
+
+  it('returns roots when browsing without dir', async () => {
+    const res = await call('/api/browse?key=x')
+    expect(res.statusCode).toBe(200)
+    const data = JSON.parse(res.body.toString())
+    expect(data.roots.length).toBeGreaterThanOrEqual(1)
+    expect(data.roots[0].path).toBe(TEST_DIR)
+  })
+
+  it('lists dirs and video files when browsing a dir', async () => {
+    const subDir = join(TEST_DIR, 'S01')
+    mkdirSync(subDir, { recursive: true })
+    writeFileSync(join(subDir, 'ep01.mkv'), Buffer.from('x'))
+    const res = await call('/api/browse?key=x&dir=' + encodeURIComponent(TEST_DIR))
+    expect(res.statusCode).toBe(200)
+    const data = JSON.parse(res.body.toString())
+    expect(data.dirs.some((d: any) => d.name === 'S01')).toBe(true)
+    expect(data.parent).toBe(tmpdir()) // TEST_DIR 的上级
+    const res2 = await call('/api/browse?key=x&dir=' + encodeURIComponent(subDir))
+    const data2 = JSON.parse(res2.body.toString())
+    expect(data2.files.some((f: any) => f.name === 'ep01.mkv')).toBe(true)
+  })
+
+  it('blocks browsing outside scan roots', async () => {
+    const outside = join(tmpdir(), 'anibox-outside-browse-' + randomUUID().slice(0, 6))
+    mkdirSync(outside, { recursive: true })
+    try {
+      const res = await call('/api/browse?key=x&dir=' + encodeURIComponent(outside))
+      expect(res.statusCode).toBe(403)
+    } finally {
+      rmSync(outside, { recursive: true, force: true })
+    }
   })
 
   it('returns library JSON', async () => {

@@ -58,7 +58,15 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, [theme])
 
   const setTheme = useCallback((name: string) => {
-    if (THEMES[name]) setThemeState(name)
+    if (THEMES[name]) {
+      setThemeState(name)
+      // 同步给主进程，串流网页注入时跟随主应用配色（静默失败不影响主应用）
+      try {
+        window.electronAPI?.streamSyncTheme?.(name).catch(() => {})
+      } catch {
+        /* preload 不可用时忽略 */
+      }
+    }
   }, [])
 
   const themeNames = Object.keys(THEMES)

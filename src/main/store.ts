@@ -115,6 +115,7 @@ interface StoreData {
     port: number // HTTP 端口
     requireToken: boolean // 是否要求访问口令
     token: string // 访问口令（URL ?key=xxx）
+    theme: string // 串流网页主题名（跟随主应用）
   }
 }
 
@@ -151,6 +152,7 @@ let data: StoreData = {
     port: 17830,
     requireToken: true,
     token: '',
+    theme: 'warm-oat',
   },
 }
 let loaded = false
@@ -242,6 +244,7 @@ function ensureReady(): void {
         port: 17830,
         requireToken: true,
         token: '',
+        theme: 'warm-oat',
       },
     }
   }
@@ -719,6 +722,8 @@ export interface StreamSettingsData {
   port: number
   requireToken: boolean
   token: string
+  /** 串流网页主题（与主应用六套莫兰迪主题同名，由渲染进程切主题时同步过来） */
+  theme: string
 }
 
 export function getStreamSettings(): StreamSettingsData {

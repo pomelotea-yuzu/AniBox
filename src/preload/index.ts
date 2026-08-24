@@ -311,6 +311,8 @@ const electronAPI = {
   }): Promise<any> => ipcRenderer.invoke('stream:setSettings', patch),
   streamGetState: (): Promise<{ running: boolean; port: number; urls: string[]; error?: string }> =>
     ipcRenderer.invoke('stream:getState'),
+  /** 同步当前主题给主进程（串流网页跟随主应用配色） */
+  streamSyncTheme: (theme: string): Promise<string> => ipcRenderer.invoke('stream:syncTheme', theme),
   streamCacheInfo: (): Promise<{ cacheMB: number }> => ipcRenderer.invoke('stream:cacheInfo'),
   streamCacheClean: (maxMB?: number): Promise<{ removed: number; freedMB: number }> =>
     ipcRenderer.invoke('stream:cacheClean', maxMB),

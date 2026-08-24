@@ -191,6 +191,8 @@ export interface ElectronAPI {
     urls: string[]
     error?: string
   }>
+  /** 同步当前主题给主进程（串流网页跟随主应用配色） */
+  streamSyncTheme: (theme: string) => Promise<string>
   streamCacheInfo: () => Promise<{ cacheMB: number }>
   streamCacheClean: (maxMB?: number) => Promise<{ removed: number; freedMB: number }>
   streamEngineInfo: () => Promise<any>

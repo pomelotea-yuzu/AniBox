@@ -21,8 +21,8 @@
  *   - 文件路径必须位于扫描根目录或串流缓存目录内（防路径穿越/任意文件读取）
  */
 import { createServer, Server, IncomingMessage, ServerResponse } from 'http'
-import { createReadStream, existsSync, statSync } from 'fs'
-import { join, resolve } from 'path'
+import { createReadStream, existsSync, statSync, readdirSync } from 'fs'
+import { join, resolve, basename, dirname } from 'path'
 import { networkInterfaces } from 'os'
 import webIndexHtml from './web/index.html?raw'
 import * as store from './store'
@@ -245,6 +245,58 @@ function buildLibrary() {
   return { series, episodes }
 }
 
+// ---------- 文件夹浏览 ----------
+
+const VIDEO_EXTS = new Set([
+  'mp4', 'm4v', 'f4v', 'mov', 'webm', 'ogv', 'ogg', '3gp',
+  'mkv', 'avi', 'ts', 'm2ts', 'flv', 'wmv', 'rm', 'rmvb',
+])
+
+function isVideoFile(fp: string): boolean {
+  return VIDEO_EXTS.has((fp.split('.').pop() || '').toLowerCase())
+}
+
+/** 自然排序（中文 + 数字感知） */
+const collator = new Intl.Collator('zh-CN', { numeric: true, sensitivity: 'base' })
+
+interface BrowseEntry {
+  name: string
+  path: string
+}
+
+interface BrowseResult {
+  roots: BrowseEntry[] // dir 为空时的根目录列表
+  dirs: BrowseEntry[]
+  files: Array<BrowseEntry & { size: number }>
+  parent: string | null // 上级目录（为空或与 dir 相同则无上级）
+}
+
+function listDirContent(dir: string): BrowseResult {
+  const dirs: BrowseEntry[] = []
+  const files: Array<BrowseEntry & { size: number }> = []
+  const entries = readdirSync(dir, { withFileTypes: true })
+  for (const e of entries) {
+    if (e.name.startsWith('.')) continue
+    const fp = join(dir, e.name)
+    try {
+      if (e.isDirectory()) {
+        dirs.push({ name: e.name, path: fp })
+      } else if (e.isFile() && isVideoFile(fp)) {
+        files.push({ name: e.name, path: fp, size: statSync(fp).size })
+      }
+    } catch {
+      /* 无权限/句柄占用，跳过 */
+    }
+  }
+  dirs.sort((a, b) => collator.compare(a.name, b.name))
+  files.sort((a, b) => collator.compare(a.name, b.name))
+  const parent = dirname(dir)
+  return { roots: [], dirs, files, parent: parent && parent !== dir ? parent : null }
+}
+
+/** 防止网页端反复触发桌面文件夹选择弹窗 */
+let folderReqPending = false
+
 // ---------- 请求分发 ----------
 
 /** 导出供单元测试直测（沙箱环境禁回环 socket） */
@@ -264,7 +316,9 @@ export function handleRequest(req: IncomingMessage, res: ServerResponse): void {
   }
 
   if (p === '/') {
-    const html = webIndexHtml.replace('__ANIBOX_TOKEN__', store.ensureStreamToken())
+    const html = webIndexHtml
+      .replace(/__ANIBOX_TOKEN__/g, store.ensureStreamToken())
+      .replace(/__ANIBOX_THEME__/g, store.getStreamSettings().theme || 'warm-oat')
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' })
     res.end(html)
     return
@@ -286,6 +340,72 @@ export function handleRequest(req: IncomingMessage, res: ServerResponse): void {
       case '/api/library':
         sendJson(res, 200, buildLibrary())
         return
+
+      case '/api/roots': {
+        // 扫描根目录列表（网页文件夹浏览的起点）
+        sendJson(
+          res,
+          200,
+          store.getScanRoots().map((r) => ({ path: r, exists: existsSync(r) })),
+        )
+        return
+      }
+
+      case '/api/browse': {
+        // 文件夹浏览：dir 为空 → 返回根目录；否则返回 dir 下的目录与视频文件
+        const dir = q('dir')
+        if (!dir) {
+          const roots = store
+            .getScanRoots()
+            .filter((r) => r && existsSync(r))
+            .map((r) => ({ name: basename(r) || r, path: r }))
+          sendJson(res, 200, { roots, dirs: [], files: [], parent: null })
+          return
+        }
+        if (!existsSync(dir) || !isPathAllowed(dir)) {
+          sendJson(res, 403, { error: 'path not allowed' })
+          return
+        }
+        try {
+          sendJson(res, 200, listDirContent(dir))
+        } catch (e) {
+          sendJson(res, 500, { error: (e as Error).message })
+        }
+        return
+      }
+
+      case '/api/request-folder': {
+        // 网页端请求在电脑上添加一个文件夹到扫描根目录（弹系统目录选择框）
+        let dialog: typeof import('electron').dialog | undefined
+        try {
+          dialog = require('electron').dialog
+        } catch {
+          dialog = undefined
+        }
+        if (!dialog || !dialog.showOpenDialog) {
+          sendJson(res, 500, { error: 'desktop dialog unavailable' })
+          return
+        }
+        if (folderReqPending) {
+          sendJson(res, 429, { error: '已有待处理的添加请求，请先在电脑上完成选择' })
+          return
+        }
+        folderReqPending = true
+        dialog
+          .showOpenDialog({ title: '选择要加入串流的文件夹', properties: ['openDirectory'] })
+          .then((r: { canceled: boolean; filePaths: string[] }) => {
+            folderReqPending = false
+            if (!r.canceled && r.filePaths?.[0]) {
+              store.addScanRoot(r.filePaths[0])
+              console.log('[AniBox] 串流网页添加文件夹:', r.filePaths[0])
+            }
+          })
+          .catch(() => {
+            folderReqPending = false
+          })
+        sendJson(res, 200, { ok: true, message: '请在电脑上选择文件夹' })
+        return
+      }
 
       case '/api/episodes': {
         const sid = q('seriesId')
