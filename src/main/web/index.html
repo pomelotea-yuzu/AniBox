@@ -898,18 +898,6 @@ function renderPlayer(hash){
   });
   seek.addEventListener("change", ()=>{
     if(isFinite(video.duration) && video.duration){
-      if(cur.live){
-        // 实时转码中：seek 超出已转完区域会失败，限制在已缓冲范围附近
-        try{
-          const b = video.buffered;
-          const max = b.length ? b.end(b.length-1) : video.currentTime;
-          if(Number(seek.value) > max + 15){
-            toast("该位置还没转码完成，稍候再试");
-            seeking = false;
-            return;
-          }
-        }catch(e){ /* ignore */ }
-      }
       video.currentTime = Number(seek.value);
     }
     seeking = false;
@@ -1034,16 +1022,9 @@ function renderPlayer(hash){
       const r = await api("/api/stream?path=" + encodeURIComponent(path) + "&mode=" + encodeURIComponent(mode) + "&cap=" + CAP);
       cur.streamMode = r.mode || mode;
       if(r.kind === "error"){ showErr(r.message || "无法播放该文件"); return; }
-      if(r.kind === "live"){
-        // 实时播放：产物已可读，边转边播（无需等待完成）
-        pt.textContent = "开始播放（转码进行中）…"; pd.textContent = "";
-        playPath(r.path, "live");
-        watchLive(r.mode || mode);
-        return;
-      }
       if(r.kind === "working"){
         pt.textContent = String(r.mode||"").includes("transcode") ? "正在转码（首次较慢，之后秒开）…" : "正在转封装…";
-        pd.textContent = r.progress>0 ? Math.round(r.progress*100)+"%" : "首次播放需要几秒，之后秒开";
+        pd.textContent = r.progress>0 ? Math.round(r.progress*100)+"%" : "首次播放需要几秒到几十秒";
         await pollStream();
       } else {
         playPath(r.path, "stream");
@@ -1061,11 +1042,10 @@ function renderPlayer(hash){
 
   async function pollStream(){
     const mode = cur.streamMode || "auto";
-    for(let i=0;i<900;i++){
+    for(let i=0;i<1500;i++){
       await new Promise(r=>setTimeout(r, 1200));
       try{
         const st = await api("/api/stream-status?path=" + encodeURIComponent(path) + "&mode=" + encodeURIComponent(mode));
-        if(st.state === "live" && st.cachePath){ playPath(st.cachePath, "live"); watchLive(mode); return; }
         if(st.state === "done" && st.cachePath){ playPath(st.cachePath, "stream"); return; }
         if(st.state === "error"){ showErr(st.error || "转码失败"); return; }
         if(st.progress>0){ pd.textContent = "正在转码 " + Math.round(st.progress*100) + "%（首次较慢，之后秒开）"; }
@@ -1073,18 +1053,6 @@ function renderPlayer(hash){
       }catch(e){ /* 网络抖动重试 */ }
     }
     showErr("处理超时，请重试");
-  }
-
-  /* 实时播放：后台轮询任务直到完成/失败（播放同一路径，转完即成为缓存，秒开复用） */
-  async function watchLive(mode){
-    for(let i=0;i<1200;i++){
-      await new Promise(r=>setTimeout(r, 1500));
-      try{
-        const st = await api("/api/stream-status?path=" + encodeURIComponent(path) + "&mode=" + encodeURIComponent(mode));
-        if(st.state === "error"){ showErr(st.error || "转码失败"); return; }
-        if(st.state === "done") return;
-      }catch(e){ /* 网络抖动重试 */ }
-    }
   }
 
   let usingTranscode = false;
@@ -1100,7 +1068,6 @@ function renderPlayer(hash){
   }
   function playPath(p, srcKind){
     cur.srcKind = srcKind || "stream";
-    cur.live = srcKind === "live";
     ov.classList.remove("hidden");
     pt.textContent = "加载视频…"; pd.textContent = "";
     const src = vurl("/api/video?path=" + encodeURIComponent(p));
@@ -1112,11 +1079,6 @@ function renderPlayer(hash){
   video.addEventListener("error", ()=>{
     const err = video.error;
     const info = err ? `（code=${err.code}${err.message ? " · " + err.message : ""}）` : "";
-    if(cur.live){
-      // 实时转码流中断（编码不兼容等），不再降级循环
-      showErr("实时转码播放中断" + info);
-      return;
-    }
     if(cur.srcKind === "direct"){
       cur.srcKind = "stream";
       startStreamPipeline("auto");
@@ -1132,21 +1094,18 @@ function renderPlayer(hash){
     ov.classList.add("hidden");
     tryPlay();
     prewarmNext();
-    // live 续播时跳过进度恢复（liveEnded 已定位到续播点，避免跳回旧进度）
-    if(!cur.live){
-      try{
-        const p = await api("/api/progress?path=" + encodeURIComponent(path));
-        if(p && p.position > 5 && p.position < video.duration - 10){
-          video.currentTime = p.position;
-        }
-      }catch(e){ /* ok */ }
-    }
+    try{
+      const p = await api("/api/progress?path=" + encodeURIComponent(path));
+      if(p && p.position > 5 && p.position < video.duration - 10){
+        video.currentTime = p.position;
+      }
+    }catch(e){ /* ok */ }
     loadSubs();
   });
   video.addEventListener("play", ()=>{ ov.classList.add("hidden"); });
   video.addEventListener("playing", ()=>{ ov.classList.add("hidden"); });
   video.addEventListener("waiting", ()=>{
-    // 转码跟上/边界续播时的缓冲等待：显示轻提示，不误报错误
+    // 网络缓冲等待：显示轻提示，不误报错误
     ov.classList.remove("hidden");
     pt.textContent = "缓冲中…"; pd.textContent = "";
   });
@@ -1178,58 +1137,8 @@ function renderPlayer(hash){
   /* 实时转码播放到当前产物边界（Safari 不会自动续拉增量文件，触发 ended）：
      检查转码状态 → 未完成则直接 seek 从末尾附近续播（不整体 reload，无卡壳），
      绝不误判为"一集播完" */
-  let lastLiveEndedAt = 0;
-  function reloadContinue(last, back){
-    video.load();
-    const onMeta = ()=>{
-      video.removeEventListener("loadedmetadata", onMeta);
-      try{
-        if(last > 2 && isFinite(video.duration) && last < video.duration - 1){
-          video.currentTime = last - back;
-        }
-      }catch(e){ /* ignore */ }
-      video.play().catch(()=>{});
-    };
-    video.addEventListener("loadedmetadata", onMeta);
-    setTimeout(()=>{ if(video.readyState > 0) video.play().catch(()=>{}); }, 3000);
-  }
-  async function liveEnded(){
-    const now = Date.now();
-    if(now - lastLiveEndedAt < 1500){
-      // 1.5s 内再次 ended：seek 后 Safari 没拉到新数据 → 用 reload 强制重新拉流
-      lastLiveEndedAt = now;
-      const l = isFinite(video.currentTime) ? video.currentTime : 0;
-      reloadContinue(l, Math.min(2, l > 2 ? 2 : l));
-      return;
-    }
-    lastLiveEndedAt = now;
-    let st = null;
-    try{
-      st = await api("/api/stream-status?path=" + encodeURIComponent(path) + "&mode=" + encodeURIComponent(cur.streamMode || "auto"));
-    }catch(e){ /* 查询失败也按未完成处理 */ }
-    if(st && st.state === "error"){ showErr(st.error || "转码失败"); return; }
-    if(st && st.state === "done"){
-      // 转码完成：文件已完整，这次续播就能看到结尾；之后真实 ended 走正常逻辑
-      cur.live = false;
-    }
-    const last = isFinite(video.currentTime) ? video.currentTime : 0;
-    // 回退 2 秒：落在关键帧缓冲区内，音频同步正常；不整段重播
-    const back = Math.min(2, last > 2 ? 2 : last);
-    try{
-      // 优先 seek 续播：Safari 会重新发 Range 请求拉新数据，无需重新加载解析
-      video.currentTime = Math.max(0, last - back);
-      video.play().catch(()=>{});
-    }catch(e){
-      reloadContinue(last, back);
-    }
-  }
-
   video.addEventListener("ended", ()=>{
     saveProgress(true);
-    if(cur.live){
-      liveEnded();
-      return;
-    }
     handleNormalEnded();
   });
   setInterval(saveProgress, 5000);

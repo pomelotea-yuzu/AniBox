@@ -38,7 +38,7 @@ export interface StreamJob {
 }
 
 export interface PlayableResult {
-  kind: 'direct' | 'cache' | 'live' | 'working' | 'error'
+  kind: 'direct' | 'cache' | 'working' | 'error'
   /** 实际采用的模式（网页按它轮询 stream-status） */
   mode?: StreamMode | 'direct'
   path?: string
@@ -46,13 +46,6 @@ export interface PlayableResult {
   message?: string
   probe?: ProbeResult | null
 }
-
-/**
- * 产物达到该大小即可开始实时播放（fragmented mp4 的 ftyp+moov 在文件头，几百 KB 即可解析）。
- * 2MB ≈ 转码 20~30 秒视频：首段太短（512KB 只有几秒）会频繁触发 Safari 边界续播，
- * 造成"第一段很短 + 卡壳 + 尾部无声"的体验问题
- */
-const LIVE_MIN_BYTES = 2 * 1024 * 1024
 
 // ---------- 硬件编码器探测 ----------
 
@@ -355,7 +348,9 @@ function isDirectPlayable(p: ProbeResult | null, ext: string): boolean {
 
 /**
  * 获取可播放版本。返回 direct（原文件直出）/ cache（缓存产物）即时可用，
- * live（边转边播）/ working（需轮询 /api/stream-status）。
+ * 或 working（转码中，需轮询 /api/stream-status 等待完成后播放）。
+ * 体验策略：整集缓存完再播放（不做边转边播）；下一集由网页在当前集播放时
+ * 后台 prewarm 预转，切集秒开。
  * @param cap 设备解码能力（网页 canPlayType 探测）：'hvc1' = 支持 HEVC 解码
  */
 export async function ensurePlayable(
@@ -413,36 +408,19 @@ export async function ensurePlayable(
   if (job) {
     if (job.state === 'done') return { kind: 'cache', mode: eff, path: job.cachePath, probe }
     if (job.state === 'error') return { kind: 'error', mode: eff, message: job.error || '转码失败', probe }
-    // 任务进行中：产物已可读 → 实时播放（边转边播），否则等网页轮询
-    if (isLiveReady(job.cachePath)) {
-      return { kind: 'live', mode: eff, path: job.cachePath, probe, progress: job.progress }
-    }
     return { kind: 'working', mode: eff, progress: job.progress, probe }
   }
 
   const promise = runJob(filePath, out, eff, probe)
-  // 不 await 完成（后台继续跑，状态经 jobs/getStreamStatus 查询）
-  promise.catch(() => {})
   job = { state: 'working', progress: 0, cachePath: out, promise }
   jobs.set(key, job)
-
-  // 等产物写入到可播大小（fragmented mp4 头部写完即可解析），最多 6s
-  const deadline = Date.now() + 6000
-  while (Date.now() < deadline) {
-    if (isLiveReady(out)) {
-      return { kind: 'live', mode: eff, path: out, probe, progress: job.progress }
-    }
-    await new Promise((r) => setTimeout(r, 100))
-  }
-  return { kind: 'working', mode: eff, progress: job.progress, probe }
-}
-
-function isLiveReady(out: string): boolean {
-  try {
-    return existsSync(out) && statSync(out).size >= LIVE_MIN_BYTES
-  } catch {
-    return false
-  }
+  // 等任务完成（体验决策：整集缓存完再播放，不做边转边播；
+  // 下一集由网页 prewarmNext 在当前集播放时后台预转，切集秒开）
+  const path = await promise
+  const final = jobs.get(key)
+  if (!final) return { kind: 'error', mode: eff, message: '转码任务异常', probe }
+  if (final.state === 'error') return { kind: 'error', mode: eff, message: final.error || '转码失败', probe }
+  return { kind: 'cache', mode: eff, path, probe, progress: 1 }
 }
 
 function isH264(p: ProbeResult): boolean {
@@ -459,9 +437,9 @@ function is10bit(p: ProbeResult): boolean {
   return /(^|[^0-9])1[02](le|be)?$/.test(p.pixFmt || '') || (p.pixFmt || '').includes('p010')
 }
 
-/** 查询任务状态（网页端轮询用）。state: idle/working/live/done/error（live=产物可读，可实时播放） */
+/** 查询任务状态（网页端轮询用）。state: idle/working/done/error */
 export function getStreamStatus(filePath: string, mode: StreamMode = 'auto'): {
-  state: 'idle' | 'working' | 'live' | 'done' | 'error'
+  state: 'idle' | 'working' | 'done' | 'error'
   progress: number
   cachePath?: string
   error?: string
@@ -475,9 +453,6 @@ export function getStreamStatus(filePath: string, mode: StreamMode = 'auto'): {
     if (job) {
       if (job.state === 'done') return { state: 'done', progress: 1, cachePath: job.cachePath }
       if (job.state === 'error') return { state: 'error', progress: job.progress, error: job.error }
-      if (isLiveReady(job.cachePath)) {
-        return { state: 'live', progress: job.progress, cachePath: job.cachePath }
-      }
       return { state: 'working', progress: job.progress }
     }
     const out = join(cacheDir(), cacheKey(filePath, m))

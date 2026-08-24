@@ -34,25 +34,15 @@ describe.skipIf(!existsSync(VIDEO) || !hasFfmpeg())('transcode pipeline (real en
     expect(hasFfmpeg()).toBe(true)
   })
 
-  it('remuxes a real file into a cache mp4 (live-first, then cache)', async () => {
-    // 实时播放模式：产物可读即返回 live（边转边播），无需等待完整
+  it('remuxes a real file into a cache mp4 (waits for completion, then cache)', async () => {
+    // 体验策略：整集缓存完再播放（ensurePlayable 等待任务完成后返回 cache）
     const r = await ensurePlayable(VIDEO, 'remux')
-    expect(['live', 'cache']).toContain(r.kind)
+    expect(r.kind).toBe('cache')
     expect(r.mode).toBe('remux')
-    if (r.path) {
-      expect(existsSync(r.path)).toBe(true)
-    }
-    // 等任务完成，产物应完整且二次调用命中缓存
-    const deadline = Date.now() + 150000
-    while (Date.now() < deadline) {
-      const st = getStreamStatus(VIDEO, 'remux')
-      if (st.state === 'done') break
-      if (st.state === 'error') throw new Error('remux failed: ' + st.error)
-      await new Promise((res) => setTimeout(res, 1000))
-    }
+    expect(existsSync(r.path as string)).toBe(true)
+    // 二次调用命中缓存
     const r2 = await ensurePlayable(VIDEO, 'remux')
     expect(r2.kind).toBe('cache')
-    expect(existsSync(r2.path as string)).toBe(true)
     expect(statSync(r2.path as string).size).toBeGreaterThan(1024)
   }, 180000)
 })
