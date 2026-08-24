@@ -1,6 +1,6 @@
 {
   "name": "anibox",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "本地番剧库浏览器 + 基础播放器",
   "main": "./out/main/index.js",
   "scripts": {
