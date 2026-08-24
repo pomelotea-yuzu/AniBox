@@ -6,15 +6,16 @@
 
 - **Gitee（国内镜像）**: https://gitee.com/yuzu-tea-duck/ani-box
 - **GitHub**: https://github.com/pomelotea-yuzu/AniBox
-- **Releases 下载**: https://gitee.com/yuzu-tea-duck/ani-box/releases
+- **Releases 下载**: https://gitee.com/yuzu-tea-duck/ani-box/releases · https://github.com/pomelotea-yuzu/AniBox/releases
 
 ## 快速开始
 
 **普通用户（便携版）**
 1. 下载 `AniBox-x.y.z-portable-x64.zip`（见上方 Releases 页），解压后双击 `AniBox.exe`
+   - **便携版数据随软件走**：缓存/配置/进度都存放在软件目录的 `data/` 文件夹，随整个文件夹拷贝迁移，C 盘零占用
 2. 首次使用点 **手动添加** 选择番剧目录（或直接「搜索番剧」在线找资源）
 3. 可选：在 **设置 → 下载** 配置 qBittorrent WebUI，解锁「一键下载 / 追番」
-4. **手机/iPad 看番**：**设置 → 串流** 勾选「启用局域网串流」→ 手机连同一 WiFi → 浏览器打开显示的地址（形如 `http://192.168.x.x:17830`）→ 选番剧开看，无需安装 App
+4. **手机/iPad 看番**：**设置 → 串流** 勾选「启用局域网串流」→ 手机连同一 WiFi → 浏览器打开显示的地址（形如 `http://192.168.x.x:17830`）→ 输入访问口令 → 选番剧开看，无需安装 App
 
 **开发者**
 ```bash
@@ -67,15 +68,17 @@ pnpm package      # 打包
   - **封面简介自动写入** — 追番成功后自动把该番封面与简介写入保存目录（`.anibox/cover.jpg` + `metadata.json`），番剧库刷新即显示
 - **版本自适应** — qBittorrent WebUI 客户端兼容 4.x / 5.x 差异（path 语义、登录响应格式）
 
-### 局域网串流（1.2.0 新增）
+### 局域网串流（1.2.1 大升级）
 - **手机/iPad 直接看番** — 电脑端「设置 → 串流」一键开启，手机浏览器访问地址即可浏览番剧库并播放，免安装 App
-- **格式自动适配** — mp4/webm 秒开直出；mkv 自动转封装（`-c copy` 不重编码、画质无损，1~2 秒）；HEVC 自动转码（iPhone 直出，Android 自动重编码）
+- **口令访问** — 默认开启访问口令（设置页可开关/重置），口令不再明文暴露在页面源码
+- **播放器 UI 对齐桌面主播放器** — 缓冲进度 + 已播填充、倍速菜单（9 档+自定义）、字幕多轨切换、选集面板、截图、画中画、画面比例、播放模式（顺序/单集循环/列表循环/随机）；控制条 3 秒无操作自动隐藏
+- **10bit HEVC 番剧专项** — 8bit HEVC 免转码秒开（hvc1 标记，iPad Safari 原生支持）；10bit HEVC 自动硬件加速转 8bit HEVC（NVENC → QSV → AMF，体积小画质佳）；智能决策（探测设备解码能力 + ffprobe 位深），无法实现的功能统一提示「串流模式下无法使用」
+- **整集缓存完再播放** — 无片段割裂、无卡壳；播放中**后台预转下一集**，切集秒开
 - **转码引擎零配置** — 自动检测 ffmpeg（应用目录 / PATH / userData），缺失时自动下载（BtbN / gyan.dev 镜像），也可手动放置
-- **产物缓存** — 转封装/转码结果缓存于 `userData/stream-cache`，同一集再次播放秒开，可一键清理
-- **下一集预转封装** — 播放中后台预热下一集，切集秒开
+- **产物缓存** — 转封装/转码结果缓存于 `userData/stream-cache`，同一集再次播放秒开；设置页「存储」可查看大小并一键清理
 - **进度双向同步** — 手机看到一半，电脑接着看
 - **外挂字幕** — srt / ass 自动转 VTT 显示（与视频同目录、文件名含集号）
-- **访问安全** — 默认开启访问口令（链接自动携带）；仅暴露扫描根目录内的文件；端口被占自动跳转
+- **访问安全** — 默认开启访问口令；仅暴露扫描根目录内的文件；端口被占自动跳转
 
 ### 播放器
 - **HTML5 video 为主** — 支持 30+ 视频格式（mp4/mkv/ts/rmvb 等），4K 走硬解
@@ -111,7 +114,7 @@ pnpm package      # 打包
 - **OP/ED 智能跳过** — 快捷键模式：连按 3 次右方向键跳过 90 秒（OP/ED 固定时长），控制条一键开关
 - **音轨管理** — 自动检测多音轨，按系列记忆偏好，音频延迟+音量均衡
 - **莫兰迪配色主题** — 5 套主题（暖燕麦/冷亚麻/玫瑰灰/橄榄暮/薰衣雾），ThemeProvider + CSS 变量驱动
-- **全局设置** — 主题/字幕/播放/快捷键/API/下载/串流/关于 8 个 Tab 设置页
+- **全局设置** — 主题/字幕/播放/快捷键/API/下载/串流/存储/关于 9 个 Tab 设置页（「存储」页展示数据根目录、各缓存大小与一键清理）
 - **快捷键** — 30+ 键盘快捷键覆盖所有操作，`?` 键呼出帮助面板
 
 ---
@@ -167,7 +170,7 @@ AniBox → **设置 → 下载**：
 | 桌面框架 | Electron 33 + electron-vite |
 | 前端 | React 19 + TypeScript + Tailwind CSS |
 | 播放 | HTML5 video（主）+ libmpv 内嵌软渲染（koffi FFI 取帧 → WebGL 显示）+ mpv.exe 回退 |
-| 局域网串流 | Node.js 内置 http（Range 流式）+ mpv IPC 编码探测 + ffmpeg 转封装/转码（fragmented mp4） |
+| 局域网串流 | Node.js 内置 http（Range 流式 + 口令鉴权）+ mpv IPC 编码探测 + ffprobe 位深 + ffmpeg 转封装/硬件转码（fragmented mp4，整集缓存 + 后台预转下一集） |
 | 存储 | JSON 文件（anibox-store.json，debounce 写入 + 原子保存） |
 | 扫描 | Node.js fs 递归 + 跨文件夹合并算法 |
 | 搜索 | AniList GraphQL（番剧库）+ Bangumi v0（中文转原名兜底） |
@@ -268,4 +271,4 @@ pnpm package
 
 ---
 
-*最后更新: 2026-08-23（v1.2.0）*
+*最后更新: 2026-08-24（v1.2.1）*
