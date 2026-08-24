@@ -89,13 +89,22 @@ afterAll(() => {
 })
 
 describe('stream server handler', () => {
-  it('serves the web UI with token and theme injected', async () => {
+  it('serves the web UI with theme and requireToken injected, without leaking token', async () => {
+    store.setStreamSettings({ requireToken: true, token: 'testtok' })
     const res = await call('/')
     expect(res.statusCode).toBe(200)
     const html = res.body.toString()
     expect(html).toContain('AniBox 串流')
     expect(html).not.toContain('__ANIBOX_TOKEN__')
+    expect(html).not.toContain('__ANIBOX_REQUIRE_TOKEN__')
     expect(html).not.toContain('__ANIBOX_THEME__')
+    // token 不内联进页面（防直接打开网页绕过口令）
+    expect(html).not.toContain('testtok')
+    // requireToken 标志注入正确
+    expect(html).toContain('REQUIRE_TOKEN = "true"')
+    store.setStreamSettings({ requireToken: false })
+    const res2 = await call('/')
+    expect(res2.body.toString()).toContain('REQUIRE_TOKEN = "false"')
   })
 
   it('injects the configured stream theme', async () => {
@@ -104,6 +113,18 @@ describe('stream server handler', () => {
     const html = res.body.toString()
     expect(html).toContain('"sakura"')
     store.setStreamSettings({ theme: 'warm-oat' })
+  })
+
+  it('verify api validates the web key', async () => {
+    store.setStreamSettings({ requireToken: true, token: 'testtok' })
+    const ok = await call('/api/verify?key=testtok')
+    expect(ok.statusCode).toBe(200)
+    expect(JSON.parse(ok.body.toString()).ok).toBe(true)
+    const bad = await call('/api/verify?key=wrong')
+    expect(bad.statusCode).toBe(403)
+    store.setStreamSettings({ requireToken: false })
+    const off = await call('/api/verify?key=whatever')
+    expect(JSON.parse(off.body.toString()).ok).toBe(true)
   })
 
   it('returns scan roots for folder browsing', async () => {

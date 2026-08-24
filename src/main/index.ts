@@ -3,7 +3,10 @@
 delete process.env.ELECTRON_RUN_AS_NODE
 delete (process.env as any).ELECTRON_RUN_AS_NODE
 
-import { app, BrowserWindow, protocol, ipcMain, dialog, Menu } from 'electron'
+// 便携版数据重定向：必须在任何 userData 访问前执行（首个 import）
+import './bootstrap'
+
+import { app, BrowserWindow, protocol, ipcMain, dialog, Menu, shell } from 'electron'
 import { join, dirname } from 'path'
 import { createReadStream, statSync, existsSync, writeFileSync, readFileSync } from 'fs'
 import { spawn, ChildProcess } from 'child_process'
@@ -77,6 +80,7 @@ import {
   getStreamServerState,
 } from './stream-server'
 import { cleanStreamCache, getStreamCacheSizeMB, getEngineInfo, resetFfmpegDownload } from './transcode'
+import { getStorageInfo, clearCacheDir } from './storage-info'
 
 // === 硬件加速 & GPU 配置 ===
 // Windows 系统级 HEVC 硬解码（Media Foundation）
@@ -1221,6 +1225,17 @@ function registerIpcHandlers(): void {
   ipcMain.handle('stream:ffmpegRetry', () => {
     resetFfmpegDownload()
     return getEngineInfo()
+  })
+
+  // ===== 存储信息（设置页「存储」tab） =====
+  ipcMain.handle('storage:getInfo', () => getStorageInfo())
+
+  ipcMain.handle('storage:clearCache', (_e, key: string) => clearCacheDir(key))
+
+  ipcMain.handle('storage:openPath', (_e, p: string) => {
+    if (!p) return false
+    shell.openPath(p).catch(() => {})
+    return true
   })
 
   // 应用版本信息（关于页显示；与 package.json version 同步）

@@ -100,12 +100,14 @@ let teamsCache: { data: AGTeam[]; ts: number } | null = null
 const TEAMS_TTL = 60 * 60 * 1000 // 内存缓存 1h
 const TEAMS_DISK_TTL = 24 * 60 * 60 * 1000 // 磁盘缓存 24h 内优先用
 const TEAMS_DISK_FALLBACK_TTL = 30 * 24 * 60 * 60 * 1000 // 磁盘缓存 30 天内做离线兜底
-const TEAMS_CACHE_PATH = join(app.getPath('userData'), 'teams-cache.json')
+function teamsCachePath(): string {
+  return join(app.getPath('userData'), 'teams-cache.json')
+}
 
 function loadTeamsDisk(): { teams: AGTeam[]; ts: number } | null {
   try {
-    if (existsSync(TEAMS_CACHE_PATH)) {
-      const raw = JSON.parse(readFileSync(TEAMS_CACHE_PATH, 'utf-8'))
+    if (existsSync(teamsCachePath())) {
+      const raw = JSON.parse(readFileSync(teamsCachePath(), 'utf-8'))
       if (Array.isArray(raw?.teams) && raw.teams.length) {
         return { teams: raw.teams, ts: raw.ts || 0 }
       }
@@ -116,7 +118,7 @@ function loadTeamsDisk(): { teams: AGTeam[]; ts: number } | null {
 
 function saveTeamsDisk(teams: AGTeam[]) {
   try {
-    writeFileSync(TEAMS_CACHE_PATH, JSON.stringify({ ts: Date.now(), teams }, null, 1), 'utf-8')
+    writeFileSync(teamsCachePath(), JSON.stringify({ ts: Date.now(), teams }, null, 1), 'utf-8')
   } catch {}
 }
 
@@ -200,7 +202,9 @@ export async function listTeams(
 // 收到 qBittorrent 拉取请求时实时调 /resources API（search 生效），
 // 再在客户端按字幕组过滤，生成标准 RSS 2.0 返回。
 const RSS_PORT = 5860
-const RSS_FEEDS_PATH = join(app.getPath('userData'), 'rss-feeds.json')
+function rssFeedsPath(): string {
+  return join(app.getPath('userData'), 'rss-feeds.json')
+}
 const RSS_BASE = `http://127.0.0.1:${RSS_PORT}`
 
 export interface RssFeedConfig {
@@ -219,8 +223,8 @@ let rssServer: ReturnType<typeof createServer> | null = null
 
 function loadRssFeeds() {
   try {
-    if (existsSync(RSS_FEEDS_PATH)) {
-      rssFeeds = JSON.parse(readFileSync(RSS_FEEDS_PATH, 'utf-8')) || []
+    if (existsSync(rssFeedsPath())) {
+      rssFeeds = JSON.parse(readFileSync(rssFeedsPath(), 'utf-8')) || []
     }
   } catch {
     rssFeeds = []
@@ -229,7 +233,7 @@ function loadRssFeeds() {
 
 function saveRssFeeds() {
   try {
-    writeFileSync(RSS_FEEDS_PATH, JSON.stringify(rssFeeds, null, 2), 'utf-8')
+    writeFileSync(rssFeedsPath(), JSON.stringify(rssFeeds, null, 2), 'utf-8')
   } catch {
     /* 忽略 */
   }
@@ -345,7 +349,9 @@ export function formatSize(kb: number): string {
 }
 
 // ==== qBittorrent WebUI v2 ====
-const QB_CONFIG_PATH = join(app.getPath('userData'), 'qb-config.json')
+function qbConfigPath(): string {
+  return join(app.getPath('userData'), 'qb-config.json')
+}
 
 export interface QbConfig {
   host: string // 如 127.0.0.1
@@ -357,8 +363,8 @@ export interface QbConfig {
 
 function loadQbConfig(): QbConfig | null {
   try {
-    if (existsSync(QB_CONFIG_PATH)) {
-      const raw = readFileSync(QB_CONFIG_PATH, 'utf-8')
+    if (existsSync(qbConfigPath())) {
+      const raw = readFileSync(qbConfigPath(), 'utf-8')
       const cfg = JSON.parse(raw)
       if (cfg.host) return { host: cfg.host, port: cfg.port || 8080, username: cfg.username || 'admin', password: cfg.password || '', savepath: cfg.savepath || '' }
     }
@@ -370,7 +376,7 @@ function loadQbConfig(): QbConfig | null {
 
 function saveQbConfig(cfg: QbConfig) {
   try {
-    writeFileSync(QB_CONFIG_PATH, JSON.stringify(cfg), 'utf-8')
+    writeFileSync(qbConfigPath(), JSON.stringify(cfg), 'utf-8')
   } catch {
     /* 写失败忽略 */
   }

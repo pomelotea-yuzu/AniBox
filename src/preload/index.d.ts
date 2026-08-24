@@ -197,6 +197,10 @@ export interface ElectronAPI {
   streamCacheClean: (maxMB?: number) => Promise<{ removed: number; freedMB: number }>
   streamEngineInfo: () => Promise<any>
   streamFfmpegRetry: () => Promise<any>
+  // 存储信息（设置页「存储」tab）
+  storageGetInfo: () => Promise<any>
+  storageClearCache: (key: string) => Promise<{ ok: boolean; message: string }>
+  storageOpenPath: (p: string) => Promise<boolean>
   getAppVersion: () => Promise<{ version: string; electron: string }>
   audioGetPrefs: (
     seriesId: string,

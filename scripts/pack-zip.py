@@ -15,6 +15,8 @@ def main():
     total_files = 0
     total_bytes = 0
     with zipfile.ZipFile(OUT, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
+        # 便携版标志：应用启动时检测到根目录 .portable 文件即启用「数据随软件走」
+        zf.writestr(".portable", "")
         for root, dirs, files in os.walk(SRC):
             for f in files:
                 full = os.path.join(root, f)

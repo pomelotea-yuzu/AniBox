@@ -5,7 +5,13 @@ import { createHash } from 'crypto'
 
 import { hashPath } from './utils'
 
-const STORE_PATH = join(app.getPath('userData'), 'anibox-store.json')
+/**
+ * store 文件路径（懒加载：便携模式下 userData 在应用启动早期被重定向，
+ * 必须等 app.setPath 执行后再取路径，不能用模块级常量）
+ */
+function storePath(): string {
+  return join(app.getPath('userData'), 'anibox-store.json')
+}
 
 interface EpisodeRecord {
   id: string // hash(filePath)
@@ -179,8 +185,8 @@ function ensureReady(): void {
   if (loaded) return
   loaded = true
   try {
-    if (existsSync(STORE_PATH)) {
-      const raw = JSON.parse(readFileSync(STORE_PATH, 'utf-8'))
+    if (existsSync(storePath())) {
+      const raw = JSON.parse(readFileSync(storePath(), 'utf-8'))
       data.series = raw.series || {}
       data.episodes = raw.episodes || {}
       data.progress = raw.progress || {}
@@ -204,8 +210,8 @@ function ensureReady(): void {
     // JSON 损坏时备份原始文件，避免静默丢数据
     console.error('[AniBox] Store JSON corrupted:', err)
     try {
-      const backupPath = STORE_PATH + '.corrupted-backup'
-      const rawContent = readFileSync(STORE_PATH, 'utf-8')
+      const backupPath = storePath() + '.corrupted-backup'
+      const rawContent = readFileSync(storePath(), 'utf-8')
       writeFileSync(backupPath, rawContent)
       console.warn('[AniBox] Corrupted store backed up to:', backupPath)
     } catch {
@@ -272,14 +278,14 @@ export function flushStore(): void {
 function flushNow(): void {
   dirty = false
   try {
-    const dir = dirname(STORE_PATH)
+    const dir = dirname(storePath())
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
     // 原子写入：先写临时文件，再 rename
-    const tmpPath = STORE_PATH + '.tmp'
+    const tmpPath = storePath() + '.tmp'
     writeFileSync(tmpPath, JSON.stringify(data, null, 2))
     // Windows 上 renameSync 会自动覆盖
     const { renameSync } = require('fs')
-    renameSync(tmpPath, STORE_PATH)
+    renameSync(tmpPath, storePath())
   } catch (e) {
     console.error('[AniBox] Store save failed:', e)
   }

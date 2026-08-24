@@ -7,14 +7,16 @@ import { app } from 'electron'
 import { join } from 'path'
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 
-const AI_CONFIG_PATH = join(app.getPath('userData'), 'ai-config.json')
+function aiConfigPath(): string {
+  return join(app.getPath('userData'), 'ai-config.json')
+}
 
 let apiKey: string | null = null
 
 function loadKey(): string | null {
   try {
-    if (existsSync(AI_CONFIG_PATH)) {
-      const raw = readFileSync(AI_CONFIG_PATH, 'utf-8')
+    if (existsSync(aiConfigPath())) {
+      const raw = readFileSync(aiConfigPath(), 'utf-8')
       const config = JSON.parse(raw)
       return config.apiKey || null
     }
@@ -24,7 +26,7 @@ function loadKey(): string | null {
 
 function saveKey(key: string) {
   try {
-    writeFileSync(AI_CONFIG_PATH, JSON.stringify({ apiKey: key }), 'utf-8')
+    writeFileSync(aiConfigPath(), JSON.stringify({ apiKey: key }), 'utf-8')
   } catch {}
 }
 

@@ -316,9 +316,10 @@ export function handleRequest(req: IncomingMessage, res: ServerResponse): void {
   }
 
   if (p === '/') {
+    // 注入主题名与是否要求口令；token 不内联（网页需输入口令验证后进入）
     const html = webIndexHtml
-      .replace(/__ANIBOX_TOKEN__/g, store.ensureStreamToken())
       .replace(/__ANIBOX_THEME__/g, store.getStreamSettings().theme || 'warm-oat')
+      .replace(/__ANIBOX_REQUIRE_TOKEN__/g, String(store.getStreamSettings().requireToken))
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' })
     res.end(html)
     return
@@ -340,6 +341,14 @@ export function handleRequest(req: IncomingMessage, res: ServerResponse): void {
       case '/api/library':
         sendJson(res, 200, buildLibrary())
         return
+
+      case '/api/verify': {
+        // 网页登录验证：key 与 store token 一致才算通过（requireToken 关闭时恒通过）
+        const cfg = store.getStreamSettings()
+        const key = q('key')
+        sendJson(res, 200, { ok: !cfg.requireToken || (key !== '' && key === cfg.token) })
+        return
+      }
 
       case '/api/roots': {
         // 扫描根目录列表（网页文件夹浏览的起点）

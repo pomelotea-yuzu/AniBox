@@ -38,7 +38,7 @@ const SHORTCUTS = [
   { key: '?', desc: '快捷键帮助' },
 ]
 
-type Tab = 'theme' | 'subtitle' | 'playback' | 'shortcuts' | 'api' | 'download' | 'stream' | 'about'
+type Tab = 'theme' | 'subtitle' | 'playback' | 'shortcuts' | 'api' | 'download' | 'stream' | 'storage' | 'about'
 
 export default function SettingsModal({ visible, onClose }: SettingsModalProps) {
   const { theme, themeList, setTheme } = useTheme()
@@ -93,6 +93,16 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
   const [streamSaved, setStreamSaved] = useState('') // 当前已复制的 URL（只高亮被点击的那一个）
   const [cacheInfo, setCacheInfo] = useState('')
   const [engineInfo, setEngineInfo] = useState<any>(null)
+  // 存储信息（「存储」tab）
+  const [storageInfo, setStorageInfo] = useState<any>(null)
+  const [storageBusy, setStorageBusy] = useState('') // 正在清理的 key
+
+  function refreshStorage() {
+    window.electronAPI
+      .storageGetInfo()
+      .then((info) => setStorageInfo(info))
+      .catch(() => {})
+  }
 
   // 加载当前设置
   useEffect(() => {
@@ -155,6 +165,8 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
       .streamEngineInfo()
       .then((e) => setEngineInfo(e))
       .catch(() => {})
+    // 存储信息（「存储」tab）
+    refreshStorage()
     // 下载 ffmpeg 期间轮询进度 + 同步服务器状态（防止"启动中"显示卡住）
     const poll = setInterval(() => {
       window.electronAPI
@@ -223,6 +235,7 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
     { key: 'api', label: 'API' },
     { key: 'download', label: '下载' },
     { key: 'stream', label: '串流' },
+    { key: 'storage', label: '存储' },
     { key: 'about', label: '关于' },
   ]
 
@@ -812,6 +825,108 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
                   转封装/转码产物存储在 userData/stream-cache，同一文件再次播放秒开。
                 </p>
               </div>
+            </div>
+          )}
+
+          {/* === 存储 === */}
+          {tab === 'storage' && (
+            <div className="space-y-4">
+              {/* 模式说明 */}
+              <div
+                className={`px-3 py-2.5 rounded-lg border text-xs leading-relaxed ${
+                  storageInfo?.portable
+                    ? 'text-emerald-500 border-emerald-500/30 bg-emerald-500/5'
+                    : 'text-anibox-text-muted border-anibox-border bg-anibox-bg'
+                }`}
+              >
+                {storageInfo?.portable
+                  ? '📦 便携模式：所有数据（缓存/配置/进度）都存放在软件目录下的 data/ 文件夹，随软件一起拷贝迁移，系统盘零占用。'
+                  : '💾 安装版：数据存放在系统用户目录。如需数据随软件走，请使用便携版（软件根目录含 .portable 标志文件）。'}
+              </div>
+
+              {/* 数据根目录 */}
+              <div className="flex items-center gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs text-anibox-text-muted">数据根目录</div>
+                  <div className="text-[11px] text-anibox-text truncate font-mono mt-0.5">
+                    {storageInfo?.root || '加载中…'}
+                  </div>
+                </div>
+                <button
+                  onClick={() => storageInfo && window.electronAPI.storageOpenPath(storageInfo.root)}
+                  className="px-3 py-1.5 text-xs rounded-lg border border-anibox-border text-anibox-text-muted hover:text-anibox-text hover:border-anibox-accent/40 transition-colors shrink-0"
+                >
+                  打开
+                </button>
+              </div>
+
+              {/* 各缓存目录 */}
+              <div className="space-y-2">
+                {storageInfo?.items?.map((item: any) => (
+                  <div
+                    key={item.key}
+                    className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-anibox-border bg-anibox-bg"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs text-anibox-text flex items-center gap-2">
+                        {item.label}
+                        <span
+                          className={`text-[10px] px-1.5 py-px rounded ${
+                            item.exists
+                              ? 'bg-anibox-surface text-anibox-text-muted'
+                              : 'bg-anibox-surface text-anibox-text-muted/60'
+                          }`}
+                        >
+                          {item.exists ? `${item.sizeMB} MB` : '未使用'}
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-anibox-text-muted mt-0.5">{item.desc}</div>
+                      <div className="text-[10px] text-anibox-text-muted/80 font-mono truncate mt-0.5">
+                        {item.path}
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-1 shrink-0">
+                      <button
+                        onClick={() => window.electronAPI.storageOpenPath(item.path)}
+                        className="px-2.5 py-1 text-[11px] rounded-md border border-anibox-border text-anibox-text-muted hover:text-anibox-text hover:border-anibox-accent/40 transition-colors"
+                      >
+                        打开
+                      </button>
+                      {item.clearable && (
+                        <button
+                          disabled={!!storageBusy}
+                          onClick={async () => {
+                            setStorageBusy(item.key)
+                            const r = await window.electronAPI.storageClearCache(item.key).catch(() => null)
+                            setStorageBusy('')
+                            if (r?.ok) {
+                              refreshStorage()
+                              setCacheInfo(`已清理 ${item.label}`)
+                              setTimeout(() => setCacheInfo(''), 2000)
+                            } else {
+                              setCacheInfo(r?.message || '清理失败')
+                              setTimeout(() => setCacheInfo(''), 2000)
+                            }
+                          }}
+                          className="px-2.5 py-1 text-[11px] rounded-md border border-anibox-border text-amber-500/80 hover:text-amber-500 hover:border-amber-500/40 transition-colors"
+                        >
+                          {storageBusy === item.key ? '清理中…' : '清理'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {cacheInfo && <p className="text-[11px] text-anibox-accent">{cacheInfo}</p>}
+
+              <p className="text-[10px] text-anibox-text-muted leading-relaxed">
+                {storageInfo?.storeExists
+                  ? `数据库文件：${storageInfo.storePath}（番剧库/进度/设置，不随清理删除）`
+                  : '首次运行后会自动生成数据文件。'}
+                <br />
+                清理只会删除缓存产物，番剧文件与观看进度不受影响；模型目录不可一键清理。
+              </p>
             </div>
           )}
 

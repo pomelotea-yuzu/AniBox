@@ -319,6 +319,12 @@ const electronAPI = {
   streamEngineInfo: (): Promise<any> => ipcRenderer.invoke('stream:engineInfo'),
   streamFfmpegRetry: (): Promise<any> => ipcRenderer.invoke('stream:ffmpegRetry'),
 
+  // 存储信息（设置页「存储」tab）
+  storageGetInfo: (): Promise<any> => ipcRenderer.invoke('storage:getInfo'),
+  storageClearCache: (key: string): Promise<{ ok: boolean; message: string }> =>
+    ipcRenderer.invoke('storage:clearCache', key),
+  storageOpenPath: (p: string): Promise<boolean> => ipcRenderer.invoke('storage:openPath', p),
+
   // 应用版本信息（关于页显示）
   getAppVersion: (): Promise<{ version: string; electron: string }> =>
     ipcRenderer.invoke('app:getVersion'),

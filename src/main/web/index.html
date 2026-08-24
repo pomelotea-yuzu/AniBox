@@ -101,17 +101,20 @@ img{display:block}
   font-size:12px;font-weight:600;padding:7px 12px;border-radius:16px;flex-shrink:0}
 .btn-add:active{background:var(--accent-hover)}
 
-/* ---------- 播放器（始终深色控制层，与主应用一致） ---------- */
-.player-wrap{position:fixed;inset:0;background:#000;z-index:50;display:flex;flex-direction:column}
-video{flex:1;width:100%;object-fit:contain;background:#000}
-.pbar{position:relative;background:rgba(10,12,16,.9);color:#e8ebf0;padding-bottom:env(safe-area-inset-bottom)}
-.seek-row{display:flex;align-items:center;gap:8px;padding:7px 12px 2px}
+/* ---------- 播放器（控制条悬浮叠加，自动隐藏） ---------- */
+.player-wrap{position:fixed;inset:0;background:#000;z-index:50;overflow:hidden}
+video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000}
+.pbar{position:absolute;left:0;right:0;bottom:0;z-index:9;color:#e8ebf0;
+  background:linear-gradient(to top,rgba(0,0,0,.88) 0%,rgba(0,0,0,.55) 55%,transparent 100%);
+  padding:26px 0 env(safe-area-inset-bottom);transition:opacity .35s ease,transform .35s ease}
+.pbar.hide{opacity:0;transform:translateY(100%);pointer-events:none}
+.seek-row{display:flex;align-items:center;gap:8px;padding:0 12px}
 .seek-row .t{font-size:11px;color:rgba(255,255,255,.72);min-width:42px;font-variant-numeric:tabular-nums;text-align:center}
 .seek-row input[type=range]{flex:1;height:22px;-webkit-appearance:none;appearance:none;background:transparent;cursor:pointer;touch-action:none}
 .seek-row input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:rgba(255,255,255,.22)}
 .seek-row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:15px;height:15px;margin-top:-5.5px;border-radius:50%;
   background:var(--accent);border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.5)}
-.btn-row{display:flex;align-items:center;gap:2px;padding:4px 8px 8px;flex-wrap:nowrap}
+.btn-row{display:flex;align-items:center;gap:2px;padding:4px 10px 4px;flex-wrap:wrap}
 .btn-row button{color:rgba(255,255,255,.92);font-size:14px;padding:7px 9px;border-radius:8px;flex-shrink:0}
 .btn-row button:active{background:rgba(255,255,255,.16)}
 .btn-row button.on{color:var(--accent)}
@@ -123,6 +126,33 @@ video{flex:1;width:100%;object-fit:contain;background:#000}
 .btn-row input[type=range].vol::-webkit-slider-runnable-track{height:3px;border-radius:2px;background:rgba(255,255,255,.25)}
 .btn-row input[type=range].vol::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:11px;height:11px;margin-top:-4px;border-radius:50%;background:var(--accent);border:1px solid #fff}
 .btn-row .grow{flex:1}
+.btn-row .tt{font-size:11px;color:rgba(255,255,255,.72);min-width:92px;font-variant-numeric:tabular-nums;padding:0 4px;flex-shrink:0;text-align:center}
+
+/* 进度条 + 缓冲 */
+.seek-wrap{position:relative;flex:1;height:22px;display:flex;align-items:center;min-width:60px}
+.seek-wrap .buf{position:absolute;left:0;top:50%;transform:translateY(-50%);height:4px;border-radius:2px;background:rgba(255,255,255,.18);pointer-events:none;width:0%}
+.seek-wrap input[type=range]{position:relative;z-index:2;width:100%;height:22px;-webkit-appearance:none;appearance:none;background:transparent;cursor:pointer;touch-action:none}
+
+/* 弹层菜单 */
+.bwrap{position:relative;display:inline-flex;flex-shrink:0}
+.menu{position:absolute;bottom:calc(100% + 10px);left:0;z-index:12;background:rgba(18,20,26,.97);border:1px solid rgba(255,255,255,.14);
+  border-radius:10px;padding:6px;min-width:140px;max-height:300px;overflow-y:auto;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+.menu.right{left:auto;right:0}
+.menu button{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:8px 10px;border-radius:7px;font-size:12px;color:rgba(255,255,255,.92)}
+.menu button:active{background:rgba(255,255,255,.12)}
+.menu button.on{color:var(--accent)}
+.menu button.dim{color:rgba(255,255,255,.38)}
+.menu .sep{height:1px;background:rgba(255,255,255,.1);margin:4px 6px}
+.menu .mt{font-size:10px;color:rgba(255,255,255,.45);padding:4px 10px 2px}
+.menu input{width:100%;padding:7px 8px;border-radius:6px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.06);color:#fff;font-size:12px;outline:none}
+.menu .ok{display:flex;gap:6px;margin-top:6px}
+.menu .ok button{flex:1;text-align:center;justify-content:center;background:var(--accent);color:#12151a;font-weight:600}
+.menu .ok button:active{background:var(--accent-hover)}
+.ep-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;min-width:230px;max-width:280px}
+.ep-grid button{padding:8px 4px;border-radius:7px;background:rgba(255,255,255,.07);text-align:center;font-size:11.5px;color:rgba(255,255,255,.85)}
+.ep-grid button.on{background:var(--accent);color:#12151a;font-weight:700}
+.ep-grid button:active{background:rgba(255,255,255,.2)}
+.ic{width:16px;height:16px;flex-shrink:0;display:inline-block;vertical-align:middle}
 .ov{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;
   background:rgba(0,0,0,.72);color:#e8ebf0;z-index:5}
 .tap-play{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:6;
@@ -130,9 +160,6 @@ video{flex:1;width:100%;object-fit:contain;background:#000}
 .pl-back{position:absolute;top:10px;left:10px;z-index:8;display:flex;align-items:center;gap:3px;
   background:rgba(0,0,0,.45);color:#fff;font-size:13px;padding:6px 12px;border-radius:18px;backdrop-filter:blur(4px)}
 .pl-back:active{background:rgba(0,0,0,.7)}
-.dbg{position:absolute;bottom:112px;left:0;right:0;z-index:7;background:rgba(0,0,0,.6);
-  color:#9fe1cb;font-size:10px;font-family:monospace;padding:3px 8px;white-space:nowrap;
-  overflow:hidden;text-overflow:ellipsis;pointer-events:none}
 .ov .ring{width:34px;height:34px;border:3px solid rgba(255,255,255,.18);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 .ov .pt{font-size:13px}
@@ -142,6 +169,16 @@ video{flex:1;width:100%;object-fit:contain;background:#000}
   color:#fff;font-size:12.5px;padding:8px 14px;border-radius:20px;z-index:99;opacity:0;transition:opacity .25s;pointer-events:none;max-width:80%}
 .toast.show{opacity:1}
 .empty{text-align:center;color:var(--muted);padding:60px 20px;font-size:13px}
+
+/* ---------- 口令登录 ---------- */
+.login{position:fixed;inset:0;z-index:200;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:28px}
+.login .box{width:100%;max-width:340px;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:28px 22px;box-shadow:0 10px 30px rgba(0,0,0,.12)}
+.login .lt{font-size:17px;font-weight:700;text-align:center;color:var(--text)}
+.login .ld{font-size:11.5px;color:var(--muted);text-align:center;margin:10px 0 18px;line-height:1.7}
+.login input{width:100%;padding:11px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:14px;outline:none;text-align:center;letter-spacing:3px}
+.login input:focus{border-color:var(--accent)}
+.login button{width:100%;margin-top:14px;padding:11px;border-radius:8px;background:var(--accent);color:var(--on-accent);font-size:14px;font-weight:600}
+.login button:disabled{opacity:.6}
 </style>
 </head>
 <body>
@@ -180,8 +217,62 @@ function applyTheme(name){
 }
 applyTheme(CURRENT_THEME);
 
+/* ---------- 口令验证 ---------- */
+/* 服务端注入是否要求口令；token 不内联在页面里，需用户输入验证后使用 */
+const REQUIRE_TOKEN = "__ANIBOX_REQUIRE_TOKEN__" === "true";
+let TOKEN = "";
+try{ TOKEN = localStorage.getItem("anibox-web-key") || ""; }catch(e){}
+
+/** 校验口令（verify 接口本身按 key 鉴权，无需先持有 token） */
+async function checkKey(key){
+  try{
+    const r = await fetch("/api/verify?key=" + encodeURIComponent(key));
+    if(!r.ok) return false;
+    const j = await r.json();
+    return !!j.ok;
+  }catch(e){ return false; }
+}
+/** 进入前验证：无需口令直接过；本地有有效 key 直接过；否则弹登录层 */
+function ensureAuth(){
+  if(!REQUIRE_TOKEN) return Promise.resolve();
+  if(TOKEN) return checkKey(TOKEN).then(ok => ok ? Promise.resolve() : showLogin());
+  return showLogin();
+}
+function showLogin(){
+  return new Promise(resolve => {
+    const lg = el("div","login");
+    const box = el("div","box");
+    box.appendChild(el("div","lt","🔐 AniBox 串流"));
+    box.appendChild(el("div","ld","此服务需要访问口令。\n口令在电脑端 AniBox 设置 →「串流」中查看。"));
+    const inp = document.createElement("input");
+    inp.type = "password"; inp.placeholder = "输入访问口令";
+    const btn = el("button","","进入");
+    box.appendChild(inp); box.appendChild(btn);
+    lg.appendChild(box);
+    document.body.appendChild(lg);
+    setTimeout(()=>inp.focus(), 100);
+    async function go(){
+      const v = inp.value.trim();
+      if(!v) return;
+      btn.disabled = true; btn.textContent = "验证中…";
+      const ok = await checkKey(v);
+      if(ok){
+        TOKEN = v;
+        try{ localStorage.setItem("anibox-web-key", v); }catch(e){}
+        lg.remove();
+        resolve();
+      } else {
+        btn.disabled = false; btn.textContent = "进入";
+        toast("口令不正确");
+        inp.select();
+      }
+    }
+    btn.addEventListener("click", go);
+    inp.addEventListener("keydown", (e)=>{ if(e.key==="Enter") go(); });
+  });
+}
+
 /* ---------- 工具 ---------- */
-const TOKEN = "__ANIBOX_TOKEN__";
 const $ = (s, el=document) => el.querySelector(s);
 const el = (tag, cls, txt) => { const e = document.createElement(tag); if(cls)e.className=cls; if(txt!=null)e.textContent=txt; return e; };
 
@@ -516,85 +607,234 @@ function renderPlayer(hash){
     else location.hash = "#/";
   });
   wrap.appendChild(backBtn);
-  // 内置诊断条（排查 iPad 黑屏用）
-  const dbg = el("div","dbg","");
-  wrap.appendChild(dbg);
-  const dbgEvents = [];
-  function dbgLog(ev){
-    dbgEvents.push(ev);
-    if(dbgEvents.length > 4) dbgEvents.shift();
-    const srcKind = cur ? cur.srcKind : "";
-    const err = video.error ? video.error.code + (video.error.message ? ":" + video.error.message : "") : "-";
-    dbg.textContent = "[" + srcKind + "] state:" + video.readyState + " net:" + video.networkState +
-      " err:" + err + " t:" + (video.currentTime||0).toFixed(1) + "/" + (video.duration||0).toFixed(1) +
-      " ev:" + dbgEvents.join(",");
-  }
-  for(const ev of ["loadedmetadata","loadeddata","play","playing","pause","waiting","stalled","canplay","canplaythrough","error","emptied","abort","ended"]){
-    video.addEventListener(ev, ()=> dbgLog(ev));
-  }
-  video.addEventListener("timeupdate", ()=> dbgLog("t"));
-  dbgLog("init");
 
-  /* ---------- 控制条 ---------- */
+  /* ---------- 控制条（对齐主播放器形式） ---------- */
   const bar = el("div","pbar");
-  // 进度条行
+  // 第一行：进度条（带缓冲进度）
   const seekRow = el("div","seek-row");
-  const curTime = el("span","t","0:00");
-  const durTime = el("span","t","0:00");
+  const seekWrap = el("div","seek-wrap");
+  const bufFill = el("div","buf");
   const seek = document.createElement("input");
   seek.type = "range"; seek.min = 0; seek.max = 0; seek.step = 0.1; seek.value = 0;
-  seekRow.append(curTime, seek, durTime);
-  // 按钮行
+  seekWrap.appendChild(bufFill);
+  seekWrap.appendChild(seek);
+  seekRow.appendChild(seekWrap);
+
+  // 图标集
+  const SVG = {
+    play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4l13 8-13 8z"/></svg>',
+    pause: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>',
+    prev: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zM20 6l-10 6 10 6z"/></svg>',
+    next: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 6h2v12h-2zM4 6l10 6-10 6z"/></svg>',
+    vol: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3z"/><path d="M16.5 8.5a5 5 0 010 7"/><path d="M19 6a8.5 8.5 0 010 12"/></svg>',
+    volOff: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3z"/><line x1="16" y1="9" x2="21" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="21" y1="9" x2="16" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+    speed: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 4a8 8 0 100 16 8 8 0 000-16zm0 2a6 6 0 110 12 6 6 0 010-12zm-1 3v6l5 3 1-1.7-4-2.3V9h-2z"/></svg>',
+    sub: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h16a2 2 0 012 2v12a2 2 0 01-2 2H4a2 2 0 01-2-2V6a2 2 0 012-2zm0 2v12h16V6H4zm2 8h5v2H6v-2zm7 0h5v2h-5v-2z"/></svg>',
+    ratio: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="1"/><path d="M3 9h18"/></svg>',
+    shot: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>',
+    pip: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><rect x="11" y="11" width="8" height="6" rx="1"/></svg>',
+    list: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 9h8M8 13h5"/></svg>',
+    fs: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>',
+    more: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>',
+  };
+  const ic = (name) => '<span class="ic">' + (SVG[name] || '') + '</span>';
+
   const btnRow = el("div","btn-row");
-  const mkBtn = (html, cls, fn) => { const b = el("button", cls, ""); b.innerHTML = html; b.addEventListener("click", fn); return b; };
-  const PLAY_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4l13 8-13 8z"/></svg>';
-  const PAUSE_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>';
-  const playBtn = el("button","pbtn",PLAY_SVG);
-  const updatePlayIcon = ()=>{ playBtn.innerHTML = video.paused ? PLAY_SVG : PAUSE_SVG; };
+  const mkBtn = (html, cls, title, fn) => { const b = el("button", cls, ""); b.innerHTML = html; if(title) b.title = title; b.addEventListener("click", fn); return b; };
+
+  // 播放 / 暂停
+  const playBtn = el("button","pbtn",SVG.play);
+  const updatePlayIcon = ()=>{ playBtn.innerHTML = video.paused ? SVG.play : SVG.pause; };
   video.addEventListener("play", updatePlayIcon);
   video.addEventListener("pause", updatePlayIcon);
-  const prevBtn = mkBtn('‹', "", ()=> stepEp(-1));
-  const nextBtn = mkBtn('›', "", ()=> stepEp(1));
-  const speedBtn = el("button","speed","1.0x"); speedBtn.addEventListener("click", ()=>{
-    const opts = [0.5,0.75,1,1.25,1.5,2]; const i = opts.indexOf(video.playbackRate);
-    const v = i>=0 ? opts[(i+1)%opts.length] : 1; video.playbackRate = v; speedBtn.textContent = v+"x";
-    localStorage.setItem("anibox_speed", String(v));
-  });
-  const subBtn = mkBtn('字', "", ()=> toggleSubs());
-  const autoBtn = el("button","lbl","连播");
-  const setAuto = (on)=>{ autoBtn.textContent = on ? "连播·开" : "连播·关"; autoBtn.classList.toggle("on", on); };
-  autoBtn.addEventListener("click", ()=>{ const on = !(localStorage.getItem("anibox_autonext") !== "0"); setAuto(!on); localStorage.setItem("anibox_autonext", !on ? "1":"0"); });
-  // 音量
-  const volBtn = mkBtn(VOL_SVG(false), "", ()=>{
-    video.muted = !video.muted;
-    if(!video.muted) video.volume = volSlider.value > 0 ? Number(volSlider.value) : 0.8;
-    syncVolUI();
-  });
-  const volSlider = document.createElement("input");
-  volSlider.type = "range"; volSlider.className = "vol"; volSlider.min = 0; volSlider.max = 1; volSlider.step = 0.05;
+  const prevBtn = mkBtn(ic("prev"), "", "上一集", ()=> stepEp(-1));
+  const nextBtn = mkBtn(ic("next"), "", "下一集", ()=> stepEp(1));
+  // 时间显示
+  const timeLabel = el("span","tt","0:00 / 0:00");
+  const setTimeLabel = ()=>{ timeLabel.textContent = fmtSec(video.currentTime) + " / " + fmtSec(video.duration); };
+
+  /* 弹层菜单基础设施 */
+  let openMenu = null;
+  function closeMenus(){
+    if(openMenu){ openMenu.remove(); openMenu = null; }
+  }
+  function toggleMenu(bwrap, build){
+    closeMenus();
+    const m = el("div","menu");
+    build(m);
+    bwrap.appendChild(m);
+    openMenu = m;
+    pokeCtrl();
+  }
+  const bwrap = (child) => { const w = el("div","bwrap"); w.appendChild(child); return w; };
+
+  // 音量（悬浮滑块）
+  const volBtn = mkBtn(ic("vol"), "", "音量", ()=> toggleMenu(volWrap, m=>buildVolMenu(m)));
+  const volWrap = bwrap(volBtn);
   const savedVol = parseFloat(localStorage.getItem("anibox_volume")||"0.8");
-  volSlider.value = isFinite(savedVol) ? savedVol : 0.8;
-  video.volume = Number(volSlider.value) || 0.8;
-  volSlider.addEventListener("input", ()=>{ video.muted = false; video.volume = Number(volSlider.value); syncVolUI(); });
-  volSlider.addEventListener("change", ()=>{ localStorage.setItem("anibox_volume", String(volSlider.value)); });
-  function VOL_SVG(muted){
-    return muted
-      ? '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3z"/><line x1="16" y1="9" x2="21" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="21" y1="9" x2="16" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>'
-      : '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3z"/><path d="M16.5 8.5a5 5 0 010 7"/><path d="M19 6a8.5 8.5 0 010 12"/></svg>';
+  video.volume = isFinite(savedVol) ? savedVol : 0.8;
+  function syncVolBtn(){
+    volBtn.innerHTML = (video.muted || video.volume === 0) ? ic("volOff") : ic("vol");
   }
-  function syncVolUI(){
-    volBtn.innerHTML = VOL_SVG(video.muted || video.volume === 0);
-    if(!video.muted && Number(volSlider.value) !== video.volume) volSlider.value = String(video.volume);
+  function buildVolMenu(m){
+    m.appendChild(el("div","mt","音量 " + Math.round((video.muted ? 0 : video.volume) * 100) + "%"));
+    const sl = document.createElement("input");
+    sl.type = "range"; sl.min = 0; sl.max = 1; sl.step = 0.05;
+    sl.value = String(video.muted ? 0 : video.volume);
+    sl.addEventListener("input", ()=>{
+      video.muted = false; video.volume = Number(sl.value);
+      syncVolBtn();
+      m.querySelector(".mt").textContent = "音量 " + Math.round(video.volume * 100) + "%";
+    });
+    sl.addEventListener("change", ()=> localStorage.setItem("anibox_volume", String(sl.value)));
+    m.appendChild(sl);
+    const mute = el("button","", (video.muted ? "取消静音" : "静音"));
+    mute.addEventListener("click", ()=>{ video.muted = !video.muted; syncVolBtn(); toggleMenu(volWrap, m=>buildVolMenu(m)); });
+    m.appendChild(mute);
   }
+
+  // 倍速（菜单 9 档 + 自定义）
+  const SPEEDS = [0.5,0.75,1,1.25,1.5,1.75,2,2.5,3];
+  const speedBtn = el("button","speed","1x");
+  const setSpeedLabel = ()=> speedBtn.textContent = video.playbackRate + "x";
+  speedBtn.addEventListener("click", ()=> toggleMenu(speedWrap, m=>buildSpeedMenu(m)));
+  const speedWrap = bwrap(speedBtn);
+  function buildSpeedMenu(m){
+    for(const s of SPEEDS){
+      const b = el("button","", (s===1 ? "1x 正常" : s+"x"));
+      if(Math.abs(s - video.playbackRate) < 0.01) b.classList.add("on");
+      b.addEventListener("click", ()=>{ video.playbackRate = s; localStorage.setItem("anibox_speed", String(s)); setSpeedLabel(); closeMenus(); });
+      m.appendChild(b);
+    }
+    m.appendChild(el("div","sep"));
+    const inp = document.createElement("input"); inp.type = "number"; inp.min = 0.1; inp.max = 16; inp.step = 0.05; inp.placeholder = "自定义 0.1~16";
+    const ok = el("button","","确定");
+    const apply = ()=>{ const v = parseFloat(inp.value); if(v >= 0.1 && v <= 16){ video.playbackRate = v; localStorage.setItem("anibox_speed", String(v)); setSpeedLabel(); closeMenus(); } else toast("请输入 0.1~16 之间的倍速"); };
+    ok.addEventListener("click", apply);
+    inp.addEventListener("keydown", (e)=>{ if(e.key==="Enter") apply(); });
+    const row = el("div","ok"); row.appendChild(inp);
+    const row2 = el("div","ok"); row2.appendChild(ok);
+    m.appendChild(row); m.appendChild(row2);
+  }
+
+  // 字幕（开关 + 多轨选择）
+  const subBtn = mkBtn(ic("sub"), "", "字幕", ()=> toggleMenu(subWrap, m=>buildSubMenu(m)));
+  const subWrap = bwrap(subBtn);
+  function buildSubMenu(m){
+    m.appendChild(el("div","mt","字幕"));
+    const off = el("button","", "关闭字幕"); if(!subOn) off.classList.add("on");
+    off.addEventListener("click", ()=>{ setSubTrack(-1); closeMenus(); });
+    m.appendChild(off);
+    const tracks = video.textTracks || [];
+    for(let i=0;i<tracks.length;i++){
+      const b = el("button","", (tracks[i].label || ("字幕 " + (i+1))));
+      if(tracks[i].mode === "showing") b.classList.add("on");
+      b.addEventListener("click", ()=>{ setSubTrack(i); closeMenus(); });
+      m.appendChild(b);
+    }
+    m.appendChild(el("div","sep"));
+    for(const [nm, tip] of [["在线搜索字幕","在线搜索字幕"],["双语字幕","双语字幕"],["字幕样式设置","字幕样式设置"]]){
+      const b = el("button","dim", nm);
+      b.addEventListener("click", ()=> stub(tip));
+      m.appendChild(b);
+    }
+  }
+
+  // 选集
+  const epBtn = mkBtn(ic("list"), "", "选集", ()=> toggleMenu(epWrap, m=>buildEpMenu(m)));
+  const epWrap = bwrap(epBtn);
+  function buildEpMenu(m){
+    if(!epList.length){
+      m.appendChild(el("div","mt","暂无选集数据"));
+      return;
+    }
+    const grid = el("div","ep-grid");
+    epList.forEach((e, i) => {
+      const b = el("button","", String(e.epNumber || (i+1)));
+      if(e.filePath === path) b.classList.add("on");
+      b.addEventListener("click", ()=>{ location.hash = epUrl(e); });
+      grid.appendChild(b);
+    });
+    m.appendChild(grid);
+  }
+
+  // 画面比例（等比/拉伸两态）
+  let ratioIdx = 0; // 0 等比 contain, 1 拉伸 fill
+  const RATIO_NAMES = ["等比", "拉伸"];
+  const ratioBtn = mkBtn(ic("ratio"), "", "画面比例：等比", ()=>{
+    ratioIdx = (ratioIdx + 1) % 2;
+    video.style.objectFit = ratioIdx === 0 ? "contain" : "fill";
+    ratioBtn.title = "画面比例：" + RATIO_NAMES[ratioIdx];
+    toast("画面比例：" + RATIO_NAMES[ratioIdx]);
+  });
+
+  // 截图
+  const shotBtn = mkBtn(ic("shot"), "", "截图", ()=>{
+    try{
+      const c = document.createElement("canvas");
+      c.width = video.videoWidth || video.clientWidth;
+      c.height = video.videoHeight || video.clientHeight;
+      c.getContext("2d").drawImage(video, 0, 0);
+      const a = document.createElement("a");
+      a.href = c.toDataURL("image/jpeg", 0.9);
+      a.download = "anibox-" + Date.now() + ".jpg";
+      a.click();
+      toast("截图已保存到下载");
+    }catch(e){ toast("截图失败：" + e.message); }
+  });
+
+  // 画中画
+  const pipBtn = mkBtn(ic("pip"), "", "画中画", async ()=>{
+    try{
+      if(document.pictureInPictureElement){ await document.exitPictureInPicture(); return; }
+      await video.requestPictureInPicture();
+    }catch(e){ toast("当前浏览器不支持画中画"); }
+  });
+
+  // 播放模式：顺序 / 单集循环 / 列表循环 / 随机
+  const MODE_NAMES = ["顺序播放","单集循环","列表循环","随机播放"];
+  let playMode = localStorage.getItem("anibox_playmode") || "order";
+  const modeBtn = mkBtn(ic("list"), "", "播放模式", ()=>{
+    const order = ["order","one","list","random"];
+    playMode = order[(order.indexOf(playMode) + 1) % order.length];
+    localStorage.setItem("anibox_playmode", playMode);
+    toast("播放模式：" + MODE_NAMES[order.indexOf(playMode)]);
+  });
+
+  // 无法在串流模式实现的功能（保留按钮位，点击提示）
+  function stub(name){
+    closeMenus();
+    toast("串流模式下无法使用：" + name);
+  }
+  const moreBtn = mkBtn(ic("more"), "", "更多", ()=> toggleMenu(moreWrap, m=>buildMoreMenu(m)));
+  const moreWrap = bwrap(moreBtn);
+  function buildMoreMenu(m){
+    const items = [
+      ["音轨切换","音轨切换"],
+      ["画面增强 4K","画面增强 4K"],
+      ["A/B 对比","A/B 对比"],
+      ["音频延迟","音频延迟"],
+      ["音量均衡","音量均衡"],
+      ["OP/ED 跳过","OP/ED 跳过"],
+      ["弹幕","弹幕"],
+      ["生词点查","生词点查"],
+      ["Whisper 语音识别","Whisper 语音识别"],
+    ];
+    for(const [nm, tip] of items){
+      const b = el("button","", nm);
+      b.addEventListener("click", ()=> stub(tip));
+      m.appendChild(b);
+    }
+  }
+
   // 全屏
-  const fsBtn = mkBtn('<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>', "", toggleFullscreen);
+  const fsBtn = mkBtn(ic("fs"), "", "全屏", toggleFullscreen);
   function toggleFullscreen(){
     const doc = document;
     if(!doc.fullscreenElement){
       const req = doc.documentElement.requestFullscreen || doc.documentElement.webkitRequestFullscreen;
       if(req){
         req.call(doc.documentElement).catch(()=>{
-          // iOS Safari：video 原生全屏兜底
           try{ if(video.webkitEnterFullscreen) video.webkitEnterFullscreen(); }catch(e){}
         });
       } else {
@@ -604,18 +844,34 @@ function renderPlayer(hash){
       (doc.exitFullscreen || doc.webkitExitFullscreen || function(){}).call(doc);
     }
   }
-  btnRow.append(playBtn, prevBtn, speedBtn, subBtn, autoBtn, nextBtn, el("span","grow"), volBtn, volSlider, fsBtn);
+
+  btnRow.append(prevBtn, playBtn, nextBtn, timeLabel, el("span","grow"), volWrap, speedWrap, subWrap, epWrap, ratioBtn, shotBtn, pipBtn, modeBtn, moreWrap, fsBtn);
   bar.appendChild(seekRow);
   bar.appendChild(btnRow);
   wrap.appendChild(bar);
   app.appendChild(wrap);
 
-  /* 进度条交互 */
+  /* 控制条自动隐藏：播放中 3s 无操作隐藏；暂停/加载/菜单打开时保持显示 */
+  let ctrlTimer = null;
+  function pokeCtrl(){
+    bar.classList.remove("hide");
+    clearTimeout(ctrlTimer);
+    if(!video.paused && !openMenu){
+      ctrlTimer = setTimeout(()=> bar.classList.add("hide"), 3000);
+    }
+  }
+  wrap.addEventListener("pointermove", pokeCtrl);
+  wrap.addEventListener("touchstart", pokeCtrl);
+  wrap.addEventListener("pointerdown", pokeCtrl);
+  video.addEventListener("play", ()=>{ pokeCtrl(); });
+  video.addEventListener("pause", ()=>{ bar.classList.remove("hide"); clearTimeout(ctrlTimer); });
+
+  /* 进度条交互（拖动中不实时跳转，松手定位）+ 缓冲进度 */
   let seeking = false;
   seek.addEventListener("pointerdown", ()=>{ seeking = true; });
   seek.addEventListener("input", ()=>{
     if(!isFinite(video.duration) || !video.duration) return;
-    curTime.textContent = fmtSec(Number(seek.value));
+    timeLabel.textContent = fmtSec(Number(seek.value)) + " / " + fmtSec(video.duration);
   });
   seek.addEventListener("change", ()=>{
     if(isFinite(video.duration) && video.duration){
@@ -628,18 +884,25 @@ function renderPlayer(hash){
     if(isFinite(video.duration) && video.duration){
       seek.max = String(video.duration);
       seek.value = String(video.currentTime);
-      curTime.textContent = fmtSec(video.currentTime);
-      durTime.textContent = fmtSec(video.duration);
+      setTimeLabel();
     }
   });
   video.addEventListener("loadedmetadata", ()=>{
     if(isFinite(video.duration) && video.duration){
       seek.max = String(video.duration);
-      durTime.textContent = fmtSec(video.duration);
+      setTimeLabel();
     }
   });
+  video.addEventListener("progress", ()=>{
+    try{
+      const b = video.buffered;
+      if(b.length && video.duration){
+        bufFill.style.width = Math.min(100, b.end(b.length-1) / video.duration * 100) + "%";
+      }
+    }catch(e){ /* ignore */ }
+  });
 
-  /* 点击画面切换播放/暂停；双击全屏 */
+  /* 点击画面：控制条隐藏时唤出；可见时切换播放/暂停；双击全屏 */
   let tapLayer = null;
   let lastTap = 0;
   function tryPlay(){
@@ -661,10 +924,18 @@ function renderPlayer(hash){
   function hideTapLayer(){ if(tapLayer){ tapLayer.remove(); tapLayer = null; } }
   video.addEventListener("click", ()=>{
     hideTapLayer();
+    closeMenus();
     const now = Date.now();
     if(now - lastTap < 300){ lastTap = 0; toggleFullscreen(); return; }
     lastTap = now;
-    if(video.paused){ tryPlay(); } else { video.pause(); }
+    if(bar.classList.contains("hide")){
+      pokeCtrl(); // 唤出控制条
+    } else {
+      if(video.paused){ tryPlay(); } else { video.pause(); }
+    }
+  });
+  document.addEventListener("click", (e)=>{
+    if(openMenu && !e.target.closest(".bwrap")) closeMenus();
   });
 
   const ov = el("div","ov","");
@@ -673,11 +944,11 @@ function renderPlayer(hash){
   const pd = el("div","pd",""); ov.appendChild(pd);
   wrap.appendChild(ov);
 
-  // 初始音量/倍速/连播恢复
+  // 初始音量/倍速恢复
   const resume = localStorage.getItem("anibox_speed");
-  if(resume){ const r = parseFloat(resume); if(r) video.playbackRate = r; speedBtn.textContent = r+"x"; }
-  setAuto(localStorage.getItem("anibox_autonext") !== "0");
-  syncVolUI();
+  if(resume){ const r = parseFloat(resume); if(r) video.playbackRate = r; }
+  setSpeedLabel();
+  syncVolBtn();
 
   /* 剧集列表：库模式按系列，文件夹模式按目录内视频 */
   let epList = [];
@@ -807,7 +1078,26 @@ function renderPlayer(hash){
   video.addEventListener("pause", ()=> saveProgress());
   video.addEventListener("ended", ()=>{
     saveProgress(true);
-    if(localStorage.getItem("anibox_autonext") !== "0") stepEp(1);
+    if(playMode === "one"){
+      // 单集循环
+      video.currentTime = 0;
+      video.play().catch(()=>{});
+      return;
+    }
+    if(playMode === "random"){
+      if(epList.length > 1){
+        let n;
+        do{ n = epList[Math.floor(Math.random() * epList.length)]; }while(n.filePath === path);
+        location.hash = epUrl(n);
+      }
+      return;
+    }
+    // 顺序 / 列表循环
+    const i = epList.findIndex(e=>e.filePath===path || e.epNumber===epNo);
+    const n = epList[i+1];
+    if(n) location.hash = epUrl(n);
+    else if(playMode === "list" && epList.length) location.hash = epUrl(epList[0]);
+    else toast("已经是最后一个视频");
   });
   setInterval(saveProgress, 5000);
   window.addEventListener("beforeunload", saveProgress);
@@ -820,25 +1110,28 @@ function renderPlayer(hash){
     try{ await api("/api/progress", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ path: p, position: video.currentTime||0 }) }); }catch(e){}
   }
 
-  /* 字幕 */
+  /* 字幕（多轨：加载全部，菜单切换） */
   let subOn = true;
+  let subIdx = 0;
   async function loadSubs(){
     try{
       const subs = await api("/api/subs?path=" + encodeURIComponent(path));
       cur.subs = subs;
-      if(!subs.length) return;
-      const t = document.createElement("track");
-      t.kind = "subtitles"; t.label = subs[0].label || "字幕"; t.srclang = subs[0].language || "zh";
-      t.src = vurl("/api/sub?path=" + encodeURIComponent(subs[0].filePath));
-      video.appendChild(t);
-      subBtn.classList.add("on");
+      if(!subs.length){ subOn = false; return; }
+      subs.forEach((s, i) => {
+        const t = document.createElement("track");
+        t.kind = "subtitles"; t.label = s.label || ("字幕 " + (i+1)); t.srclang = s.language || "zh";
+        t.src = vurl("/api/sub?path=" + encodeURIComponent(s.filePath));
+        video.appendChild(t);
+      });
+      setSubTrack(0);
     }catch(e){ /* 无字幕 */ }
   }
-  function toggleSubs(){
-    subOn = !subOn;
-    const t = video.querySelector("track");
-    if(!t){ toast("该集没有外挂字幕"); subOn = true; return; }
-    t.track.mode = subOn ? "showing" : "hidden";
+  function setSubTrack(i){
+    subIdx = i;
+    subOn = i >= 0;
+    const tracks = video.textTracks;
+    for(let k=0;k<tracks.length;k++) tracks[k].mode = (k === i) ? "showing" : "hidden";
     subBtn.classList.toggle("on", subOn);
   }
 
@@ -846,7 +1139,7 @@ function renderPlayer(hash){
 }
 
 /* ---------- 启动 ---------- */
-route();
+ensureAuth().then(route);
 </script>
 </body>
 </html>
