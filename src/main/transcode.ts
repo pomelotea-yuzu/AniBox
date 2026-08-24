@@ -21,7 +21,13 @@ import { createHash } from 'crypto'
 import { app } from 'electron'
 import { probeFile, getMpvPath, ProbeResult } from './video-probe'
 
-export type StreamMode = 'auto' | 'remux' | 'transcode'
+export type StreamMode =
+  | 'auto'
+  | 'remux'
+  | 'remux-hvc1' // 8bit HEVC copy + hvc1 标记（Safari 可播）
+  | 'transcode'
+  | 'transcode-hvc1' // 任意 → 8bit HEVC（硬件优先）
+  | 'transcode-h264' // 任意 → 8bit h264（全兼容）
 
 export interface StreamJob {
   state: 'working' | 'done' | 'error'
@@ -33,8 +39,8 @@ export interface StreamJob {
 
 export interface PlayableResult {
   kind: 'direct' | 'cache' | 'live' | 'working' | 'error'
-  /** 实际采用的模式：direct / remux / transcode（网页按它轮询 stream-status） */
-  mode?: 'direct' | 'remux' | 'transcode'
+  /** 实际采用的模式（网页按它轮询 stream-status） */
+  mode?: StreamMode | 'direct'
   path?: string
   progress?: number
   message?: string
@@ -43,6 +49,48 @@ export interface PlayableResult {
 
 /** 产物达到该大小即可开始实时播放（fragmented mp4 的 ftyp+moov 在文件头，几百 KB 即可解析） */
 const LIVE_MIN_BYTES = 512 * 1024
+
+// ---------- 硬件编码器探测 ----------
+
+export interface EncodersInfo {
+  hevc: string | null // hevc_nvenc / hevc_qsv / hevc_amf / null
+  h264: string | null
+}
+
+let encodersCache: EncodersInfo | null = null
+
+/** 探测可用硬件编码器（ffmpeg -encoders 解析，优先级 nvenc > qsv > amf；结果缓存） */
+export async function detectEncoders(): Promise<EncodersInfo> {
+  if (encodersCache) return encodersCache
+  const r: EncodersInfo = { hevc: null, h264: null }
+  try {
+    const f = findFfmpeg()
+    if (!f) return r
+    const { execFileSync } = require('child_process') as typeof import('child_process')
+    const out = execFileSync(f, ['-hide_banner', '-encoders'], {
+      timeout: 8000,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }) as string
+    for (const line of out.split('\n')) {
+      const m = line.match(/^V\S*\s+(\S+)/)
+      if (!m) continue
+      const name = m[1]
+      const prio = (enc: string): number => (enc.includes('nvenc') ? 3 : enc.includes('qsv') ? 2 : enc.includes('amf') ? 1 : 0)
+      if (name.startsWith('hevc_') && prio(name) > 0 && prio(name) > prio(r.hevc || '')) r.hevc = name
+      if (name.startsWith('h264_') && prio(name) > 0 && prio(name) > prio(r.h264 || '')) r.h264 = name
+    }
+  } catch {
+    /* 无 ffmpeg 或解析失败 → 全 null（回退软件编码） */
+  }
+  encodersCache = r
+  return r
+}
+
+/** 清空编码器探测缓存（ffmpeg 重装后调用） */
+export function resetEncodersCache(): void {
+  encodersCache = null
+}
 
 const jobs = new Map<string, StreamJob>()
 
@@ -257,6 +305,7 @@ export function getEngineInfo() {
     ffmpegPath: f && f !== 'ffmpeg' ? f : null,
     mpv: existsSync(getMpvPath()),
     download: { ...downloadInfo },
+    encoders: encodersCache, // 硬件编码器（null = 尚未探测）
   }
 }
 
@@ -298,31 +347,23 @@ function isDirectPlayable(p: ProbeResult | null, ext: string): boolean {
   return goodContainer && goodCodec && goodAudio && ext !== 'mkv'
 }
 
-/**
- * 需要转码（remux copy 无法保证浏览器可播）：
- * 仅 h264 走 remux copy；HEVC（尤其 10bit，Safari 不支持 → 有声音没画面）、
- * AV1/VP9 等一律转码 libx264（iOS Safari/Android Chrome 均兼容 8bit h264）
- */
-function needsTranscode(p: ProbeResult): boolean {
-  const vc = (p.videoCodec || '').toLowerCase()
-  return !(vc.includes('h264') || vc.includes('avc'))
-}
-
 // ---------- 任务 ----------
 
 /**
  * 获取可播放版本。返回 direct（原文件直出）/ cache（缓存产物）即时可用，
- * 或 working（下载/转码中，需轮询 /api/stream-status）。
+ * live（边转边播）/ working（需轮询 /api/stream-status）。
+ * @param cap 设备解码能力（网页 canPlayType 探测）：'hvc1' = 支持 HEVC 解码
  */
 export async function ensurePlayable(
   filePath: string,
   mode: StreamMode = 'auto',
+  cap = '',
 ): Promise<PlayableResult> {
   const ext = (filePath.split('.').pop() || '').toLowerCase()
   let probe: ProbeResult | null = null
 
   if (mode === 'transcode') {
-    // 强制重编码：不需要探测，直接跑 transcode 任务
+    // 强制重编码（网页 error 降级）：输出 h264 最稳
   } else if (DIRECT_EXT.has(ext)) {
     // mp4/webm 等浏览器原生容器：probe 判断编码（h264 直出 / HEVC 转码）
     probe = await probeFile(filePath)
@@ -332,39 +373,50 @@ export async function ensurePlayable(
     }
   }
 
-  // 决定产物模式：auto 时非原生容器先探测视频编码——
-  // HEVC/AV1/VP9 等 Safari/Android 解不了（remux copy 后"有声音没画面"），
-  // 一律走 libx264 转码保证兼容；仅 h264 走 remux copy（快、无损）
-  let effMode: 'remux' | 'transcode'
-  if (mode === 'transcode') effMode = 'transcode'
-  else if (mode === 'remux') effMode = 'remux'
-  else {
-    if (!DIRECT_EXT.has(ext)) {
-      probe = probe || (await probeFile(filePath).catch(() => null))
-      effMode = probe && needsTranscode(probe) ? 'transcode' : 'remux'
+  // ---- 决策产物模式 ----
+  // remux（h264 原样 copy）/ remux-hvc1（8bit HEVC copy+hvc1，秒开）/
+  // transcode-hvc1（转 8bit HEVC）/ transcode-h264（转 8bit h264）
+  let eff: StreamMode
+  if (mode === 'transcode') {
+    eff = 'transcode-h264'
+  } else if (mode === 'remux') {
+    eff = 'remux'
+  } else {
+    // auto：非原生容器先探测编码
+    if (!DIRECT_EXT.has(ext)) probe = probe || (await probeFile(filePath).catch(() => null))
+    if (!probe) {
+      eff = 'remux' // 探测失败保守 remux（网页 error 降级兜底）
+    } else if (isH264(probe)) {
+      eff = 'remux'
+    } else if (isHevc(probe) && !is10bit(probe) && probe.pixFmt) {
+      // 确认 8bit HEVC：copy + hvc1 标记，免转码秒开（iOS Safari 原生支持）
+      eff = 'remux-hvc1'
     } else {
-      effMode = 'remux'
+      // 10bit HEVC / 位深未知（保守转码防黑屏）/ AV1 / VP9 / 其他：转码。
+      // 设备支持 HEVC 且有硬件 HEVC 编码器 → 8bit HEVC 产物（快+小）；否则 h264
+      const enc = await detectEncoders()
+      eff = cap === 'hvc1' && enc.hevc ? 'transcode-hvc1' : 'transcode-h264'
     }
   }
 
-  const out = join(cacheDir(), cacheKey(filePath, effMode))
+  const out = join(cacheDir(), cacheKey(filePath, eff))
   if (existsSync(out) && statSync(out).size > 1024) {
-    return { kind: 'cache', mode: effMode, path: out, probe }
+    return { kind: 'cache', mode: eff, path: out, probe }
   }
 
-  const key = `${filePath}|${effMode}`
+  const key = `${filePath}|${eff}`
   let job = jobs.get(key)
   if (job) {
-    if (job.state === 'done') return { kind: 'cache', mode: effMode, path: job.cachePath, probe }
-    if (job.state === 'error') return { kind: 'error', mode: effMode, message: job.error || '转码失败', probe }
+    if (job.state === 'done') return { kind: 'cache', mode: eff, path: job.cachePath, probe }
+    if (job.state === 'error') return { kind: 'error', mode: eff, message: job.error || '转码失败', probe }
     // 任务进行中：产物已可读 → 实时播放（边转边播），否则等网页轮询
     if (isLiveReady(job.cachePath)) {
-      return { kind: 'live', mode: effMode, path: job.cachePath, probe, progress: job.progress }
+      return { kind: 'live', mode: eff, path: job.cachePath, probe, progress: job.progress }
     }
-    return { kind: 'working', mode: effMode, progress: job.progress, probe }
+    return { kind: 'working', mode: eff, progress: job.progress, probe }
   }
 
-  const promise = runJob(filePath, out, effMode, probe)
+  const promise = runJob(filePath, out, eff, probe)
   // 不 await 完成（后台继续跑，状态经 jobs/getStreamStatus 查询）
   promise.catch(() => {})
   job = { state: 'working', progress: 0, cachePath: out, promise }
@@ -374,11 +426,11 @@ export async function ensurePlayable(
   const deadline = Date.now() + 6000
   while (Date.now() < deadline) {
     if (isLiveReady(out)) {
-      return { kind: 'live', mode: effMode, path: out, probe, progress: job.progress }
+      return { kind: 'live', mode: eff, path: out, probe, progress: job.progress }
     }
     await new Promise((r) => setTimeout(r, 100))
   }
-  return { kind: 'working', mode: effMode, progress: job.progress, probe }
+  return { kind: 'working', mode: eff, progress: job.progress, probe }
 }
 
 function isLiveReady(out: string): boolean {
@@ -389,6 +441,20 @@ function isLiveReady(out: string): boolean {
   }
 }
 
+function isH264(p: ProbeResult): boolean {
+  const vc = (p.videoCodec || '').toLowerCase()
+  return vc.includes('h264') || vc.includes('avc')
+}
+
+function isHevc(p: ProbeResult): boolean {
+  return (p.videoCodec || '').toLowerCase().includes('hevc')
+}
+
+/** 10bit（含 12bit）：pixFmt 形如 yuv420p10le / yuv422p12le / p010 */
+function is10bit(p: ProbeResult): boolean {
+  return /(^|[^0-9])1[02](le|be)?$/.test(p.pixFmt || '') || (p.pixFmt || '').includes('p010')
+}
+
 /** 查询任务状态（网页端轮询用）。state: idle/working/live/done/error（live=产物可读，可实时播放） */
 export function getStreamStatus(filePath: string, mode: StreamMode = 'auto'): {
   state: 'idle' | 'working' | 'live' | 'done' | 'error'
@@ -396,7 +462,10 @@ export function getStreamStatus(filePath: string, mode: StreamMode = 'auto'): {
   cachePath?: string
   error?: string
 } {
-  const modes: ('remux' | 'transcode')[] = mode === 'transcode' ? ['transcode'] : mode === 'remux' ? ['remux'] : ['remux', 'transcode']
+  const modes: StreamMode[] =
+    mode === 'auto'
+      ? ['remux', 'remux-hvc1', 'transcode-h264', 'transcode-hvc1']
+      : [mode]
   for (const m of modes) {
     const job = jobs.get(`${filePath}|${m}`)
     if (job) {
@@ -431,8 +500,9 @@ function setJobError(key: string, err: string): void {
   }
 }
 
-async function runJob(filePath: string, out: string, mode: 'remux' | 'transcode', probe: ProbeResult | null): Promise<string> {
+async function runJob(filePath: string, out: string, mode: StreamMode, probe: ProbeResult | null): Promise<string> {
   const key = `${filePath}|${mode}`
+  const isRemux = mode === 'remux' || mode === 'remux-hvc1'
 
   // 先把 job.progress 挂到下载进度上（下载占 0~0.5）
   const dlTimer = setInterval(() => {
@@ -450,32 +520,7 @@ async function runJob(filePath: string, out: string, mode: 'remux' | 'transcode'
       return ''
     }
 
-    const args =
-      mode === 'remux'
-        ? [
-            '-y',
-            '-i', filePath,
-            '-map', '0:v:0',
-            '-map', '0:a?',
-            '-map_metadata', '0',
-            '-c', 'copy',
-            // fragmented mp4：Safari 流式播放兼容性最佳（faststart 对 iPad Safari 不友好，实测黑屏）
-            '-movflags', 'frag_keyframe+empty_moov+default_base_moof',
-            out,
-          ]
-        : [
-            '-y',
-            '-i', filePath,
-            '-map', '0:v:0',
-            '-map', '0:a?',
-            '-c:v', 'libx264',
-            '-preset', 'veryfast',
-            '-crf', '23',
-            '-c:a', 'aac',
-            '-b:a', '192k',
-            '-movflags', 'frag_keyframe+empty_moov+default_base_moof',
-            out,
-          ]
+    const args = isRemux ? buildRemuxArgs(filePath, out, mode) : await buildEncodeArgs(filePath, out, mode)
 
     return await new Promise<string>((resolve) => {
       const proc = spawn(ffmpeg, args, { stdio: ['ignore', 'ignore', 'pipe'] })
@@ -483,7 +528,7 @@ async function runJob(filePath: string, out: string, mode: 'remux' | 'transcode'
       proc.stderr.on('data', (d: Buffer) => {
         const s = d.toString()
         stderrTail = (stderrTail + s).slice(-600)
-        if (mode === 'transcode' && probe && probe.duration > 0) {
+        if (!isRemux && probe && probe.duration > 0) {
           const m = s.match(/time=(\d+):(\d+):(\d+)/)
           if (m) {
             const t = Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3])
@@ -511,6 +556,59 @@ async function runJob(filePath: string, out: string, mode: 'remux' | 'transcode'
     setJobError(key, (e as Error).message)
     return ''
   }
+}
+
+function buildRemuxArgs(filePath: string, out: string, mode: StreamMode): string[] {
+  return [
+    '-y',
+    '-i', filePath,
+    '-map', '0:v:0',
+    '-map', '0:a?',
+    '-map_metadata', '0',
+    '-c', 'copy',
+    // 8bit HEVC → 强制 hvc1 标记（Safari 要求 hvc1，源可能为 hev1）
+    ...(mode === 'remux-hvc1' ? ['-tag:v', 'hvc1'] : []),
+    // fragmented mp4：Safari 流式播放兼容性最佳（faststart 对 iPad Safari 不友好，实测黑屏）
+    '-movflags', 'frag_keyframe+empty_moov+default_base_moof',
+    out,
+  ]
+}
+
+/** 转码参数：10bit/HEVC/AV1/VP9 → 8bit HEVC(hvc1) 或 8bit h264，硬件编码器优先 */
+async function buildEncodeArgs(filePath: string, out: string, mode: StreamMode): Promise<string[]> {
+  const codec = mode === 'transcode-hvc1' ? 'hvc1' : 'h264'
+  const enc = await pickEncoder(codec)
+  const base = [
+    '-y',
+    '-i', filePath,
+    '-map', '0:v:0',
+    '-map', '0:a?',
+    '-c:a', 'aac',
+    '-b:a', '192k',
+    '-movflags', 'frag_keyframe+empty_moov+default_base_moof',
+  ]
+  const vargs = codec === 'hvc1' ? hevcVideoArgs(enc) : h264VideoArgs(enc)
+  const tag = codec === 'hvc1' ? ['-tag:v', 'hvc1'] : []
+  return [...base, ...vargs, ...tag, out]
+}
+
+async function pickEncoder(codec: 'hvc1' | 'h264'): Promise<string> {
+  const enc = await detectEncoders()
+  return codec === 'hvc1' ? enc.hevc || 'libx265' : enc.h264 || 'libx264'
+}
+
+function hevcVideoArgs(enc: string): string[] {
+  if (enc.includes('nvenc')) return ['-c:v', 'hevc_nvenc', '-preset', 'p4', '-cq', '24', '-pix_fmt', 'yuv420p']
+  if (enc.includes('qsv')) return ['-c:v', 'hevc_qsv', '-global_quality', '24', '-pix_fmt', 'yuv420p']
+  if (enc.includes('amf')) return ['-c:v', 'hevc_amf', '-quality', 'balanced', '-qp_i', '24', '-qp_p', '24', '-pix_fmt', 'yuv420p']
+  return ['-c:v', 'libx265', '-preset', 'veryfast', '-x265-params', 'profile=main:crf=24', '-pix_fmt', 'yuv420p']
+}
+
+function h264VideoArgs(enc: string): string[] {
+  if (enc.includes('nvenc')) return ['-c:v', 'h264_nvenc', '-preset', 'p4', '-cq', '24']
+  if (enc.includes('qsv')) return ['-c:v', 'h264_qsv', '-global_quality', '24']
+  if (enc.includes('amf')) return ['-c:v', 'h264_amf', '-quality', 'balanced', '-qp_i', '24', '-qp_p', '24']
+  return ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23']
 }
 
 // ---------- 缓存管理 ----------

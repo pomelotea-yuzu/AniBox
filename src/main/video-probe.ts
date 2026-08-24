@@ -9,6 +9,7 @@ import { spawn } from 'child_process'
 import { createConnection, Socket } from 'net'
 import { existsSync, statSync } from 'fs'
 import { join, dirname } from 'path'
+import { app } from 'electron'
 
 export interface ProbeResult {
   /** 容器 lavf 名称，如 'mp4' / 'matroska,webm' */
@@ -17,6 +18,8 @@ export interface ProbeResult {
   videoCodec: string
   videoWidth: number
   videoHeight: number
+  /** 像素格式（判断位深用），如 'yuv420p' / 'yuv420p10le' */
+  pixFmt: string
   /** 音频编码列表 */
   audioCodecs: string[]
   /** 时长（秒） */
@@ -35,6 +38,50 @@ export function getMpvPath(): string {
     return standard
   }
   return join(__dirname, '../../mpv.exe')
+}
+
+/** 查找 ffprobe（与 ffmpeg 同布局；用于像素格式探测，mpv 的 video-params 拿不到位深） */
+function findFfprobe(): string {
+  const candidates: string[] = []
+  if (process.resourcesPath) {
+    candidates.push(join(process.resourcesPath, 'ffprobe.exe'))
+    candidates.push(join(dirname(process.resourcesPath), 'ffprobe.exe'))
+  }
+  try {
+    candidates.push(join(app.getPath('userData'), 'ffmpeg', 'ffprobe.exe'))
+  } catch {
+    /* ok */
+  }
+  candidates.push(join(__dirname, '../../ffprobe.exe'))
+  for (const p of candidates) {
+    try {
+      if (existsSync(p)) return p
+    } catch {
+      /* ok */
+    }
+  }
+  return 'ffprobe' // PATH 兜底
+}
+
+/** ffprobe 查视频像素格式（yuv420p / yuv420p10le / p010 等）；失败返回 '' */
+function probePixFmt(filePath: string): Promise<string> {
+  return new Promise((resolve) => {
+    try {
+      const { execFile } = require('child_process') as typeof import('child_process')
+      execFile(
+        findFfprobe(),
+        ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=pix_fmt', '-of', 'csv=p=0', filePath],
+        { timeout: 6000, windowsHide: true },
+        (err, stdout) => {
+          if (err) return resolve('')
+          const line = String(stdout || '').trim().split('\n')[0] || ''
+          resolve(line.toLowerCase())
+        },
+      )
+    } catch {
+      resolve('')
+    }
+  })
 }
 
 /** 带缓存的文件探测；失败返回 null */
@@ -74,6 +121,7 @@ function probeViaMpv(filePath: string): Promise<ProbeResult | null> {
     let trackList: any[] | null = null
     let lavfType = ''
     let duration = 0
+    let pixFmt: string | null = null // null = 尚未就位
 
     const cleanup = () => {
       clearTimeout(timeout)
@@ -108,7 +156,7 @@ function probeViaMpv(filePath: string): Promise<ProbeResult | null> {
         '--vo=null',
         '--ao=null',
         '--no-config',
-        '--no-video',
+        // 注意：不能加 --no-video——它禁用视频解码，video-params/pixel-format 取不到（位深判断失效）
       ],
       { stdio: 'ignore' },
     )
@@ -133,6 +181,12 @@ function probeViaMpv(filePath: string): Promise<ProbeResult | null> {
               sock!.write(JSON.stringify({ command: ['get_property', 'track-list'], request_id: 1 }) + '\n')
               sock!.write(JSON.stringify({ command: ['get_property', 'demuxer-lavf-type'], request_id: 2 }) + '\n')
               sock!.write(JSON.stringify({ command: ['get_property', 'duration'], request_id: 3 }) + '\n')
+              // 位深（10bit 判断）：mpv 的 video-params 在 --vo=null 下拿不到，
+              // 用 ffprobe 查 pix_fmt（ffmpeg 同目录自带）
+              probePixFmt(filePath).then((p) => {
+                pixFmt = p
+                tryDone()
+              })
             } else if (msg.request_id === 1 && msg.data !== undefined) {
               trackList = msg.data || []
               tryDone()
@@ -150,7 +204,7 @@ function probeViaMpv(filePath: string): Promise<ProbeResult | null> {
       })
       sock.on('error', () => finish(null))
       sock.on('close', () => {
-        if (trackList) finish(buildResult(trackList, lavfType, duration))
+        if (trackList) finish(buildResult(trackList, lavfType, duration, pixFmt))
         else finish(null)
       })
     }, 400)
@@ -165,12 +219,12 @@ function probeViaMpv(filePath: string): Promise<ProbeResult | null> {
       doneCalled = true
       const tracks = trackList
       doneTimer = setTimeout(() => {
-        finish(buildResult(tracks, lavfType, duration))
+        finish(buildResult(tracks, lavfType, duration, pixFmt))
       }, ms)
     }
     function tryDone(): void {
-      // 三个属性全部就位 → 立即收工；否则等 1.2s 兜底
-      if (trackList !== null && lavfType && duration > 0) scheduleFinish(0)
+      // 四个属性全部就位 → 立即收工；否则等 1.2s 兜底
+      if (trackList !== null && lavfType && duration > 0 && pixFmt !== null) scheduleFinish(0)
       else if (trackList !== null && !doneCalled) scheduleFinish(1200)
     }
 
@@ -178,7 +232,7 @@ function probeViaMpv(filePath: string): Promise<ProbeResult | null> {
   })
 }
 
-function buildResult(trackList: any[], lavfType: string, duration: number): ProbeResult | null {
+function buildResult(trackList: any[], lavfType: string, duration: number, pixFmt: string | null): ProbeResult | null {
   const video = trackList.find((t: any) => t.type === 'video')
   const audioTracks = trackList.filter((t: any) => t.type === 'audio')
   if (!video) return null
@@ -188,6 +242,7 @@ function buildResult(trackList: any[], lavfType: string, duration: number): Prob
     videoCodec: String(video.codec || '').toLowerCase(),
     videoWidth: Number(video['demux-w'] || vp.w || 0),
     videoHeight: Number(video['demux-h'] || vp.h || 0),
+    pixFmt: (pixFmt || String(vp['pixel-format'] || '')).toLowerCase(),
     audioCodecs: audioTracks.map((t: any) => String(t.codec || '').toLowerCase()),
     duration,
   }

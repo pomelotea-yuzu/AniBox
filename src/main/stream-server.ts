@@ -513,9 +513,10 @@ export function handleRequest(req: IncomingMessage, res: ServerResponse): void {
       case '/api/stream': {
         const fp = q('path')
         const mode = (q('mode') || 'auto') as StreamMode
+        const cap = q('cap') || '' // 设备解码能力（hvc1 = 支持 HEVC）
         if (!fp) return sendJson(res, 400, { error: 'path required' })
         if (!existsSync(fp) || !isPathAllowed(fp)) return sendJson(res, 403, { error: 'path not allowed' })
-        ensurePlayable(fp, mode)
+        ensurePlayable(fp, mode, cap)
           .then((r) => sendJson(res, 200, r))
           .catch((e) => sendJson(res, 500, { error: (e as Error).message }))
         return

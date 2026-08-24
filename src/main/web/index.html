@@ -278,6 +278,13 @@ function showLogin(){
 }
 
 /* ---------- 工具 ---------- */
+/* 设备解码能力探测：支持 HEVC → 服务端产出 8bit HEVC 产物（体积小/快） */
+const CAP = (() => {
+  try {
+    const v = document.createElement("video");
+    return v.canPlayType('video/mp4; codecs="hvc1.1.6.L93.B0"') ? "hvc1" : "";
+  } catch (e) { return ""; }
+})();
 const $ = (s, el=document) => el.querySelector(s);
 const el = (tag, cls, txt) => { const e = document.createElement(tag); if(cls)e.className=cls; if(txt!=null)e.textContent=txt; return e; };
 
@@ -1024,7 +1031,7 @@ function renderPlayer(hash){
     ov.classList.remove("hidden");
     pt.textContent = "分析文件…"; pd.textContent = "";
     try{
-      const r = await api("/api/stream?path=" + encodeURIComponent(path) + "&mode=" + encodeURIComponent(mode));
+      const r = await api("/api/stream?path=" + encodeURIComponent(path) + "&mode=" + encodeURIComponent(mode) + "&cap=" + CAP);
       cur.streamMode = r.mode || mode;
       if(r.kind === "error"){ showErr(r.message || "无法播放该文件"); return; }
       if(r.kind === "live"){
@@ -1035,8 +1042,8 @@ function renderPlayer(hash){
         return;
       }
       if(r.kind === "working"){
-        pt.textContent = r.mode === "transcode" ? "正在转码（编码不兼容，首次较慢）…" : "正在转封装…";
-        pd.textContent = r.progress>0 ? Math.round(r.progress*100)+"%" : "首次播放需要几秒到几十秒，之后秒开";
+        pt.textContent = String(r.mode||"").includes("transcode") ? "正在转码（首次较慢，之后秒开）…" : "正在转封装…";
+        pd.textContent = r.progress>0 ? Math.round(r.progress*100)+"%" : "首次播放需要几秒，之后秒开";
         await pollStream();
       } else {
         playPath(r.path, "stream");
@@ -1088,7 +1095,7 @@ function renderPlayer(hash){
     if(!n) return;
     cur.prewarmed = true;
     setTimeout(()=>{
-      api("/api/stream?path=" + encodeURIComponent(n.filePath) + "&mode=auto").catch(()=>{});
+      api("/api/stream?path=" + encodeURIComponent(n.filePath) + "&mode=auto&cap=" + CAP).catch(()=>{});
     }, 4000);
   }
   function playPath(p, srcKind){
