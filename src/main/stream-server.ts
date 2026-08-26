@@ -217,9 +217,16 @@ function buildLibrary() {
   const series = all.map((s) => {
     const meta = store.getSeriesMetadata(s.id)
     const watched = store.getSeriesProgress(s.id)
+    // 标题与桌面端播放器一致：Bangumi 中文(须含汉字) > 文件夹名(series.title) > AniList 英文 > romaji。
+    // 注意不能用 meta.titleCn || meta.title 直接回退——titleCn 为空时会显示 AniList 罗马音而非文件夹名。
+    const metaCn = meta?.titleCn || ''
+    const hasChinese = metaCn && /[\u4e00-\u9fff]/.test(metaCn)
+    const title = hasChinese ? metaCn : s.title || meta?.titleEn || meta?.title || ''
     return {
       id: s.id,
-      title: meta?.titleCn || meta?.title || s.title,
+      title,
+      titleCn: hasChinese ? metaCn : '',
+      titleEn: meta?.titleEn || '',
       folderPath: s.folderPath,
       totalEps: s.totalEps,
       status: s.status,

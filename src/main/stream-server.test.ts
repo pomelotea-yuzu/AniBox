@@ -177,6 +177,87 @@ describe('stream server handler', () => {
     expect(lib.episodes[lib.series[0].id].length).toBe(1)
   })
 
+  it('library title prefers Bangumi Chinese title (same as desktop player)', async () => {
+    const sid = store.getAllSeries()[0].id
+    store.setSeriesMetadata(sid, {
+      title: 'Sword Art Online', // AniList romaji
+      titleCn: '刀剑神域',
+      titleEn: 'Sword Art Online',
+      synopsis: '',
+      rating: 8.5,
+      genres: [],
+      year: 2012,
+      season: '',
+      episodes: 0,
+      studio: '',
+      staff: [],
+      coverUrl: '',
+      anilistId: 0,
+      bangumiId: 0,
+    })
+    const res = await call('/api/library?key=x')
+    const lib = JSON.parse(res.body.toString())
+    expect(lib.series[0].title).toBe('刀剑神域')
+    expect(lib.series[0].titleEn).toBe('Sword Art Online')
+    store.setSeriesMetadata(sid, {
+      title: '',
+      titleCn: '',
+      titleEn: '',
+      synopsis: '',
+      rating: 0,
+      genres: [],
+      year: 0,
+      season: '',
+      episodes: 0,
+      studio: '',
+      staff: [],
+      coverUrl: '',
+      anilistId: 0,
+      bangumiId: 0,
+    })
+  })
+
+  it('library title falls back to folder title, not romaji, when Chinese missing', async () => {
+    // 模拟：Bangumi 未匹配到中文名，AniList 只给了 romaji → 必须显示 series.title（文件夹名）
+    const sid = store.getAllSeries()[0].id
+    store.setSeriesMetadata(sid, {
+      title: 'Sword Art Online',
+      titleCn: '',
+      titleEn: 'Sword Art Online',
+      synopsis: '',
+      rating: 0,
+      genres: [],
+      year: 0,
+      season: '',
+      episodes: 0,
+      studio: '',
+      staff: [],
+      coverUrl: '',
+      anilistId: 0,
+      bangumiId: 0,
+    })
+    const res = await call('/api/library?key=x')
+    const lib = JSON.parse(res.body.toString())
+    expect(lib.series[0].title).toBe('Test Anime')
+    expect(lib.series[0].title).not.toBe('Sword Art Online')
+    store.setSeriesMetadata(sid, {
+      title: '',
+      titleCn: '',
+      titleEn: '',
+      synopsis: '',
+      rating: 0,
+      genres: [],
+      year: 0,
+      season: '',
+      episodes: 0,
+      studio: '',
+      staff: [],
+      coverUrl: '',
+      anilistId: 0,
+      bangumiId: 0,
+    })
+  })
+
   it('serves full file without range', async () => {
     const res = await call('/api/video?key=x&path=' + encodeURIComponent(SAMPLE))
     expect(res.statusCode).toBe(200)
