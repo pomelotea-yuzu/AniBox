@@ -253,7 +253,7 @@ export default function MpvCanvas({
   togglePauseRef.current = togglePause
   const handleCommandRef = useRef(handleCommand)
   handleCommandRef.current = handleCommand
-  // 三连按右键时间戳（600ms 窗口，跳过 80 秒用）
+  // 三连按右键时间戳（600ms 窗口，跳过 90 秒用）
   const rightPressesRef = useRef<number[]>([])
   useEffect(() => {
     durationRef.current = duration
@@ -337,7 +337,8 @@ export default function MpvCanvas({
           handleCommandRef.current(['seek', String(step), 'relative'])
           return
         }
-        // 三连按右键（600ms 窗口）= 跳过 80 秒（受 ⏭ 开关控制，前两次已各快进 5 秒），未连按时普通快进
+        // 三连按右键（600ms 窗口）= 总共跳过 90 秒（受 ⏭ 开关控制）。前两次按下已各快进 5 秒，
+        // 第三次补 +80，总位移恰为 5+5+80=90 秒；未连按时普通快进
         const now = Date.now()
         rightPressesRef.current = rightPressesRef.current.filter((t) => now - t < 600)
         rightPressesRef.current.push(now)
@@ -345,7 +346,7 @@ export default function MpvCanvas({
           rightPressesRef.current = []
           if (skipShortcutEnabledRef.current) {
             handleCommandRef.current(['seek', '80', 'relative'])
-            showToastMsg('⏭ 已跳过 80 秒')
+            showToastMsg('⏭ 已跳过 90 秒')
             return
           }
         }
@@ -845,12 +846,12 @@ export default function MpvCanvas({
   // OP/ED 快捷键跳过开关
   const toggleSkipShortcut = useCallback(() => {
     setSkipShortcutEnabled((prev) => {
-      showToastMsg(prev ? 'OP/ED 跳过已关闭' : 'OP/ED 跳过已开启（连按 3 次 → 跳过 80 秒）')
+      showToastMsg(prev ? 'OP/ED 跳过已关闭' : 'OP/ED 跳过已开启（连按 3 次 → 跳过 90 秒）')
       return !prev
     })
   }, [showToastMsg])
 
-  // 三连按右键 = 跳过 80 秒（受开关控制；与 HTML5 Player 一致）
+  // 三连按右键 = 跳过 90 秒（受开关控制；与 HTML5 Player 一致）
   const skipShortcutEnabledRef = useRef(false)
   useEffect(() => {
     skipShortcutEnabledRef.current = skipShortcutEnabled
@@ -1002,7 +1003,7 @@ export default function MpvCanvas({
               {[
                 ['Space', '播放 / 暂停'],
                 ['← / →', '快退 / 快进 5 秒'],
-                ['→ ×3', '连按 3 次 → 跳过 80 秒（OP/ED）'],
+                ['→ ×3', '连按 3 次 → 跳过 90 秒（OP/ED）'],
                 ['Ctrl + ←/→', '快退 / 快进 10 秒'],
                 ['↑ / ↓', '音量增减 5%'],
                 ['F', '全屏切换'],

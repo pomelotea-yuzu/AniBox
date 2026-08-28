@@ -53,7 +53,7 @@ interface ControlsProps {
   /** 音量均衡开关 */
   volumeNormalization?: boolean
   onVolumeNormalizationToggle?: () => void
-  /** OP/ED 跳过（快捷键模式）：连按 3 次右方向键 = 跳过 80 秒 */
+  /** OP/ED 跳过（快捷键模式）：连按 3 次右方向键 = 跳过 90 秒 */
   skipShortcutEnabled?: boolean
   onSkipShortcutToggle?: () => void
   /** 画面增强 */
@@ -450,18 +450,16 @@ export default function Controls({
           </div>
         )}
 
-        {/* OP/ED 跳过（快捷键模式：连按 3 次右方向键 = 跳过 80 秒） */}
+        {/* OP/ED 跳过（快捷键模式：连按 3 次右方向键 = 跳过 90 秒） */}
         {onSkipShortcutToggle && (
           <button
             onClick={onSkipShortcutToggle}
             className={`text-[10px] px-1.5 py-0.5 rounded transition-colors ${
-              skipShortcutEnabled
-                ? 'text-green-400'
-                : 'text-white/25 hover:text-white/50'
+              skipShortcutEnabled ? 'text-green-400' : 'text-white/25 hover:text-white/50'
             }`}
             title={
               skipShortcutEnabled
-                ? 'OP/ED 跳过已开启：连按 3 次 → 跳过 80 秒'
+                ? 'OP/ED 跳过已开启：连按 3 次 → 跳过 90 秒'
                 : 'OP/ED 跳过已关闭（点击开启）'
             }
           >

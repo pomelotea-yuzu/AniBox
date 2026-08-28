@@ -39,6 +39,9 @@ export default function App() {
   // 音频编码兼容性缓存：key = 集文件路径，value = HTML5 是否可播放。
   // 避免连播/切集时逐集重复检测导致「跳一下」（问题 #3）。
   const audioSupportCacheRef = useRef<Map<string, boolean>>(new Map())
+  // 剧集级播放形式锁定：key = 番剧目录，value = HTML5 是否可播。
+  // 同一部剧基本同一种片源，首集实时检测后锁定整部，连播/切集直接复用，不再逐集检测。
+  const seriesAudioBackendRef = useRef<Map<string, boolean>>(new Map())
   // 已批量预热过音频检测的番剧目录集合
   const seriesAudioWarmedRef = useRef<Set<string>>(new Set())
 
@@ -131,19 +134,33 @@ export default function App() {
     setView('wall')
   }, [])
 
-  // 单集音频兼容性解析：优先命中缓存，否则实时检测一次并写缓存。
+  // 单集音频兼容性解析：优先命中单集缓存 → 再命中剧集级锁定 → 否则实时检测一次。
   // 返回 true 表示 HTML5 可播放，false 表示需要 mpv。
-  const resolveAudioSupport = useCallback(async (filePath: string): Promise<boolean> => {
-    const cached = audioSupportCacheRef.current.get(filePath)
-    if (cached !== undefined) return cached
-    try {
-      const audio = await window.electronAPI.checkAudio(filePath)
-      audioSupportCacheRef.current.set(filePath, audio.supported)
-      return audio.supported
-    } catch {
-      return true // 检测失败默认走 HTML5
-    }
-  }, [])
+  const resolveAudioSupport = useCallback(
+    async (filePath: string, folder?: string): Promise<boolean> => {
+      // 1. 单集缓存命中（最精确，如已批量预热）
+      const cached = audioSupportCacheRef.current.get(filePath)
+      if (cached !== undefined) return cached
+      // 2. 剧集级锁定命中：同一种片源，直接复用该剧的播放形式
+      if (folder) {
+        const locked = seriesAudioBackendRef.current.get(folder)
+        if (locked !== undefined) {
+          audioSupportCacheRef.current.set(filePath, locked)
+          return locked
+        }
+      }
+      // 3. 实时检测：写入单集缓存，并作为该剧集播放形式的首个样本锁定整部
+      try {
+        const audio = await window.electronAPI.checkAudio(filePath)
+        audioSupportCacheRef.current.set(filePath, audio.supported)
+        if (folder) seriesAudioBackendRef.current.set(folder, audio.supported)
+        return audio.supported
+      } catch {
+        return true // 检测失败默认走 HTML5
+      }
+    },
+    [],
+  )
 
   // 后台批量预热整部番的音频检测结果（一次性检测全部，连播时逐集命中缓存，不再「跳一下」）
   const warmSeriesAudioCache = useCallback((series: SeriesInfo | null) => {
@@ -168,8 +185,8 @@ export default function App() {
     async (ep: EpisodeInfo, index: number) => {
       currentEpIndexRef.current = index
       setMpvBackend('libmpv')
-      // 播放前检查音频编码兼容性（缓存优先）
-      const supported = await resolveAudioSupport(ep.filePath)
+      // 播放前检查音频编码兼容性（单集缓存 → 剧集级锁定）
+      const supported = await resolveAudioSupport(ep.filePath, selectedSeries?.folderPath)
       setMpvFallback(!supported)
       if (!supported) console.log('[AniBox] Unsupported audio codec, using mpv:', ep.filePath)
       // 后台批量预热整部番，之后连播/切集直接命中缓存
@@ -230,7 +247,7 @@ export default function App() {
         }
       }
     }
-    switchToEpisode(eps, nextIdx)
+    switchToEpisode(eps, nextIdx, selectedSeries.folderPath)
   }, [selectedSeries, playMode])
 
   const handlePrevEpisode = useCallback(() => {
@@ -238,17 +255,17 @@ export default function App() {
     const eps = selectedSeries.episodes
     const prevIdx = currentEpIndexRef.current - 1
     if (prevIdx < 0) return
-    switchToEpisode(eps, prevIdx)
+    switchToEpisode(eps, prevIdx, selectedSeries.folderPath)
   }, [selectedSeries])
 
   const switchToEpisode = useCallback(
-    async (eps: EpisodeInfo[], idx: number) => {
+    async (eps: EpisodeInfo[], idx: number, folder?: string) => {
       const ep = eps[idx]
       currentEpIndexRef.current = idx
       setMpvBackend('libmpv')
-      // 缓存优先检测，避免连播中间先切回 HTML5 再切回 mpv 造成的「跳一下」。
+      // 缓存优先检测（单集缓存 → 剧集级锁定），避免连播中间先切回 HTML5 再切回 mpv 造成的「跳一下」。
       // 注意：此处不再同步 setMpvFallback(false)，而是等检测结果确定后再一次性切换。
-      const supported = await resolveAudioSupport(ep.filePath)
+      const supported = await resolveAudioSupport(ep.filePath, folder)
       setMpvFallback(!supported)
       if (!supported) console.log('[AniBox] Unsupported audio codec, using mpv:', ep.filePath)
       // 停止当前 mpv，再加载新集（幂等；MpvCanvas 卸载 cleanup 时也会再调一次）
@@ -568,7 +585,7 @@ export default function App() {
                       currentEpIndex={selectedSeries ? currentEpIndexRef.current : -1}
                       onSelectEpisode={(idx) => {
                         if (selectedSeries) {
-                          switchToEpisode(selectedSeries.episodes, idx)
+                          switchToEpisode(selectedSeries.episodes, idx, selectedSeries.folderPath)
                         }
                       }}
                       onOpenSettings={() => setShowSettings(true)}
@@ -599,7 +616,8 @@ export default function App() {
                     currentEpIndex={curIdx}
                     onSelectEpisode={
                       selectedSeries
-                        ? (idx) => switchToEpisode(selectedSeries.episodes, idx)
+                        ? (idx) =>
+                            switchToEpisode(selectedSeries.episodes, idx, selectedSeries.folderPath)
                         : undefined
                     }
                   />

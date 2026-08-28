@@ -96,7 +96,7 @@ export default function Player({
     settingsRef: playbackSettingsRef,
   })
 
-  // OP/ED 跳过（快捷键模式：连按 3 次 → 跳过 80 秒）
+  // OP/ED 跳过（快捷键模式：连按 3 次 → 跳过 90 秒）
   const skiptimes = useSkipTimes()
 
   // 全局播放偏好：挂载时异步拉取，供 usePlayback（默认音量/倍速/自动下一集）与
@@ -349,8 +349,8 @@ export default function Player({
             break
           }
           {
-            // 三连按右键（600ms 窗口）= 跳过 80 秒（OP/ED 固定时长，前两次已各快进 5 秒，
-            // 合计约 85 秒）；开关关闭时回退普通快进
+            // 三连按右键（600ms 窗口）= 总共跳过 90 秒（OP/ED 固定时长）。前两次按下已各快进 5 秒，
+            // 第三次补 +80，总位移恰为 5+5+80=90 秒；开关关闭时回退普通快进
             const now = Date.now()
             rightPressesRef.current = rightPressesRef.current.filter((t) => now - t < 600)
             rightPressesRef.current.push(now)
@@ -358,7 +358,7 @@ export default function Player({
               rightPressesRef.current = []
               if (skipShortcutEnabledRef.current) {
                 v.currentTime = Math.min(v.duration || 0, v.currentTime + 80)
-                showToast('⏭ 已跳过 80 秒')
+                showToast('⏭ 已跳过 90 秒')
                 break
               }
             }
@@ -882,7 +882,7 @@ export default function Player({
           onVolumeNormalizationToggle={() =>
             audio.handleVolumeNormalizationToggle(playback.videoRef.current)
           }
-          // OP/ED 跳过（快捷键模式）：合并开关按钮，开启后连按 3 次 → 跳过 80 秒
+          // OP/ED 跳过（快捷键模式）：合并开关按钮，开启后连按 3 次 → 跳过 90 秒
           skipShortcutEnabled={skiptimes.skipShortcutEnabled}
           onSkipShortcutToggle={skiptimes.toggleSkipShortcut}
           enhanceEnabled={enh.enhanceEnabled}

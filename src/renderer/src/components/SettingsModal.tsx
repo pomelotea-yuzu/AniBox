@@ -38,7 +38,16 @@ const SHORTCUTS = [
   { key: '?', desc: '快捷键帮助' },
 ]
 
-type Tab = 'theme' | 'subtitle' | 'playback' | 'shortcuts' | 'api' | 'download' | 'stream' | 'storage' | 'about'
+type Tab =
+  | 'theme'
+  | 'subtitle'
+  | 'playback'
+  | 'shortcuts'
+  | 'api'
+  | 'download'
+  | 'stream'
+  | 'storage'
+  | 'about'
 
 export default function SettingsModal({ visible, onClose }: SettingsModalProps) {
   const { theme, themeList, setTheme } = useTheme()
@@ -115,7 +124,9 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
       .catch(() => {})
     window.electronAPI
       .getAIKey()
-      .then((k) => { if (k) setApiKey(k) })
+      .then((k) => {
+        if (k) setApiKey(k)
+      })
       .catch(() => {})
     window.electronAPI
       .qbGetConfig()
@@ -206,14 +217,17 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
   )
 
   // 串流设置：改动即存，主进程按需重启服务器并回传最新状态
-  const saveStream = useCallback((patch: { enabled?: boolean; port?: number; requireToken?: boolean; token?: string }) => {
-    window.electronAPI
-      .streamSetSettings(patch)
-      .then((r) => {
-        if (r?.state) setStreamState(r.state)
-      })
-      .catch(() => {})
-  }, [])
+  const saveStream = useCallback(
+    (patch: { enabled?: boolean; port?: number; requireToken?: boolean; token?: string }) => {
+      window.electronAPI
+        .streamSetSettings(patch)
+        .then((r) => {
+          if (r?.state) setStreamState(r.state)
+        })
+        .catch(() => {})
+    },
+    [],
+  )
 
   // Esc 关闭
   useEffect(() => {
@@ -473,7 +487,8 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
               <p className="text-[10px] text-anibox-text-muted leading-relaxed">
                 开启后每次播放默认启用「⏭ 跳过」：播放中连按 3 次
                 <kbd className="px-1 py-0.5 bg-anibox-bg rounded text-[10px] font-mono">→</kbd>
-                跳过 80 秒（含前两次快进，总效果约 90 秒）。仍可在控制条随时手动开关。
+                跳过 90 秒（前两次快进各 5 秒，第三次补足 80 秒，总效果 90
+                秒）。仍可在控制条随时手动开关。
               </p>
               <div>
                 <label className="text-xs text-anibox-text-muted block mb-1">
@@ -516,15 +531,26 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
           {tab === 'api' && (
             <div className="space-y-4">
               <p className="text-xs text-anibox-text-muted">
-                配置 DeepSeek API Key 后，新番标题和番剧简介将使用 AI 翻译（日→中）。<br />
-                Key 仅存储在本地，不会上传。<br />
-                <a href="https://platform.deepseek.com/api_keys" target="_blank" className="text-anibox-accent hover:underline">获取 Key →</a>
+                配置 DeepSeek API Key 后，新番标题和番剧简介将使用 AI 翻译（日→中）。
+                <br />
+                Key 仅存储在本地，不会上传。
+                <br />
+                <a
+                  href="https://platform.deepseek.com/api_keys"
+                  target="_blank"
+                  className="text-anibox-accent hover:underline"
+                >
+                  获取 Key →
+                </a>
               </p>
               <div className="flex gap-2">
                 <input
                   type="password"
                   value={apiKey}
-                  onChange={(e) => { setApiKey(e.target.value); setApiKeySaved(false) }}
+                  onChange={(e) => {
+                    setApiKey(e.target.value)
+                    setApiKeySaved(false)
+                  }}
                   placeholder="sk-xxxxxxxxxxxxxxxx"
                   className="flex-1 px-3 py-2 text-sm bg-anibox-bg border border-anibox-border rounded-lg text-anibox-text placeholder:text-anibox-text-muted/50 focus:outline-none focus:border-anibox-accent"
                 />
@@ -555,9 +581,12 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
           {tab === 'download' && (
             <div className="space-y-4">
               <p className="text-xs text-anibox-text-muted">
-                配置 qBittorrent WebUI 后，可在<b className="text-anibox-text">新番时间表 → 获取资源</b>中一键发送磁力下载或添加 RSS 订阅。
+                配置 qBittorrent WebUI 后，可在
+                <b className="text-anibox-text">新番时间表 → 获取资源</b>中一键发送磁力下载或添加
+                RSS 订阅。
                 <br />
-                需在 qBittorrent 中开启 <b className="text-anibox-accent">工具 → 选项 → Web UI</b>（默认端口 8080，用户名 admin）。
+                需在 qBittorrent 中开启 <b className="text-anibox-accent">工具 → 选项 → Web UI</b>
+                （默认端口 8080，用户名 admin）。
               </p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -602,7 +631,9 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
                 </div>
               </div>
               <div>
-                <label className="text-xs text-anibox-text-muted block mb-1">默认保存路径（可选）</label>
+                <label className="text-xs text-anibox-text-muted block mb-1">
+                  默认保存路径（可选）
+                </label>
                 <input
                   value={qbSavepath}
                   onChange={(e) => setQbSavepath(e.target.value)}
@@ -614,9 +645,18 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
                 <button
                   onClick={async () => {
                     setQbStatus('测试中…')
-                    const cfg = { host: qbHost.trim(), port: qbPort, username: qbUser.trim(), password: qbPass }
+                    const cfg = {
+                      host: qbHost.trim(),
+                      port: qbPort,
+                      username: qbUser.trim(),
+                      password: qbPass,
+                    }
                     const r = await window.electronAPI.qbTest(cfg)
-                    setQbStatus(r.ok ? `✓ ${r.message}${r.version ? ` (v${r.version})` : ''}` : `✗ ${r.message}`)
+                    setQbStatus(
+                      r.ok
+                        ? `✓ ${r.message}${r.version ? ` (v${r.version})` : ''}`
+                        : `✗ ${r.message}`,
+                    )
                   }}
                   className="px-4 py-2 text-sm rounded-lg border border-anibox-border text-anibox-text-muted hover:text-anibox-text hover:border-anibox-accent/40 transition-colors"
                 >
@@ -624,7 +664,10 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
                 </button>
                 <button
                   onClick={async () => {
-                    if (!qbHost.trim()) { setQbStatus('✗ 请填写地址'); return }
+                    if (!qbHost.trim()) {
+                      setQbStatus('✗ 请填写地址')
+                      return
+                    }
                     await window.electronAPI.qbSetConfig({
                       host: qbHost.trim(),
                       port: qbPort,
@@ -646,12 +689,17 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
                 </button>
               </div>
               {qbStatus && (
-                <p className={`text-xs ${qbStatus.startsWith('✓') ? 'text-emerald-500' : 'text-red-400'}`}>{qbStatus}</p>
+                <p
+                  className={`text-xs ${qbStatus.startsWith('✓') ? 'text-emerald-500' : 'text-red-400'}`}
+                >
+                  {qbStatus}
+                </p>
               )}
               <p className="text-[10px] text-anibox-text-muted/60">
-                配置仅存储在本地 (qb-config.json)。RSS 订阅由 AniBox 本地生成（镜像站 feed.xml 不可用），
-                <b className="text-anibox-accent">添加订阅后需保持 AniBox 运行</b>；
-                自动下载还需在 qBittorrent 中为该订阅设置下载规则。
+                配置仅存储在本地 (qb-config.json)。RSS 订阅由 AniBox 本地生成（镜像站 feed.xml
+                不可用），
+                <b className="text-anibox-accent">添加订阅后需保持 AniBox 运行</b>； 自动下载还需在
+                qBittorrent 中为该订阅设置下载规则。
               </p>
             </div>
           )}
@@ -675,7 +723,8 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
               <p className="text-[10px] text-anibox-text-muted leading-relaxed">
                 开启后手机连同一 WiFi，浏览器打开下方地址即可浏览番剧库并播放。
                 <br />
-                mp4/webm 直接播放；mkv 自动转封装（秒级）；HEVC 等不兼容编码自动转码（首次较慢，之后缓存）。
+                mp4/webm 直接播放；mkv 自动转封装（秒级）；HEVC
+                等不兼容编码自动转码（首次较慢，之后缓存）。
               </p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -742,7 +791,9 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
               )}
               {streamState.urls.length > 0 && (
                 <div>
-                  <label className="text-xs text-anibox-text-muted block mb-1">访问地址（点按复制）</label>
+                  <label className="text-xs text-anibox-text-muted block mb-1">
+                    访问地址（点按复制）
+                  </label>
                   <div className="space-y-1.5">
                     {streamState.urls.map((u) => (
                       <button
@@ -755,14 +806,17 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
                         className="w-full flex items-center justify-between px-3 py-2 text-xs bg-anibox-bg border border-anibox-border rounded-lg text-anibox-accent font-mono hover:border-anibox-accent/40 transition-colors"
                       >
                         <span>{u}</span>
-                        <span className="text-anibox-text-muted">{streamSaved === u ? '✓ 已复制' : '复制'}</span>
+                        <span className="text-anibox-text-muted">
+                          {streamSaved === u ? '✓ 已复制' : '复制'}
+                        </span>
                       </button>
                     ))}
                   </div>
                   <p className="text-[10px] text-anibox-text-muted mt-1">
                     手机与电脑需在同一局域网；若无法访问，请允许 Windows 防火墙放行该端口。
                     <br />
-                    有多个地址时，选<b className="text-anibox-text">手机能连上的那个</b>（虚拟网卡/有线网卡地址手机通常访问不了）。
+                    有多个地址时，选<b className="text-anibox-text">手机能连上的那个</b>
+                    （虚拟网卡/有线网卡地址手机通常访问不了）。
                   </p>
                 </div>
               )}
@@ -772,13 +826,18 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
                 </p>
               )}
               <div className="border-t border-anibox-border/40 pt-3">
-                <label className="text-xs text-anibox-text-muted block mb-1">转码引擎 (ffmpeg)</label>
+                <label className="text-xs text-anibox-text-muted block mb-1">
+                  转码引擎 (ffmpeg)
+                </label>
                 <div className="flex items-center gap-2">
                   {engineInfo?.ffmpeg ? (
-                    <span className="text-[11px] text-emerald-500">✓ 可用{engineInfo.ffmpegPath ? ` · ${engineInfo.ffmpegPath}` : ''}</span>
+                    <span className="text-[11px] text-emerald-500">
+                      ✓ 可用{engineInfo.ffmpegPath ? ` · ${engineInfo.ffmpegPath}` : ''}
+                    </span>
                   ) : engineInfo?.download?.state === 'downloading' ? (
                     <span className="text-[11px] text-anibox-accent">
-                      正在下载 {Math.round((engineInfo.download.progress || 0) * 100)}%（约 80MB，仅首次需要）…
+                      正在下载 {Math.round((engineInfo.download.progress || 0) * 100)}%（约
+                      80MB，仅首次需要）…
                     </span>
                   ) : (
                     <span className="text-[11px] text-amber-500">
@@ -813,13 +872,17 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
                   <button
                     onClick={async () => {
                       const r = await window.electronAPI.streamCacheClean(100)
-                      setCacheInfo(r ? `✓ 已清理 ${r.removed} 个文件，释放 ${r.freedMB} MB` : '✗ 清理失败')
+                      setCacheInfo(
+                        r ? `✓ 已清理 ${r.removed} 个文件，释放 ${r.freedMB} MB` : '✗ 清理失败',
+                      )
                     }}
                     className="px-3 py-1.5 text-xs rounded-lg border border-anibox-border text-anibox-text-muted hover:text-anibox-text transition-colors"
                   >
                     清理缓存
                   </button>
-                  {cacheInfo && <span className="text-[11px] text-anibox-text-muted">{cacheInfo}</span>}
+                  {cacheInfo && (
+                    <span className="text-[11px] text-anibox-text-muted">{cacheInfo}</span>
+                  )}
                 </div>
                 <p className="text-[10px] text-anibox-text-muted/60 mt-1">
                   转封装/转码产物存储在 userData/stream-cache，同一文件再次播放秒开。
@@ -853,7 +916,9 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
                   </div>
                 </div>
                 <button
-                  onClick={() => storageInfo && window.electronAPI.storageOpenPath(storageInfo.root)}
+                  onClick={() =>
+                    storageInfo && window.electronAPI.storageOpenPath(storageInfo.root)
+                  }
                   className="px-3 py-1.5 text-xs rounded-lg border border-anibox-border text-anibox-text-muted hover:text-anibox-text hover:border-anibox-accent/40 transition-colors shrink-0"
                 >
                   打开
@@ -897,7 +962,9 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
                           disabled={!!storageBusy}
                           onClick={async () => {
                             setStorageBusy(item.key)
-                            const r = await window.electronAPI.storageClearCache(item.key).catch(() => null)
+                            const r = await window.electronAPI
+                              .storageClearCache(item.key)
+                              .catch(() => null)
                             setStorageBusy('')
                             if (r?.ok) {
                               refreshStorage()

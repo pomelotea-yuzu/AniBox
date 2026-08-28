@@ -713,13 +713,14 @@ export class LibmpvBridge {
       /* ok */
     }
     // keep-open=yes 时 mpv 播放完不发 END_FILE 事件，改轮询 eof-reached 属性边沿触发连播。
-    // 注意：快进/seek 直接跳到结尾时 mpv 可能不置位 eof-reached，导致停在最后一帧不连播，
-    // 因此额外用 time-pos≈duration 兜底检测（问题 #1）。阈值收紧到 0.2s 且排除暂停状态，
-    // 自然播放时仅比 eof-reached 提前约 0.16s 触发，几乎无感知。
+    // 注意：快进/seek 直接跳到结尾时 mpv 不会置位 eof-reached，且 keep-open 下 mpv 会自停为
+    // 暂停状态（pause=yes），因此用 time-pos≈duration 兜底检测，且不能排除暂停状态——
+    // 否则 seek 到末尾的「停在最后一帧」会因 isPaused()=true 而被漏判（问题 #2）。
+    // 阈值 0.2s：自然播放时仅比 eof-reached 提前约 0.16s 触发，几乎无感知。
     try {
       if (this.loaded) {
         let eof = this.isEofReached()
-        if (!eof && !this.eofReachedSent && !this.isPaused()) {
+        if (!eof && !this.eofReachedSent) {
           const dur = this.getDuration()
           if (dur > 0) {
             const tpos = this.getTimePos()

@@ -113,7 +113,7 @@ interface StoreData {
     defaultSpeed: number // 默认倍速
     autoNextEp: boolean // 播放结束时自动播下一集
     saveProgressInterval: number // 进度保存间隔（秒）
-    skipShortcutDefault: boolean // 默认开启 OP/ED 跳过（连按 3 次 → 跳过 80 秒）
+    skipShortcutDefault: boolean // 默认开启 OP/ED 跳过（连按 3 次 → 跳过 90 秒）
   }
   /** 局域网串流（设置页「串流」tab） */
   streamSettings: {
