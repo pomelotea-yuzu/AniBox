@@ -13,8 +13,7 @@
     "format": "prettier --write \"src/**/*.{ts,tsx,css,html}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css,html}\"",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "prepare": "husky"
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@xenova/transformers": "^2.17.2",
@@ -41,22 +40,11 @@
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.3",
-    "husky": "^9.1.0",
-    "lint-staged": "^15.5.0",
     "postcss": "^8.4.47",
     "prettier": "^3.9.6",
     "tailwindcss": "^3.4.14",
     "typescript": "^5.6.0",
     "typescript-eslint": "^8.65.0",
     "vitest": "^3.1.0"
-  },
-  "lint-staged": {
-    "src/**/*.{ts,tsx}": [
-      "prettier --check",
-      "eslint --max-warnings 0"
-    ],
-    "src/**/*.{css,html,json}": [
-      "prettier --check"
-    ]
   }
 }
