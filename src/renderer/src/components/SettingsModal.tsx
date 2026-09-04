@@ -5,6 +5,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTheme } from '../context/ThemeContext'
 import type { SubtitleStyleConfig } from './SubtitleOverlay'
+import { CONTROL_GROUPS, CONTROL_ITEMS, DEFAULT_CONTROLS_LAYOUT } from './Controls'
 
 interface SettingsModalProps {
   visible: boolean
@@ -72,6 +73,10 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
   const [autoNextEp, setAutoNextEp] = useState(true)
   const [saveProgressInterval, setSaveProgressInterval] = useState(5)
   const [skipShortcutDefault, setSkipShortcutDefault] = useState(false)
+  const [skipSeconds, setSkipSeconds] = useState(90)
+  const [volumeStep, setVolumeStep] = useState(5)
+  // 控制栏按钮自定义：出现在栏内的 key 列表
+  const [controlsLayout, setControlsLayout] = useState<string[]>(DEFAULT_CONTROLS_LAYOUT)
 
   // AI API
   const [apiKey, setApiKey] = useState('')
@@ -151,6 +156,21 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
           setAutoNextEp(s.autoNextEp)
           setSaveProgressInterval(s.saveProgressInterval)
           setSkipShortcutDefault(s.skipShortcutDefault)
+          setSkipSeconds(
+            typeof s.skipSeconds === 'number' && Number.isFinite(s.skipSeconds)
+              ? Math.max(0, Math.min(90, s.skipSeconds))
+              : 90,
+          )
+          setVolumeStep(
+            typeof s.volumeStep === 'number' && Number.isFinite(s.volumeStep)
+              ? Math.max(1, Math.min(10, s.volumeStep))
+              : 5,
+          )
+          setControlsLayout(
+            Array.isArray(s.controlsLayout)
+              ? s.controlsLayout.filter((k: unknown) => typeof k === 'string')
+              : DEFAULT_CONTROLS_LAYOUT,
+          )
         }
       })
       .catch(() => {})
@@ -210,11 +230,23 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
       autoNextEp?: boolean
       saveProgressInterval?: number
       skipShortcutDefault?: boolean
+      skipSeconds?: number
+      volumeStep?: number
+      controlsLayout?: string[]
     }) => {
       window.electronAPI.setPlaybackSettings(partial).catch(() => {})
     },
     [],
   )
+
+  // 控制栏按钮自定义：勾选/取消单个按钮，改动即存
+  const toggleControlItem = (key: string) => {
+    const next = controlsLayout.includes(key)
+      ? controlsLayout.filter((k) => k !== key)
+      : [...controlsLayout, key]
+    setControlsLayout(next)
+    savePlayback({ controlsLayout: next })
+  }
 
   // 串流设置：改动即存，主进程按需重启服务器并回传最新状态
   const saveStream = useCallback(
@@ -440,6 +472,35 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
                 />
               </div>
               <div>
+                <label className="text-xs text-anibox-text-muted block mb-1">
+                  单次音量调节幅度（{volumeStep}%）
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="range"
+                    min="1"
+                    max="10"
+                    step="1"
+                    value={volumeStep}
+                    onChange={(e) => {
+                      const v = Number(e.target.value)
+                      setVolumeStep(v)
+                      savePlayback({ volumeStep: v })
+                    }}
+                    className="flex-1 accent-anibox-accent"
+                  />
+                  <span className="text-xs text-anibox-text w-8 text-right tabular-nums">
+                    {volumeStep}%
+                  </span>
+                </div>
+                <p className="text-[10px] text-anibox-text-muted leading-relaxed mt-1">
+                  播放中按
+                  <kbd className="px-1 py-0.5 bg-anibox-bg rounded text-[10px] font-mono">↑</kbd>
+                  <kbd className="px-1 py-0.5 bg-anibox-bg rounded text-[10px] font-mono">↓</kbd>
+                  调节音量，画面中央会显示当前音量百分比。
+                </p>
+              </div>
+              <div>
                 <label className="text-xs text-anibox-text-muted block mb-1">默认播放速度</label>
                 <div className="flex gap-1.5">
                   {[0.5, 0.75, 1, 1.25, 1.5, 2].map((s) => (
@@ -484,11 +545,56 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
                 />
                 <span className="text-xs text-anibox-text">默认开启 OP/ED 跳过</span>
               </label>
+              <div>
+                <label className="text-xs text-anibox-text-muted block mb-1">
+                  OP/ED 跳过秒数（{skipSeconds} 秒）
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="range"
+                    min="0"
+                    max="90"
+                    step="1"
+                    value={skipSeconds}
+                    onChange={(e) => {
+                      const v = Number(e.target.value)
+                      setSkipSeconds(v)
+                      savePlayback({ skipSeconds: v })
+                    }}
+                    className="flex-1 accent-anibox-accent"
+                  />
+                  <input
+                    type="number"
+                    min={0}
+                    max={90}
+                    value={skipSeconds}
+                    onChange={(e) => {
+                      const raw = Number(e.target.value)
+                      const v = Number.isFinite(raw)
+                        ? Math.max(0, Math.min(90, Math.round(raw)))
+                        : 0
+                      setSkipSeconds(v)
+                    }}
+                    onBlur={(e) => {
+                      const raw = Number(e.target.value)
+                      const v = Number.isFinite(raw)
+                        ? Math.max(0, Math.min(90, Math.round(raw)))
+                        : 90
+                      setSkipSeconds(v)
+                      savePlayback({ skipSeconds: v })
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                    }}
+                    className="w-16 px-2 py-1 text-xs rounded border border-anibox-border bg-anibox-bg text-anibox-text outline-none focus:border-anibox-accent"
+                  />
+                </div>
+              </div>
               <p className="text-[10px] text-anibox-text-muted leading-relaxed">
                 开启后每次播放默认启用「⏭ 跳过」：播放中连按 3 次
                 <kbd className="px-1 py-0.5 bg-anibox-bg rounded text-[10px] font-mono">→</kbd>
-                跳过 90 秒（前两次快进各 5 秒，第三次补足 80 秒，总效果 90
-                秒）。仍可在控制条随时手动开关。
+                ，直接跳到连按开始时位置 +{skipSeconds} 秒处（前两次按下各快进 5 秒，第三次补足到
+                {skipSeconds} 秒）。设为 0 表示不跳转。仍可在控制条随时手动开关。
               </p>
               <div>
                 <label className="text-xs text-anibox-text-muted block mb-1">
@@ -506,6 +612,62 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
                   }}
                   className="w-full accent-anibox-accent"
                 />
+              </div>
+              {/* 控制栏按钮自定义 */}
+              <div className="border-t border-anibox-border/40 pt-3">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs text-anibox-text">
+                    控制栏按钮
+                    <span className="text-anibox-text-muted">（未勾选的收进「更多 ⋯」菜单）</span>
+                  </label>
+                  <div className="flex gap-1.5">
+                    <button
+                      onClick={() => {
+                        const all = CONTROL_ITEMS.map((it) => it.key)
+                        setControlsLayout(all)
+                        savePlayback({ controlsLayout: all })
+                      }}
+                      className="px-2 py-0.5 text-[10px] rounded border border-anibox-border text-anibox-text-muted hover:text-anibox-text transition-colors"
+                    >
+                      全部显示
+                    </button>
+                    <button
+                      onClick={() => {
+                        setControlsLayout(DEFAULT_CONTROLS_LAYOUT)
+                        savePlayback({ controlsLayout: DEFAULT_CONTROLS_LAYOUT })
+                      }}
+                      className="px-2 py-0.5 text-[10px] rounded border border-anibox-border text-anibox-text-muted hover:text-anibox-text transition-colors"
+                    >
+                      恢复默认
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  {CONTROL_GROUPS.map((g) => (
+                    <div key={g.name}>
+                      <p className="text-[10px] text-anibox-text-muted/70 mb-1">{g.name}</p>
+                      <div className="flex flex-wrap gap-x-4 gap-y-1">
+                        {g.items.map((it) => (
+                          <label
+                            key={it.key}
+                            className="flex items-center gap-1.5 cursor-pointer select-none"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={controlsLayout.includes(it.key)}
+                              onChange={() => toggleControlItem(it.key)}
+                              className="accent-anibox-accent w-3.5 h-3.5"
+                            />
+                            <span className="text-[11px] text-anibox-text">{it.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[10px] text-anibox-text-muted leading-relaxed mt-2">
+                  进度条、播放/暂停、时间、音量、全屏为核心按钮，始终显示；部分按钮在特定条件下才会出现（如音轨需多音轨）。改动即时生效。
+                </p>
               </div>
             </div>
           )}

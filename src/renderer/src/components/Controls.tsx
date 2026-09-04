@@ -1,241 +1,119 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import ProgressBar from './ProgressBar'
+import MoreMenu, { type MoreMenuCtx } from './controls/MoreMenu'
+import OnlineSearchPanel from './controls/OnlineSearchPanel'
+import SubtitleStylePanel from './controls/SubtitleStylePanel'
+import DanmakuSettingsPanel from './controls/DanmakuSettingsPanel'
+import EpisodePanel from './controls/EpisodePanel'
+import {
+  PLAYBACK_SPEEDS,
+  DEFAULT_CONTROLS_LAYOUT,
+  formatTime,
+  type ControlsProps,
+} from './controls/controlsData'
 
-interface ControlsProps {
-  isPlaying: boolean
-  currentTime: number
-  duration: number
-  volume: number
-  isMuted: boolean
-  playbackRate: number
-  isFullscreen: boolean
-  visible: boolean
-  subtitleTracks?: Array<{ label: string; language: string; type: string }>
-  selectedSubtitleIdx?: number
-  selectedSecondarySubIdx?: number
-  audioTracks?: Array<{ label: string; language: string; index: number }>
-  selectedAudioIdx?: number
-  onTogglePlay: () => void
-  onSeek: (time: number) => void
-  onToggleMute: () => void
-  onVolumeChange: (volume: number) => void
-  onSpeedChange: (speed: number) => void
-  onToggleFullscreen: () => void
-  onSubtitleChange?: (index: number) => void
-  onSecondarySubtitleChange?: (index: number) => void
-  onAudioChange?: (index: number) => void
-  onAspectCycle?: () => void
-  aspectMode?: string
-  bufferProgress?: number
-  onScreenshot?: () => void
-  onPiP?: () => void
-  isPiP?: boolean
-  playMode?: string
-  onCyclePlayMode?: () => void
-  loopA?: number | null
-  loopB?: number | null
-  previewTime?: number | null
-  previewImage?: string | null
-  onPreviewHover?: (time: number | null) => void
-  onPrevEpisode?: () => void
-  onNextEpisode?: () => void
-  hasPrevEpisode?: boolean
-  hasNextEpisode?: boolean
-  hasEpisodeList?: boolean
-  onEpisodeList?: () => void
-  /** 播放器内选集面板 */
-  episodes?: Array<{ fileName: string; filePath: string; epNumber?: number }>
-  currentEpIndex?: number
-  onSelectEpisode?: (index: number) => void
-  /** 音频延迟（毫秒） */
-  audioDelay?: number
-  onAudioDelayChange?: (delayMs: number) => void
-  /** 音量均衡开关 */
-  volumeNormalization?: boolean
-  onVolumeNormalizationToggle?: () => void
-  /** OP/ED 跳过（快捷键模式）：连按 3 次右方向键 = 跳过 90 秒 */
-  skipShortcutEnabled?: boolean
-  onSkipShortcutToggle?: () => void
-  /** 画面增强 */
-  enhanceEnabled?: boolean
-  enhancePreset?: string
-  onEnhanceToggle?: () => void
-  onEnhancePreset?: (preset: string) => void
-  abCompare?: boolean
-  onAbCompare?: () => void
-  /** 字幕样式 */
-  subtitleStyle?: {
-    fontSize: number
-    fontFamily: string
-    textColor: string
-    strokeColor: string
-    strokeWidth: number
-    bgColor: string
-    position: string
-    secondaryFontSize: number
-    dualSubtitleGap: number
-  }
-  onSubtitleStyleChange?: (style: any) => void
-  showSubtitleSettings?: boolean
-  onToggleSubtitleSettings?: () => void
-  /** 在线字幕搜索 */
-  onOnlineSearch?: (query?: string) => void
-  onlineSearchResults?: Array<{
-    id: string
-    title: string
-    language: string
-    languageLabel: string
-    source: string
-    fileName: string
-    rating: number
-    downloads: number
-  }>
-  isSearchingOnline?: boolean
-  showOnlineSearch?: boolean
-  onToggleOnlineSearch?: () => void
-  onOnlineSubDownload?: (result: any) => void
-  /** 生词点查 */
-  onWordLookup?: () => void
-  /** Whisper 语音识别 */
-  onWhisperTranscribe?: () => void
-  isWhisperAvailable?: boolean
-  /** 弹幕 */
-  danmakuConfig?: {
-    enabled: boolean
-    density: number
-    speed: number
-    opacity: number
-    fontScale: number
-    showScroll: boolean
-    showTop: boolean
-    showBottom: boolean
-    offsetMs: number
-  }
-  onDanmakuConfigChange?: (partial: any) => void
-  onDanmakuFetch?: () => void
-  isLoadingDanmaku?: boolean
-  danmakuCount?: number
-  showDanmakuSettings?: boolean
-  onToggleDanmakuSettings?: () => void
-  onSendDanmaku?: (text: string, color: string, mode: string) => void
-  onDanmakuExport?: () => void
-  danmakuFilterText?: string
-  onDanmakuFilterText?: (text: string) => void
-  danmakuFilterRegex?: string
-  onDanmakuFilterRegex?: (re: string) => void
-}
-
-const PLAYBACK_SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3]
-
-function formatTime(seconds: number): string {
-  if (!isFinite(seconds) || seconds < 0) return '0:00'
-  const h = Math.floor(seconds / 3600)
-  const m = Math.floor((seconds % 3600) / 60)
-  const s = Math.floor(seconds % 60)
-  if (h > 0) {
-    return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
-  }
-  return `${m}:${s.toString().padStart(2, '0')}`
-}
+// 单一数据源在 controls/controlsData.ts，这里 re-export 保持既有 import 路径兼容
+export { CONTROL_GROUPS, CONTROL_ITEMS, DEFAULT_CONTROLS_LAYOUT } from './controls/controlsData'
+export type { ControlItemDef, ControlsProps } from './controls/controlsData'
 
 /**
  * 播放控制栏
  * 底部渐变浮层，包含全部播放控制
  */
-export default function Controls({
-  isPlaying,
-  currentTime,
-  duration,
-  volume,
-  isMuted,
-  playbackRate,
-  isFullscreen,
-  visible,
-  subtitleTracks,
-  selectedSubtitleIdx = -1,
-  selectedSecondarySubIdx = -1,
-  audioTracks,
-  selectedAudioIdx = 0,
-  onTogglePlay,
-  onSeek,
-  onToggleMute,
-  onVolumeChange,
-  onSpeedChange,
-  onToggleFullscreen,
-  onSubtitleChange,
-  onSecondarySubtitleChange,
-  onAudioChange,
-  onAspectCycle,
-  aspectMode,
-  bufferProgress,
-  onScreenshot,
-  onPiP,
-  isPiP,
-  playMode,
-  onCyclePlayMode,
-  loopA,
-  loopB,
-  previewTime,
-  previewImage,
-  onPreviewHover,
-  onPrevEpisode,
-  onNextEpisode,
-  hasPrevEpisode,
-  hasNextEpisode,
-  hasEpisodeList,
-  onEpisodeList,
-  episodes,
-  currentEpIndex = -1,
-  onSelectEpisode,
-  audioDelay,
-  onAudioDelayChange,
-  volumeNormalization,
-  onVolumeNormalizationToggle,
-  skipShortcutEnabled,
-  onSkipShortcutToggle,
-  enhanceEnabled,
-  enhancePreset,
-  onEnhanceToggle,
-  onEnhancePreset,
-  abCompare,
-  onAbCompare,
-  subtitleStyle,
-  onSubtitleStyleChange,
-  showSubtitleSettings,
-  onToggleSubtitleSettings,
-  onOnlineSearch,
-  onlineSearchResults,
-  isSearchingOnline,
-  showOnlineSearch,
-  onToggleOnlineSearch,
-  onOnlineSubDownload,
-  onWordLookup,
-  onWhisperTranscribe,
-  isWhisperAvailable,
-  danmakuConfig,
-  onDanmakuConfigChange,
-  onDanmakuFetch,
-  isLoadingDanmaku,
-  danmakuCount,
-  showDanmakuSettings,
-  onToggleDanmakuSettings,
-  onSendDanmaku,
-  onDanmakuExport,
-  danmakuFilterText,
-  onDanmakuFilterText,
-  danmakuFilterRegex,
-  onDanmakuFilterRegex,
-}: ControlsProps) {
+export default function Controls(props: ControlsProps) {
+  const {
+    isPlaying,
+    currentTime,
+    duration,
+    volume,
+    isMuted,
+    playbackRate,
+    isFullscreen,
+    visible,
+    subtitleTracks,
+    selectedSubtitleIdx = -1,
+    selectedSecondarySubIdx = -1,
+    audioTracks,
+    selectedAudioIdx = 0,
+    onTogglePlay,
+    onSeek,
+    onToggleMute,
+    onVolumeChange,
+    onSpeedChange,
+    onToggleFullscreen,
+    onSubtitleChange,
+    onSecondarySubtitleChange,
+    onAudioChange,
+    onAspectCycle,
+    aspectMode,
+    bufferProgress,
+    onScreenshot,
+    onPiP,
+    isPiP,
+    playMode,
+    onCyclePlayMode,
+    loopA,
+    loopB,
+    previewTime,
+    previewImage,
+    onPreviewHover,
+    onPrevEpisode,
+    onNextEpisode,
+    hasPrevEpisode,
+    hasNextEpisode,
+    hasEpisodeList,
+    onEpisodeList,
+    episodes,
+    currentEpIndex = -1,
+    onSelectEpisode,
+    audioDelay,
+    onAudioDelayChange,
+    volumeNormalization,
+    onVolumeNormalizationToggle,
+    skipShortcutEnabled,
+    skipSeconds = 90,
+    onSkipShortcutToggle,
+    enhanceEnabled,
+    enhancePreset,
+    onEnhanceToggle,
+    onEnhancePreset,
+    abCompare,
+    onAbCompare,
+    subtitleStyle,
+    onSubtitleStyleChange,
+    showSubtitleSettings,
+    onToggleSubtitleSettings,
+    onOnlineSearch,
+    onlineSearchResults,
+    isSearchingOnline,
+    showOnlineSearch,
+    onToggleOnlineSearch,
+    onOnlineSubDownload,
+    onWordLookup,
+    onWhisperTranscribe,
+    isWhisperAvailable,
+    danmakuConfig,
+    onDanmakuConfigChange,
+    onDanmakuFetch,
+    isLoadingDanmaku,
+    danmakuCount,
+    showDanmakuSettings,
+    onToggleDanmakuSettings,
+    onSendDanmaku,
+    onDanmakuExport,
+    danmakuFilterText,
+    onDanmakuFilterText,
+    danmakuFilterRegex,
+    onDanmakuFilterRegex,
+    controlsLayout,
+  } = props
+
   const [showSpeedMenu, setShowSpeedMenu] = useState(false)
   const [showSubtitleMenu, setShowSubtitleMenu] = useState(false)
   const [showAudioMenu, setShowAudioMenu] = useState(false)
   const [showEpisodePanel, setShowEpisodePanel] = useState(false)
   const [customSpeed, setCustomSpeed] = useState('')
   const [showVolumeSlider, setShowVolumeSlider] = useState(false)
-  // 弹幕输入（受控，避免 getElementById 跨组件取值/多实例 id 冲突）
-  const [danmakuText, setDanmakuText] = useState('')
-  const [danmakuColor, setDanmakuColor] = useState('#FFFFFF')
-  const [danmakuMode, setDanmakuMode] = useState('scroll')
   const speedMenuRef = useRef<HTMLDivElement>(null)
   const subtitleMenuRef = useRef<HTMLDivElement>(null)
   const audioMenuRef = useRef<HTMLDivElement>(null)
@@ -276,6 +154,38 @@ export default function Controls({
     return () => document.removeEventListener('mousedown', handler)
   }, [showAudioMenu])
 
+  // ===== 控制栏自定义：栏内 / 「更多 ⋯」菜单分发 =====
+  const layoutSet = useMemo(
+    () => new Set(controlsLayout ?? DEFAULT_CONTROLS_LAYOUT),
+    [controlsLayout],
+  )
+  const inBar = useCallback((key: string) => layoutSet.has(key), [layoutSet])
+
+  // 双语字幕循环切换（栏内按钮与菜单行共用）
+  const cycleSecondarySubtitle = useCallback(() => {
+    if (!onSecondarySubtitleChange) return
+    const tracks = subtitleTracks || []
+    const primaryIdx = selectedSubtitleIdx
+    const secondaryIdx = selectedSecondarySubIdx ?? -1
+    if (tracks.length <= 1 || (primaryIdx ?? -1) < 0) return
+    let next = secondaryIdx < 0 ? tracks.findIndex((_, i) => i !== primaryIdx) : secondaryIdx + 1
+    while (next >= 0 && next < tracks.length && (next === secondaryIdx || next === primaryIdx))
+      next++
+    if (next >= tracks.length) next = -1
+    if (next === primaryIdx) next = -1
+    onSecondarySubtitleChange(next)
+  }, [onSecondarySubtitleChange, subtitleTracks, selectedSubtitleIdx, selectedSecondarySubIdx])
+
+  // 「更多 ⋯」菜单上下文（未放进栏内的可用按钮收在这里）
+  const moreMenuCtx: MoreMenuCtx = {
+    ...props,
+    openEpisodes: () => {
+      if (episodes && episodes.length > 0) setShowEpisodePanel(true)
+      else onEpisodeList?.()
+    },
+    cycleSecondarySubtitle,
+  }
+
   return (
     <div
       className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/85 to-transparent pt-20 pb-3 px-4 transition-opacity duration-300 ${
@@ -301,7 +211,7 @@ export default function Controls({
       {/* 控制按钮行 */}
       <div className="flex items-center gap-3">
         {/* 上一集 */}
-        {hasPrevEpisode && onPrevEpisode && (
+        {inBar('prevEp') && hasPrevEpisode && onPrevEpisode && (
           <button
             onClick={onPrevEpisode}
             className="text-white/60 hover:text-white transition-colors"
@@ -332,7 +242,7 @@ export default function Controls({
         </button>
 
         {/* 下一集 */}
-        {hasNextEpisode && onNextEpisode && (
+        {inBar('nextEp') && hasNextEpisode && onNextEpisode && (
           <button
             onClick={onNextEpisode}
             className="text-white/60 hover:text-white transition-colors"
@@ -395,7 +305,7 @@ export default function Controls({
         </div>
 
         {/* 音量均衡 */}
-        {onVolumeNormalizationToggle && (
+        {inBar('volumeNormalization') && onVolumeNormalizationToggle && (
           <button
             onClick={onVolumeNormalizationToggle}
             className={`text-xs transition-colors px-1 py-0.5 rounded ${
@@ -417,7 +327,7 @@ export default function Controls({
         )}
 
         {/* 音频延迟 */}
-        {onAudioDelayChange && audioDelay !== undefined && (
+        {inBar('audioDelay') && onAudioDelayChange && audioDelay !== undefined && (
           <div className="flex items-center gap-0.5">
             <button
               onClick={() => onAudioDelayChange(Math.max(0, audioDelay - 50))}
@@ -450,8 +360,8 @@ export default function Controls({
           </div>
         )}
 
-        {/* OP/ED 跳过（快捷键模式：连按 3 次右方向键 = 跳过 90 秒） */}
-        {onSkipShortcutToggle && (
+        {/* OP/ED 跳过（快捷键模式：连按 3 次右方向键 = 跳过自定义秒数） */}
+        {inBar('skipShortcut') && onSkipShortcutToggle && (
           <button
             onClick={onSkipShortcutToggle}
             className={`text-[10px] px-1.5 py-0.5 rounded transition-colors ${
@@ -459,7 +369,7 @@ export default function Controls({
             }`}
             title={
               skipShortcutEnabled
-                ? 'OP/ED 跳过已开启：连按 3 次 → 跳过 90 秒'
+                ? `OP/ED 跳过已开启：连按 3 次 → 跳过 ${skipSeconds} 秒`
                 : 'OP/ED 跳过已关闭（点击开启）'
             }
           >
@@ -468,31 +378,35 @@ export default function Controls({
           </button>
         )}
 
-        {/* 画面增强 */}
-        {onEnhanceToggle && (
+        {/* 画面增强：4K 开关与 A/B 对比是两个独立可配置项，共用一个紧凑分组 */}
+        {(onEnhanceToggle || (enhanceEnabled && onAbCompare)) && (
           <div className="flex items-center gap-0.5">
-            <button
-              onClick={onEnhanceToggle}
-              className={`text-[10px] px-1 py-0.5 rounded transition-colors ${
-                enhanceEnabled ? 'text-anibox-accent' : 'text-white/25 hover:text-white/50'
-              }`}
-              title={`Anime4K${enhanceEnabled ? '：开' : '：关'} (E键)`}
-            >
-              4K
-            </button>
-            {enhanceEnabled && onEnhancePreset && (
-              <select
-                value={enhancePreset || 'balanced'}
-                onChange={(e) => onEnhancePreset(e.target.value)}
-                onClick={(e) => e.stopPropagation()}
-                className="text-[9px] bg-transparent text-anibox-accent/70 outline-none cursor-pointer"
-              >
-                <option value="balanced">均衡</option>
-                <option value="quality">高质量</option>
-                <option value="performance">性能</option>
-              </select>
+            {inBar('enhance') && onEnhanceToggle && (
+              <>
+                <button
+                  onClick={onEnhanceToggle}
+                  className={`text-[10px] px-1 py-0.5 rounded transition-colors ${
+                    enhanceEnabled ? 'text-anibox-accent' : 'text-white/25 hover:text-white/50'
+                  }`}
+                  title={`Anime4K${enhanceEnabled ? '：开' : '：关'} (E键)`}
+                >
+                  4K
+                </button>
+                {enhanceEnabled && onEnhancePreset && (
+                  <select
+                    value={enhancePreset || 'balanced'}
+                    onChange={(e) => onEnhancePreset(e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-[9px] bg-transparent text-anibox-accent/70 outline-none cursor-pointer"
+                  >
+                    <option value="balanced">均衡</option>
+                    <option value="quality">高质量</option>
+                    <option value="performance">性能</option>
+                  </select>
+                )}
+              </>
             )}
-            {enhanceEnabled && onAbCompare && (
+            {inBar('abCompare') && enhanceEnabled && onAbCompare && (
               <button
                 onClick={onAbCompare}
                 className={`text-[10px] px-0.5 py-0.5 rounded transition-colors ${
@@ -507,92 +421,96 @@ export default function Controls({
         )}
 
         {/* 弹幕开关 */}
-        <button
-          onClick={() => {
-            if ((danmakuCount ?? 0) === 0) return
-            onDanmakuConfigChange?.({ enabled: !danmakuConfig?.enabled })
-          }}
-          onContextMenu={(e) => {
-            e.preventDefault()
-            onDanmakuConfigChange?.({ enabled: false })
-          }}
-          className={`text-[10px] px-1 py-0.5 rounded transition-colors ${
-            (danmakuCount ?? 0) === 0
-              ? 'text-white/15 cursor-not-allowed'
-              : danmakuConfig?.enabled
-                ? 'text-anibox-accent'
-                : 'text-white/25 hover:text-white/50'
-          }`}
-          title={
-            (danmakuCount ?? 0) === 0
-              ? '弹幕 (未加载)'
-              : danmakuConfig?.enabled
-                ? `弹幕：开 (${danmakuCount}条) · 右键关闭`
-                : `弹幕：关 (${danmakuCount}条)`
-          }
-        >
-          弹
-        </button>
+        {inBar('danmakuToggle') && (
+          <button
+            onClick={() => {
+              if ((danmakuCount ?? 0) === 0) return
+              onDanmakuConfigChange?.({ enabled: !danmakuConfig?.enabled })
+            }}
+            onContextMenu={(e) => {
+              e.preventDefault()
+              onDanmakuConfigChange?.({ enabled: false })
+            }}
+            className={`text-[10px] px-1 py-0.5 rounded transition-colors ${
+              (danmakuCount ?? 0) === 0
+                ? 'text-white/15 cursor-not-allowed'
+                : danmakuConfig?.enabled
+                  ? 'text-anibox-accent'
+                  : 'text-white/25 hover:text-white/50'
+            }`}
+            title={
+              (danmakuCount ?? 0) === 0
+                ? '弹幕 (未加载)'
+                : danmakuConfig?.enabled
+                  ? `弹幕：开 (${danmakuCount}条) · 右键关闭`
+                  : `弹幕：关 (${danmakuCount}条)`
+            }
+          >
+            弹
+          </button>
+        )}
 
         {/* 倍速选择 */}
-        <div className="relative" ref={speedMenuRef}>
-          <button
-            onClick={() => setShowSpeedMenu(!showSpeedMenu)}
-            className="text-xs text-white/75 hover:text-white transition-colors px-1 py-0.5 rounded min-w-[28px]"
-            title="播放速度"
-          >
-            {playbackRate}x
-          </button>
-          {showSpeedMenu && (
-            <div className="absolute bottom-full right-0 mb-2 bg-anibox-overlay border border-neutral-700 rounded-md shadow-xl py-1 z-50 min-w-[100px]">
-              {PLAYBACK_SPEEDS.map((speed) => (
-                <button
-                  key={speed}
-                  onClick={() => {
-                    onSpeedChange(speed)
-                    setShowSpeedMenu(false)
-                  }}
-                  className={`block w-full text-left px-4 py-1.5 text-xs hover:bg-white/10 transition-colors whitespace-nowrap ${
-                    playbackRate === speed ? 'text-anibox-accent font-medium' : 'text-white/80'
-                  }`}
-                >
-                  {speed}x
-                </button>
-              ))}
-              {/* 自定义倍速输入 */}
-              <div className="border-t border-neutral-700 mt-1 pt-1 px-2">
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault()
-                    const val = parseFloat(customSpeed)
-                    if (val >= 0.1 && val <= 16) {
-                      onSpeedChange(val)
+        {inBar('speed') && (
+          <div className="relative" ref={speedMenuRef}>
+            <button
+              onClick={() => setShowSpeedMenu(!showSpeedMenu)}
+              className="text-xs text-white/75 hover:text-white transition-colors px-1 py-0.5 rounded min-w-[28px]"
+              title="播放速度"
+            >
+              {playbackRate}x
+            </button>
+            {showSpeedMenu && (
+              <div className="absolute bottom-full right-0 mb-2 bg-anibox-overlay border border-neutral-700 rounded-md shadow-xl py-1 z-50 min-w-[100px]">
+                {PLAYBACK_SPEEDS.map((speed) => (
+                  <button
+                    key={speed}
+                    onClick={() => {
+                      onSpeedChange(speed)
                       setShowSpeedMenu(false)
-                      setCustomSpeed('')
-                    }
-                  }}
-                >
-                  <input
-                    type="number"
-                    min="0.1"
-                    max="16"
-                    step="0.05"
-                    value={customSpeed}
-                    onChange={(e) => setCustomSpeed(e.target.value)}
-                    placeholder="自定义..."
-                    className="w-full bg-white/5 border border-neutral-600 rounded px-2 py-1 text-xs text-white
+                    }}
+                    className={`block w-full text-left px-4 py-1.5 text-xs hover:bg-white/10 transition-colors whitespace-nowrap ${
+                      playbackRate === speed ? 'text-anibox-accent font-medium' : 'text-white/80'
+                    }`}
+                  >
+                    {speed}x
+                  </button>
+                ))}
+                {/* 自定义倍速输入 */}
+                <div className="border-t border-neutral-700 mt-1 pt-1 px-2">
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault()
+                      const val = parseFloat(customSpeed)
+                      if (val >= 0.1 && val <= 16) {
+                        onSpeedChange(val)
+                        setShowSpeedMenu(false)
+                        setCustomSpeed('')
+                      }
+                    }}
+                  >
+                    <input
+                      type="number"
+                      min="0.1"
+                      max="16"
+                      step="0.05"
+                      value={customSpeed}
+                      onChange={(e) => setCustomSpeed(e.target.value)}
+                      placeholder="自定义..."
+                      className="w-full bg-white/5 border border-neutral-600 rounded px-2 py-1 text-xs text-white
                       placeholder:text-white/30 focus:outline-none focus:border-anibox-accent
                       [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                </form>
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  </form>
+                </div>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
         {/* 字幕选择 */}
-        {subtitleTracks && subtitleTracks.length > 0 && onSubtitleChange && (
+        {inBar('subtitle') && subtitleTracks && subtitleTracks.length > 0 && onSubtitleChange && (
           <div className="relative" ref={subtitleMenuRef}>
             <button
               onClick={() => setShowSubtitleMenu(!showSubtitleMenu)}
@@ -722,530 +640,119 @@ export default function Controls({
           </div>
         )}
 
-        {/* 字幕辅助按钮组 */}
-        <div className="flex items-center gap-0.5">
-          {/* 在线搜索字幕 */}
-          {onOnlineSearch && (
-            <button
-              onClick={() => onToggleOnlineSearch?.()}
-              className="text-white/50 hover:text-anibox-accent transition-colors px-0.5"
-              title="在线搜索字幕 (O)"
-            >
-              <svg
-                width="15"
-                height="15"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
+        {/* 字幕辅助按钮组（在线搜索 / 双语切换 / 样式设置，各自独立可配置） */}
+        {(inBar('onlineSearch') || inBar('dualSub') || inBar('subStyle')) && (
+          <div className="flex items-center gap-0.5">
+            {/* 在线搜索字幕 */}
+            {inBar('onlineSearch') && onOnlineSearch && (
+              <button
+                onClick={() => onToggleOnlineSearch?.()}
+                className="text-white/50 hover:text-anibox-accent transition-colors px-0.5"
+                title="在线搜索字幕 (O)"
               >
-                <circle cx="11" cy="11" r="8" />
-                <line x1="21" y1="21" x2="16.65" y2="16.65" />
-              </svg>
-            </button>
-          )}
-          {/* 双语字幕切换 */}
-          {onSecondarySubtitleChange && (
-            <button
-              onClick={() => {
-                // 循环切换副字幕
-                const tracks = subtitleTracks || []
-                const primaryIdx = selectedSubtitleIdx
-                const secondaryIdx = selectedSecondarySubIdx ?? -1
-                if (tracks.length <= 1 || (primaryIdx ?? -1) < 0) return
-                let next =
-                  secondaryIdx < 0 ? tracks.findIndex((_, i) => i !== primaryIdx) : secondaryIdx + 1
-                while (
-                  next >= 0 &&
-                  next < tracks.length &&
-                  (next === secondaryIdx || next === primaryIdx)
-                )
-                  next++
-                if (next >= tracks.length) next = -1
-                if (next === primaryIdx) next = -1
-                onSecondarySubtitleChange(next)
-              }}
-              className={`transition-colors px-0.5 ${
-                (selectedSecondarySubIdx ?? -1) >= 0
-                  ? 'text-anibox-accent'
-                  : 'text-white/50 hover:text-white'
-              }`}
-              title="双语字幕 (D)"
-            >
-              <svg
-                width="15"
-                height="15"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+              </button>
+            )}
+            {/* 双语字幕切换 */}
+            {inBar('dualSub') && onSecondarySubtitleChange && (
+              <button
+                onClick={cycleSecondarySubtitle}
+                className={`transition-colors px-0.5 ${
+                  (selectedSecondarySubIdx ?? -1) >= 0
+                    ? 'text-anibox-accent'
+                    : 'text-white/50 hover:text-white'
+                }`}
+                title="双语字幕 (D)"
               >
-                <rect x="2" y="2" width="20" height="8" rx="1" />
-                <rect x="2" y="13" width="20" height="8" rx="1" opacity="0.5" />
-                <line x1="6" y1="6" x2="18" y2="6" strokeWidth="1" />
-                <line x1="6" y1="17" x2="18" y2="17" strokeWidth="1" opacity="0.5" />
-              </svg>
-            </button>
-          )}
-          {/* 字幕样式设置 */}
-          {onToggleSubtitleSettings && (
-            <button
-              onClick={() => onToggleSubtitleSettings?.()}
-              className={`transition-colors px-0.5 ${
-                showSubtitleSettings ? 'text-anibox-accent' : 'text-white/50 hover:text-white'
-              }`}
-              title="字幕样式 (G)"
-            >
-              <svg
-                width="15"
-                height="15"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <rect x="2" y="2" width="20" height="8" rx="1" />
+                  <rect x="2" y="13" width="20" height="8" rx="1" opacity="0.5" />
+                  <line x1="6" y1="6" x2="18" y2="6" strokeWidth="1" />
+                  <line x1="6" y1="17" x2="18" y2="17" strokeWidth="1" opacity="0.5" />
+                </svg>
+              </button>
+            )}
+            {/* 字幕样式设置 */}
+            {inBar('subStyle') && onToggleSubtitleSettings && (
+              <button
+                onClick={() => onToggleSubtitleSettings?.()}
+                className={`transition-colors px-0.5 ${
+                  showSubtitleSettings ? 'text-anibox-accent' : 'text-white/50 hover:text-white'
+                }`}
+                title="字幕样式 (G)"
               >
-                <polyline points="4,7 4,4 20,4 20,7" />
-                <line x1="9" y1="20" x2="15" y2="20" />
-                <line x1="12" y1="4" x2="12" y2="20" />
-              </svg>
-            </button>
-          )}
-        </div>
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <polyline points="4,7 4,4 20,4 20,7" />
+                  <line x1="9" y1="20" x2="15" y2="20" />
+                  <line x1="12" y1="4" x2="12" y2="20" />
+                </svg>
+              </button>
+            )}
+          </div>
+        )}
 
         {/* 在线字幕搜索面板 */}
         {showOnlineSearch && (
-          <div
-            className="absolute bottom-16 right-4 w-80 bg-anibox-overlay border border-neutral-700 rounded-lg shadow-xl z-50 max-h-72 flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between px-3 py-2 border-b border-neutral-700">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-medium text-white">在线字幕搜索</span>
-                {isSearchingOnline && (
-                  <div className="w-3 h-3 border border-white/30 border-t-white rounded-full animate-spin" />
-                )}
-              </div>
-              <div className="flex items-center gap-1">
-                <input
-                  className="w-28 bg-white/5 border border-neutral-600 rounded px-2 py-0.5 text-[11px] text-white placeholder:text-white/30
-                    focus:outline-none focus:border-anibox-accent"
-                  placeholder="搜索关键词..."
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      onOnlineSearch?.((e.target as HTMLInputElement).value)
-                    }
-                  }}
-                  onClick={(e) => e.stopPropagation()}
-                />
-                <button
-                  onClick={() => {
-                    onOnlineSearch?.()
-                    setShowSubtitleMenu(false)
-                  }}
-                  className="text-[11px] px-2 py-0.5 bg-anibox-accent hover:bg-anibox-accent-hover text-white rounded"
-                >
-                  搜索
-                </button>
-                <button
-                  onClick={() => onToggleOnlineSearch?.()}
-                  className="text-white/40 hover:text-white ml-1"
-                >
-                  ✕
-                </button>
-              </div>
-            </div>
-            <div className="flex-1 overflow-y-auto">
-              {onlineSearchResults && onlineSearchResults.length === 0 && !isSearchingOnline && (
-                <p className="text-xs text-neutral-400 py-4 text-center">
-                  未找到字幕，尝试更换关键词
-                </p>
-              )}
-              {onlineSearchResults?.map((r: any, i: number) => (
-                <div
-                  key={r.id || i}
-                  className="flex items-center justify-between px-3 py-2 hover:bg-white/5 border-b border-neutral-700/50 last:border-0"
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs text-white truncate">{r.fileName || r.title}</p>
-                    <p className="text-[10px] text-neutral-400">
-                      {r.languageLabel || r.language}
-                      {r.source ? ` · ${r.source}` : ''}
-                      {r.downloads ? ` · ↓${r.downloads}` : ''}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      onOnlineSubDownload?.(r)
-                    }}
-                    className="ml-2 text-[11px] px-2 py-0.5 bg-anibox-accent/80 hover:bg-anibox-accent text-white rounded shrink-0"
-                  >
-                    下载
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
+          <OnlineSearchPanel
+            results={onlineSearchResults}
+            isSearching={isSearchingOnline}
+            onSearch={onOnlineSearch}
+            onToggle={onToggleOnlineSearch}
+            onDownload={onOnlineSubDownload}
+          />
         )}
 
         {/* 字幕样式设置面板 */}
         {showSubtitleSettings && subtitleStyle && onSubtitleStyleChange && (
-          <div
-            className="absolute bottom-16 right-4 w-64 bg-anibox-overlay border border-neutral-700 rounded-lg shadow-xl z-50"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between px-3 py-2 border-b border-neutral-700">
-              <span className="text-xs font-medium text-white">字幕样式</span>
-              <button
-                onClick={() => onToggleSubtitleSettings?.()}
-                className="text-white/40 hover:text-white"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="px-3 py-2 space-y-2 text-xs">
-              {/* 字体大小 */}
-              <div className="flex items-center justify-between">
-                <span className="text-neutral-400">字体大小</span>
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() =>
-                      onSubtitleStyleChange({ fontSize: Math.max(14, subtitleStyle.fontSize - 2) })
-                    }
-                    className="w-5 h-5 bg-white/10 hover:bg-white/20 rounded text-white/60 text-xs"
-                  >
-                    −
-                  </button>
-                  <span className="text-white w-8 text-center">{subtitleStyle.fontSize}</span>
-                  <button
-                    onClick={() =>
-                      onSubtitleStyleChange({ fontSize: Math.min(48, subtitleStyle.fontSize + 2) })
-                    }
-                    className="w-5 h-5 bg-white/10 hover:bg-white/20 rounded text-white/60 text-xs"
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-              {/* 副字幕字体大小 */}
-              <div className="flex items-center justify-between">
-                <span className="text-neutral-400">副字幕大小</span>
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() =>
-                      onSubtitleStyleChange({
-                        secondaryFontSize: Math.max(12, subtitleStyle.secondaryFontSize - 2),
-                      })
-                    }
-                    className="w-5 h-5 bg-white/10 hover:bg-white/20 rounded text-white/60 text-xs"
-                  >
-                    −
-                  </button>
-                  <span className="text-white w-8 text-center">
-                    {subtitleStyle.secondaryFontSize}
-                  </span>
-                  <button
-                    onClick={() =>
-                      onSubtitleStyleChange({
-                        secondaryFontSize: Math.min(40, subtitleStyle.secondaryFontSize + 2),
-                      })
-                    }
-                    className="w-5 h-5 bg-white/10 hover:bg-white/20 rounded text-white/60 text-xs"
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-              {/* 描边粗细 */}
-              <div className="flex items-center justify-between">
-                <span className="text-neutral-400">描边粗细</span>
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() =>
-                      onSubtitleStyleChange({
-                        strokeWidth: Math.max(0, subtitleStyle.strokeWidth - 1),
-                      })
-                    }
-                    className="w-5 h-5 bg-white/10 hover:bg-white/20 rounded text-white/60 text-xs"
-                  >
-                    −
-                  </button>
-                  <span className="text-white w-8 text-center">{subtitleStyle.strokeWidth}</span>
-                  <button
-                    onClick={() =>
-                      onSubtitleStyleChange({
-                        strokeWidth: Math.min(6, subtitleStyle.strokeWidth + 1),
-                      })
-                    }
-                    className="w-5 h-5 bg-white/10 hover:bg-white/20 rounded text-white/60 text-xs"
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-              {/* 位置 */}
-              <div className="flex items-center justify-between">
-                <span className="text-neutral-400">显示位置</span>
-                <select
-                  value={subtitleStyle.position}
-                  onChange={(e) =>
-                    onSubtitleStyleChange({ position: e.target.value as 'top' | 'bottom' })
-                  }
-                  className="bg-white/5 border border-neutral-600 rounded px-1.5 py-0.5 text-white text-xs focus:outline-none"
-                >
-                  <option value="bottom">底部</option>
-                  <option value="top">顶部</option>
-                </select>
-              </div>
-              {/* 文字颜色 */}
-              <div className="flex items-center justify-between">
-                <span className="text-neutral-400">文字颜色</span>
-                <input
-                  type="color"
-                  value={subtitleStyle.textColor}
-                  onChange={(e) => onSubtitleStyleChange({ textColor: e.target.value })}
-                  className="w-6 h-5 bg-transparent border border-neutral-600 rounded cursor-pointer"
-                />
-              </div>
-              {/* 背景不透明度 */}
-              <div className="flex items-center justify-between">
-                <span className="text-neutral-400">背景不透明度</span>
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  step="5"
-                  value={(() => {
-                    try {
-                      const m = subtitleStyle.bgColor.match(
-                        /rgba?\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*([\d.]+)\s*\)/,
-                      )
-                      return m ? Math.round(parseFloat(m[1]) * 100) : 50
-                    } catch {
-                      return 50
-                    }
-                  })()}
-                  onChange={(e) => {
-                    const alpha = parseInt(e.target.value) / 100
-                    onSubtitleStyleChange?.({ bgColor: `rgba(0,0,0,${alpha.toFixed(1)})` })
-                  }}
-                  className="w-20 h-3"
-                />
-              </div>
-            </div>
-          </div>
+          <SubtitleStylePanel
+            style={subtitleStyle}
+            onChange={onSubtitleStyleChange}
+            onClose={() => onToggleSubtitleSettings?.()}
+          />
         )}
 
         {/* 弹幕设置面板 */}
         {showDanmakuSettings && danmakuConfig && onDanmakuConfigChange && (
-          <div
-            className="absolute bottom-16 right-4 w-72 bg-anibox-overlay border border-neutral-700 rounded-lg shadow-xl z-50"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between px-3 py-2 border-b border-neutral-700">
-              <span className="text-xs font-medium text-white">
-                弹幕设置 ({danmakuCount ?? 0}条)
-              </span>
-              <button
-                onClick={() => onToggleDanmakuSettings?.()}
-                className="text-white/40 hover:text-white"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="px-3 py-2 space-y-2 text-xs max-h-80 overflow-y-auto">
-              <label className="flex items-center justify-between">
-                <span className="text-neutral-400">启用弹幕</span>
-                <input
-                  type="checkbox"
-                  checked={danmakuConfig.enabled}
-                  onChange={(e) => onDanmakuConfigChange({ enabled: e.target.checked })}
-                  className="accent-anibox-accent"
-                />
-              </label>
-              <div className="flex items-center justify-between">
-                <span className="text-neutral-400">密度</span>
-                <input
-                  type="range"
-                  min="0.2"
-                  max="2"
-                  step="0.1"
-                  value={danmakuConfig.density}
-                  onChange={(e) => onDanmakuConfigChange({ density: parseFloat(e.target.value) })}
-                  className="w-24 h-3"
-                />
-                <span className="text-white w-6 text-right">{danmakuConfig.density}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-neutral-400">速度</span>
-                <input
-                  type="range"
-                  min="0.5"
-                  max="2"
-                  step="0.1"
-                  value={danmakuConfig.speed}
-                  onChange={(e) => onDanmakuConfigChange({ speed: parseFloat(e.target.value) })}
-                  className="w-24 h-3"
-                />
-                <span className="text-white w-6 text-right">{danmakuConfig.speed}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-neutral-400">透明度</span>
-                <input
-                  type="range"
-                  min="0.1"
-                  max="1"
-                  step="0.05"
-                  value={danmakuConfig.opacity}
-                  onChange={(e) => onDanmakuConfigChange({ opacity: parseFloat(e.target.value) })}
-                  className="w-24 h-3"
-                />
-                <span className="text-white w-6 text-right">{danmakuConfig.opacity}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-neutral-400">字体缩放</span>
-                <input
-                  type="range"
-                  min="0.5"
-                  max="2"
-                  step="0.1"
-                  value={danmakuConfig.fontScale}
-                  onChange={(e) => onDanmakuConfigChange({ fontScale: parseFloat(e.target.value) })}
-                  className="w-24 h-3"
-                />
-                <span className="text-white w-6 text-right">{danmakuConfig.fontScale}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-neutral-400">时间偏移(ms)</span>
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() =>
-                      onDanmakuConfigChange({
-                        offsetMs: Math.max(-5000, (danmakuConfig.offsetMs ?? 0) - 200),
-                      })
-                    }
-                    className="w-5 h-5 bg-white/10 hover:bg-white/20 rounded text-white/60 text-xs"
-                  >
-                    −
-                  </button>
-                  <span className="text-white w-10 text-center">{danmakuConfig.offsetMs ?? 0}</span>
-                  <button
-                    onClick={() =>
-                      onDanmakuConfigChange({
-                        offsetMs: Math.min(5000, (danmakuConfig.offsetMs ?? 0) + 200),
-                      })
-                    }
-                    className="w-5 h-5 bg-white/10 hover:bg-white/20 rounded text-white/60 text-xs"
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-              <div className="border-t border-neutral-700 pt-1.5 flex gap-3">
-                <label className="flex items-center gap-1 text-neutral-400">
-                  <input
-                    type="checkbox"
-                    checked={danmakuConfig.showScroll}
-                    onChange={(e) => onDanmakuConfigChange({ showScroll: e.target.checked })}
-                    className="accent-anibox-accent"
-                  />
-                  滚动
-                </label>
-                <label className="flex items-center gap-1 text-neutral-400">
-                  <input
-                    type="checkbox"
-                    checked={danmakuConfig.showTop}
-                    onChange={(e) => onDanmakuConfigChange({ showTop: e.target.checked })}
-                    className="accent-anibox-accent"
-                  />
-                  顶部
-                </label>
-                <label className="flex items-center gap-1 text-neutral-400">
-                  <input
-                    type="checkbox"
-                    checked={danmakuConfig.showBottom}
-                    onChange={(e) => onDanmakuConfigChange({ showBottom: e.target.checked })}
-                    className="accent-anibox-accent"
-                  />
-                  底部
-                </label>
-              </div>
-              <div className="border-t border-neutral-700 pt-1.5 space-y-1.5">
-                <div className="text-[10px] text-neutral-500 uppercase">屏蔽过滤</div>
-                <input
-                  type="text"
-                  value={danmakuFilterText || ''}
-                  placeholder="屏蔽关键词（用|分隔）"
-                  onChange={(e) => onDanmakuFilterText?.(e.target.value)}
-                  className="w-full bg-white/5 border border-neutral-600 rounded px-2 py-1 text-[11px] text-white placeholder:text-white/25 focus:outline-none focus:border-anibox-accent"
-                />
-                <input
-                  type="text"
-                  value={danmakuFilterRegex || ''}
-                  placeholder="正则过滤"
-                  onChange={(e) => onDanmakuFilterRegex?.(e.target.value)}
-                  className="w-full bg-white/5 border border-neutral-600 rounded px-2 py-1 text-[11px] text-white placeholder:text-white/25 focus:outline-none focus:border-anibox-accent"
-                />
-              </div>
-              {onSendDanmaku && (
-                <div className="border-t border-neutral-700 pt-1.5">
-                  <div className="text-[10px] text-neutral-500 uppercase mb-1">发送弹幕</div>
-                  <div className="flex gap-1">
-                    <input
-                      type="color"
-                      value={danmakuColor}
-                      onChange={(e) => setDanmakuColor(e.target.value)}
-                      className="w-7 h-6 bg-transparent border border-neutral-600 rounded cursor-pointer shrink-0"
-                    />
-                    <select
-                      value={danmakuMode}
-                      onChange={(e) => setDanmakuMode(e.target.value)}
-                      className="bg-white/5 border border-neutral-600 rounded px-1 text-[11px] text-white shrink-0"
-                    >
-                      <option value="scroll">滚动</option>
-                      <option value="top">顶部</option>
-                      <option value="bottom">底部</option>
-                    </select>
-                    <input
-                      type="text"
-                      placeholder="说点什么..."
-                      value={danmakuText}
-                      onChange={(e) => setDanmakuText(e.target.value)}
-                      className="flex-1 bg-white/5 border border-neutral-600 rounded px-2 py-0.5 text-[11px] text-white placeholder:text-white/30 focus:outline-none focus:border-anibox-accent"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && danmakuText.trim()) {
-                          onSendDanmaku(danmakuText.trim(), danmakuColor, danmakuMode)
-                          setDanmakuText('')
-                        }
-                      }}
-                    />
-                    <button
-                      onClick={() => {
-                        if (danmakuText.trim()) {
-                          onSendDanmaku(danmakuText.trim(), danmakuColor, danmakuMode)
-                          setDanmakuText('')
-                        }
-                      }}
-                      className="text-[11px] px-2 bg-anibox-accent hover:bg-anibox-accent-hover text-white rounded shrink-0"
-                    >
-                      发送
-                    </button>
-                  </div>
-                </div>
-              )}
-              {onDanmakuExport && (danmakuCount ?? 0) > 0 && (
-                <button
-                  onClick={onDanmakuExport}
-                  className="w-full text-[11px] py-1 bg-white/5 hover:bg-white/10 border border-neutral-600 rounded text-neutral-300"
-                >
-                  导出弹幕文件 (.xml)
-                </button>
-              )}
-            </div>
-          </div>
+          <DanmakuSettingsPanel
+            config={danmakuConfig}
+            onConfigChange={onDanmakuConfigChange}
+            count={danmakuCount}
+            onClose={() => onToggleDanmakuSettings?.()}
+            filterText={danmakuFilterText}
+            onFilterText={onDanmakuFilterText}
+            filterRegex={danmakuFilterRegex}
+            onFilterRegex={onDanmakuFilterRegex}
+            onSend={onSendDanmaku}
+            onExport={onDanmakuExport}
+          />
         )}
 
         {/* 音轨选择 */}
-        {audioTracks && audioTracks.length > 1 && onAudioChange && (
+        {inBar('audioTrack') && audioTracks && audioTracks.length > 1 && onAudioChange && (
           <div className="relative" ref={audioMenuRef}>
             <button
               onClick={() => setShowAudioMenu(!showAudioMenu)}
@@ -1294,7 +801,7 @@ export default function Controls({
         )}
 
         {/* 画面比例 */}
-        {onAspectCycle && (
+        {inBar('aspect') && onAspectCycle && (
           <button
             onClick={onAspectCycle}
             className={`text-xs transition-colors px-1 py-0.5 rounded ${
@@ -1319,7 +826,7 @@ export default function Controls({
         )}
 
         {/* 截图 */}
-        {onScreenshot && (
+        {inBar('screenshot') && onScreenshot && (
           <button
             onClick={onScreenshot}
             className="text-white/60 hover:text-white transition-colors"
@@ -1340,7 +847,7 @@ export default function Controls({
         )}
 
         {/* 画中画 */}
-        {onPiP && (
+        {inBar('pip') && onPiP && (
           <button
             onClick={onPiP}
             className={`transition-colors ${isPiP ? 'text-anibox-accent' : 'text-white/60 hover:text-white'}`}
@@ -1370,7 +877,7 @@ export default function Controls({
         )}
 
         {/* 播放模式 */}
-        {onCyclePlayMode && playMode && (
+        {inBar('playMode') && onCyclePlayMode && playMode && (
           <button
             onClick={onCyclePlayMode}
             className={`text-xs transition-colors px-1 py-0.5 rounded ${
@@ -1441,7 +948,7 @@ export default function Controls({
         )}
 
         {/* 选集 */}
-        {hasEpisodeList && (episodes || onEpisodeList) && (
+        {inBar('episodes') && hasEpisodeList && (episodes || onEpisodeList) && (
           <button
             onClick={() => {
               if (episodes && episodes.length > 0) {
@@ -1472,7 +979,7 @@ export default function Controls({
         )}
 
         {/* 弹幕按钮 */}
-        {onDanmakuFetch && (
+        {inBar('danmakuFetch') && onDanmakuFetch && (
           <div className="relative">
             <button
               onClick={() => onDanmakuFetch?.()}
@@ -1506,7 +1013,7 @@ export default function Controls({
         )}
 
         {/* 弹幕设置入口 */}
-        {onDanmakuFetch && (danmakuCount ?? 0) > 0 && (
+        {inBar('danmakuSettings') && onDanmakuFetch && (danmakuCount ?? 0) > 0 && (
           <button
             onClick={() => onToggleDanmakuSettings?.()}
             className={`transition-colors ${showDanmakuSettings ? 'text-anibox-accent' : 'text-white/40 hover:text-white'}`}
@@ -1527,7 +1034,7 @@ export default function Controls({
         )}
 
         {/* 生词点查 */}
-        {onWordLookup && (
+        {inBar('wordLookup') && onWordLookup && (
           <button
             onClick={onWordLookup}
             className="text-white/50 hover:text-anibox-accent transition-colors"
@@ -1551,7 +1058,7 @@ export default function Controls({
         )}
 
         {/* Whisper 语音识别 */}
-        {onWhisperTranscribe && (
+        {inBar('whisper') && onWhisperTranscribe && (
           <button
             onClick={onWhisperTranscribe}
             className={`transition-colors ${isWhisperAvailable ? 'text-white/50 hover:text-anibox-accent' : 'text-white/20'}`}
@@ -1573,6 +1080,9 @@ export default function Controls({
           </button>
         )}
 
+        {/* 更多 ⋯（未放进栏内的可用按钮收在这里，溢出为空时自动隐藏） */}
+        <MoreMenu ctx={moreMenuCtx} />
+
         {/* 全屏切换 */}
         <button
           onClick={onToggleFullscreen}
@@ -1592,46 +1102,13 @@ export default function Controls({
       </div>
 
       {/* 选集浮层面板 */}
-      {showEpisodePanel && episodes && episodes.length > 0 && (
-        <div
-          className="absolute bottom-16 right-4 w-72 max-h-80 bg-anibox-overlay border border-neutral-700 rounded-lg shadow-xl z-50 flex flex-col"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="flex items-center justify-between px-3 py-2 border-b border-neutral-700 shrink-0">
-            <span className="text-xs font-medium text-white">选集</span>
-            <button
-              onClick={() => setShowEpisodePanel(false)}
-              className="text-white/40 hover:text-white"
-            >
-              ✕
-            </button>
-          </div>
-          <div className="flex-1 overflow-y-auto p-2">
-            <div className="grid grid-cols-5 gap-1.5">
-              {episodes.map((ep, i) => {
-                const isCurrent = i === currentEpIndex
-                return (
-                  <button
-                    key={ep.filePath}
-                    onClick={() => {
-                      onSelectEpisode?.(i)
-                      setShowEpisodePanel(false)
-                    }}
-                    className={`aspect-square rounded text-xs font-medium transition-colors flex items-center justify-center
-                      ${
-                        isCurrent
-                          ? 'bg-anibox-accent text-white'
-                          : 'bg-white/5 text-white/70 hover:bg-white/15 hover:text-white'
-                      }`}
-                    title={ep.fileName}
-                  >
-                    {ep.epNumber ?? i + 1}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        </div>
+      {showEpisodePanel && episodes && episodes.length > 0 && onSelectEpisode && (
+        <EpisodePanel
+          episodes={episodes}
+          currentEpIndex={currentEpIndex}
+          onSelect={onSelectEpisode}
+          onClose={() => setShowEpisodePanel(false)}
+        />
       )}
     </div>
   )

@@ -7,7 +7,7 @@ import { useState, useCallback, useEffect } from 'react'
 const SHORTCUTS = [
   { key: 'Space', desc: '播放 / 暂停' },
   { key: '← / →', desc: '快退 / 快进 5 秒' },
-  { key: '→ ×3', desc: '连按 3 次 → 跳过 90 秒（OP/ED）' },
+  { key: '→ ×3', desc: '连按 3 次 → 跳过 OP/ED（秒数见设置）' },
   { key: 'Shift + ←/→', desc: '逐帧后退 / 前进' },
   { key: 'Ctrl + ←/→', desc: '快退 / 快进 10 秒' },
   { key: '↑ / ↓', desc: '音量增减 5%' },

@@ -8,10 +8,13 @@ import type { SubtitleTrackInfo } from '../components/VideoDisplay'
 interface UsePlaybackOptions {
   filePath: string
   savedPosition: number
+  /** 元数据就绪后自动开始播放（连播/切集时由上层指定） */
+  autoPlay?: boolean
   folderPath?: string
   playMode?: string
   nextEpisodeTitle?: string
-  onNextEpisode?: () => void
+  /** auto = true 表示由「播放结束自动连播」触发（区别于手动点下一集） */
+  onNextEpisode?: (auto?: boolean) => void
   onFallback?: () => void
   onPositionChange: (position: number) => void
   onDurationChange: (duration: number) => void
@@ -26,6 +29,7 @@ export function usePlayback(opts: UsePlaybackOptions) {
   const {
     filePath,
     savedPosition,
+    autoPlay = false,
     folderPath,
     playMode,
     nextEpisodeTitle,
@@ -41,6 +45,8 @@ export function usePlayback(opts: UsePlaybackOptions) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const previewVideoRef = useRef<HTMLVideoElement>(null)
   const hasSeekedRef = useRef(false)
+  // 待消费的自动播放请求（连播/切集时由上层通过 autoPlay 传入）
+  const pendingAutoPlayRef = useRef(autoPlay)
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const errorFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
@@ -405,6 +411,12 @@ export function usePlayback(opts: UsePlaybackOptions) {
       }
       detectEmbeddedTracks()
       detectAudioTracks()
+      // 连播/切集自动续播：元数据就绪（已恢复上次进度）后立即开始播放，
+      // 避免新一集加载完停在暂停状态。被浏览器策略拒绝时静默，用户手动点一下即可
+      if (pendingAutoPlayRef.current) {
+        pendingAutoPlayRef.current = false
+        v.play().catch(() => {})
+      }
     }
 
     const onDuration = () => {
@@ -449,7 +461,8 @@ export function usePlayback(opts: UsePlaybackOptions) {
       const autoNext = opts.settingsRef?.current?.autoNextEp ?? true
       if (autoNext && onNextEpisode && nextEpisodeTitle) {
         showToast(`下一话: ${nextEpisodeTitle}`)
-        setTimeout(() => onNextEpisode(), 400)
+        // auto=true：上层据此让新一集自动开始播放（连播续播）
+        setTimeout(() => onNextEpisode(true), 400)
       }
     }
 

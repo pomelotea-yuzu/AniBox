@@ -2,7 +2,7 @@
  * Player — 视频播放器组件（已重构）
  * 将原有 1900+ 行拆分为 8 个独立 hooks
  */
-import { useRef, useCallback, useEffect, useMemo } from 'react'
+import { useRef, useCallback, useEffect, useMemo, useState } from 'react'
 import VideoDisplay, { type SubtitleTrackInfo, type VideoDisplayHandle } from './VideoDisplay'
 import Controls from './Controls'
 import SubtitleOverlay, { type SubtitleStyleConfig } from './SubtitleOverlay'
@@ -17,12 +17,18 @@ import { useEnhancement } from '../hooks/useEnhancement'
 import { useAudio } from '../hooks/useAudio'
 import { useDanmaku } from '../hooks/useDanmaku'
 import { usePlayerExtras } from '../hooks/usePlayerExtras'
+import { useVolumeIndicator } from '../hooks/useVolumeIndicator'
+import VolumeIndicator from './VolumeIndicator'
 
 interface PlayerProps {
   mediaUrl: string
   filePath: string
   folderPath?: string
   savedPosition: number
+  /** 自动开始播放（连播/切集时由上层指定；首集手动进入仍保持暂停） */
+  autoPlay?: boolean
+  /** 设置弹窗关闭时自增：触发重新拉取播放偏好（音量步进/跳过秒数等改动即时生效） */
+  settingsVersion?: number
   subtitleTracks?: SubtitleTrack[]
   playMode?: string
   nextEpisodeTitle?: string
@@ -47,6 +53,8 @@ export default function Player({
   filePath,
   folderPath,
   savedPosition,
+  autoPlay = false,
+  settingsVersion = 0,
   subtitleTracks,
   playMode,
   nextEpisodeTitle,
@@ -79,10 +87,24 @@ export default function Player({
   // OP/ED 默认开关使用；keydown handler 空依赖下经 ref 访问最新值
   const playbackSettingsRef = useRef<any>(null)
 
+  // OP/ED 三连按跳过的秒数（设置页「播放」tab，0-90，默认 90）
+  // state 用于 Controls 提示文案；ref 供空依赖的 keydown handler 读取最新值
+  const [skipSeconds, setSkipSeconds] = useState(90)
+  const skipSecondsRef = useRef(90)
+
+  // 单次音量调节幅度（设置页「播放」tab，1-10%，默认 5%）+ 中央圆形音量指示器
+  const [volumeStep, setVolumeStep] = useState(5)
+  const volumeStepRef = useRef(5)
+  const volIndicator = useVolumeIndicator()
+
+  // 控制栏按钮自定义（设置页「播放」tab）；undefined 时 Controls 用默认布局
+  const [controlsLayout, setControlsLayout] = useState<string[] | undefined>(undefined)
+
   // 核心播放
   const playback = usePlayback({
     filePath,
     savedPosition,
+    autoPlay,
     folderPath,
     playMode,
     nextEpisodeTitle,
@@ -96,11 +118,14 @@ export default function Player({
     settingsRef: playbackSettingsRef,
   })
 
-  // OP/ED 跳过（快捷键模式：连按 3 次 → 跳过 90 秒）
+  // OP/ED 跳过（快捷键模式：连按 3 次 → 跳过自定义秒数，默认 90）
   const skiptimes = useSkipTimes()
 
   // 全局播放偏好：挂载时异步拉取，供 usePlayback（默认音量/倍速/自动下一集）与
-  // OP/ED 默认开关使用；keydown handler 空依赖下经 ref 访问最新值
+  // OP/ED 默认开关使用；keydown handler 空依赖下经 ref 访问最新值。
+  // settingsVersion 变化（设置弹窗关闭）时重拉，让步进/秒数等改动即时生效；
+  // 但默认音量/倍速只在首次加载时应用，重拉不得覆盖用户播放中调过的音量/倍速
+  const settingsAppliedRef = useRef(false)
   useEffect(() => {
     let cancelled = false
     window.electronAPI
@@ -110,8 +135,26 @@ export default function Player({
         playbackSettingsRef.current = s
         // 默认开启 OP/ED 跳过（设置页「播放」tab）
         if (s.skipShortcutDefault) skiptimes.setSkipShortcutEnabled(true)
+        // OP/ED 跳过秒数（0-90）
+        if (typeof s.skipSeconds === 'number' && Number.isFinite(s.skipSeconds)) {
+          const v = Math.max(0, Math.min(90, Math.round(s.skipSeconds)))
+          skipSecondsRef.current = v
+          setSkipSeconds(v)
+        }
+        // 单次音量调节幅度（1-10%）
+        if (typeof s.volumeStep === 'number' && Number.isFinite(s.volumeStep)) {
+          const vs = Math.max(1, Math.min(10, Math.round(s.volumeStep)))
+          volumeStepRef.current = vs
+          setVolumeStep(vs)
+        }
+        // 控制栏按钮自定义
+        if (Array.isArray(s.controlsLayout)) {
+          setControlsLayout(s.controlsLayout.filter((k: unknown) => typeof k === 'string'))
+        }
         // 竞争兜底：若 loadedmetadata 早于设置返回触发（onMetaLoaded 已按 100%/1x 应用），
-        // 这里视频已就绪时再补一次默认音量/倍速
+        // 这里视频已就绪时再补一次默认音量/倍速（仅首次；重拉不覆盖当前值）
+        if (settingsAppliedRef.current) return
+        settingsAppliedRef.current = true
         const v = playback.videoRef.current
         if (v && v.readyState >= 1) {
           const vol = typeof s.defaultVolume === 'number' ? s.defaultVolume / 100 : 1
@@ -127,15 +170,16 @@ export default function Player({
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [skiptimes.setSkipShortcutEnabled])
+  }, [skiptimes.setSkipShortcutEnabled, settingsVersion])
 
   // keydown handler 空依赖，经 ref 访问最新开关
   const skipShortcutEnabledRef = useRef(skiptimes.skipShortcutEnabled)
   useEffect(() => {
     skipShortcutEnabledRef.current = skiptimes.skipShortcutEnabled
   }, [skiptimes.skipShortcutEnabled])
-  // 三连按右键时间戳（600ms 窗口）
+  // 三连按右键时间戳（600ms 窗口）+ 连按起点位置（用于按自定义秒数精确跳转）
   const rightPressesRef = useRef<number[]>([])
+  const rightAnchorRef = useRef<number | null>(null)
 
   // 字幕
   const subs = useSubtitles({ subtitleTracks, filePath, showToast })
@@ -349,16 +393,25 @@ export default function Player({
             break
           }
           {
-            // 三连按右键（600ms 窗口）= 总共跳过 90 秒（OP/ED 固定时长）。前两次按下已各快进 5 秒，
-            // 第三次补 +80，总位移恰为 5+5+80=90 秒；开关关闭时回退普通快进
+            // 三连按右键（600ms 窗口）= 跳到「连按起点 + 自定义秒数」处（默认 90 秒）。
+            // 前两次按下已各快进 5 秒，第三次直接按起点位置校准，保证总位移恰为 skipSeconds
             const now = Date.now()
             rightPressesRef.current = rightPressesRef.current.filter((t) => now - t < 600)
+            if (rightPressesRef.current.length === 0) rightAnchorRef.current = v.currentTime
             rightPressesRef.current.push(now)
             if (rightPressesRef.current.length >= 3) {
               rightPressesRef.current = []
+              const anchor = rightAnchorRef.current ?? v.currentTime
+              rightAnchorRef.current = null
               if (skipShortcutEnabledRef.current) {
-                v.currentTime = Math.min(v.duration || 0, v.currentTime + 80)
-                showToast('⏭ 已跳过 90 秒')
+                const secs = skipSecondsRef.current
+                const limit = Number.isFinite(v.duration) ? v.duration : Infinity
+                if (secs > 0) {
+                  v.currentTime = Math.max(0, Math.min(anchor + secs, limit))
+                  showToast(`⏭ 已跳过 ${secs} 秒`)
+                } else {
+                  showToast('⏭ 跳过秒数为 0，未跳转')
+                }
                 break
               }
             }
@@ -394,19 +447,30 @@ export default function Player({
           break
         case 'ArrowUp':
           e.preventDefault()
-          v.volume = Math.min(1, Math.round((v.volume + 0.05) * 20) / 20)
-          v.muted = false
-          playback.setIsMuted(false)
-          playback.setVolume(v.volume)
-          showToast(`🔊 ${Math.round(v.volume * 100)}%`)
+          {
+            // 以取整后的当前百分比为基础加步进，避免 0.35 这类浮点累加漂移
+            const stepPct = volumeStepRef.current
+            const curPct = Math.round(v.volume * 100)
+            const nextPct = Math.min(100, curPct + stepPct)
+            v.volume = nextPct / 100
+            v.muted = false
+            playback.setIsMuted(false)
+            playback.setVolume(v.volume)
+            volIndicator.show()
+          }
           break
         case 'ArrowDown':
           e.preventDefault()
-          v.volume = Math.max(0, Math.round((v.volume - 0.05) * 20) / 20)
-          v.muted = false
-          playback.setIsMuted(false)
-          playback.setVolume(v.volume)
-          showToast(`🔉 ${Math.round(v.volume * 100)}%`)
+          {
+            const stepPct = volumeStepRef.current
+            const curPct = Math.round(v.volume * 100)
+            const nextPct = Math.max(0, curPct - stepPct)
+            v.volume = nextPct / 100
+            v.muted = false
+            playback.setIsMuted(false)
+            playback.setVolume(v.volume)
+            volIndicator.show()
+          }
           break
         case 'f':
         case 'F':
@@ -633,7 +697,11 @@ export default function Player({
   // ============ 渲染 ============
 
   return (
-    <div className="relative w-full h-full bg-black">
+    <div
+      className={`relative w-full h-full bg-black ${
+        !playback.showControls && playback.isPlaying ? 'cursor-none' : ''
+      }`}
+    >
       {/* 视频加载指示器 */}
       {playback.isLoading && !playback.videoError && (
         <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-black gap-3">
@@ -724,7 +792,7 @@ export default function Player({
         {/* 预览用隐藏 canvas */}
         <canvas ref={extras.previewCanvasRef} className="hidden" />
 
-        {!playback.isPlaying && playback.currentTime > 0 && (
+        {!playback.isPlaying && playback.currentTime > 0 && !volIndicator.visible && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="w-16 h-16 rounded-full bg-white/10 backdrop-blur flex items-center justify-center">
               <svg width="28" height="28" viewBox="0 0 24 24" fill="white">
@@ -733,6 +801,13 @@ export default function Player({
             </div>
           </div>
         )}
+
+        {/* 音量调节中央指示器（上下键触发，1s 自动淡出） */}
+        <VolumeIndicator
+          volume={playback.volume * 100}
+          muted={playback.isMuted}
+          visible={volIndicator.visible}
+        />
 
         {nearEnd && (
           <div
@@ -882,8 +957,9 @@ export default function Player({
           onVolumeNormalizationToggle={() =>
             audio.handleVolumeNormalizationToggle(playback.videoRef.current)
           }
-          // OP/ED 跳过（快捷键模式）：合并开关按钮，开启后连按 3 次 → 跳过 90 秒
+          // OP/ED 跳过（快捷键模式）：合并开关按钮，开启后连按 3 次 → 跳过自定义秒数
           skipShortcutEnabled={skiptimes.skipShortcutEnabled}
+          skipSeconds={skipSeconds}
           onSkipShortcutToggle={skiptimes.toggleSkipShortcut}
           enhanceEnabled={enh.enhanceEnabled}
           enhancePreset={enh.enhancePreset}
@@ -952,6 +1028,7 @@ export default function Player({
           onDanmakuFilterText={danmaku.setDanmakuFilterText}
           danmakuFilterRegex={danmaku.danmakuFilterRegex}
           onDanmakuFilterRegex={danmaku.setDanmakuFilterRegex}
+          controlsLayout={controlsLayout}
         />
       </div>
 

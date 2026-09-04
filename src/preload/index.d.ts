@@ -169,6 +169,9 @@ export interface ElectronAPI {
     autoNextEp: boolean
     saveProgressInterval: number
     skipShortcutDefault: boolean
+    skipSeconds: number
+    volumeStep: number
+    controlsLayout: string[]
   }>
   setPlaybackSettings: (settings: {
     defaultVolume?: number
@@ -176,6 +179,9 @@ export interface ElectronAPI {
     autoNextEp?: boolean
     saveProgressInterval?: number
     skipShortcutDefault?: boolean
+    skipSeconds?: number
+    volumeStep?: number
+    controlsLayout?: string[]
   }) => Promise<void>
   // 局域网串流
   streamGetSettings: () => Promise<any>

@@ -23,12 +23,21 @@ export default function App() {
     filePath: string
     mediaUrl: string
     savedPosition: number
+    /** 连播/切集时是否自动开始播放（HTML5 侧生效，mpv 本身加载即播） */
+    autoPlay?: boolean
   } | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [mpvFallback, setMpvFallback] = useState(false)
   // 方案 A 播放后端：libmpv 内嵌（默认）→ 失败自动回退 legacy（mpv.exe 独立窗口）
   const [mpvBackend, setMpvBackend] = useState<'libmpv' | 'legacy'>('libmpv')
   const [showSettings, setShowSettings] = useState(false)
+  // 设置弹窗每次关闭后自增：播放器据此重新拉取播放偏好，
+  // 让「音量步进 / OP/ED 跳过秒数 / 默认开关」等改动对已挂载的播放器即时生效
+  const [settingsVersion, setSettingsVersion] = useState(0)
+  const closeSettings = useCallback(() => {
+    setShowSettings(false)
+    setSettingsVersion((v) => v + 1)
+  }, [])
   const [seriesMetadata, setSeriesMetadata] = useState<any>(null)
   const [playMode, setPlayMode] = useState<PlayMode>('sequential')
 
@@ -225,41 +234,47 @@ export default function App() {
     if (selectedSeries) setView('episodes')
   }, [selectedSeries])
 
-  const handleNextEpisode = useCallback(() => {
-    if (!selectedSeries) return
-    const eps = selectedSeries.episodes
-    let nextIdx: number
-    if (playMode === 'shuffle') {
-      const otherIdxs = eps.map((_, i) => i).filter((i) => i !== currentEpIndexRef.current)
-      if (otherIdxs.length === 0) {
-        nextIdx = currentEpIndexRef.current
-      } else {
-        nextIdx = otherIdxs[Math.floor(Math.random() * otherIdxs.length)]
-      }
-    } else {
-      nextIdx = currentEpIndexRef.current + 1
-      if (nextIdx >= eps.length) {
-        if (playMode === 'loop-all') {
-          nextIdx = 0
+  // auto=true 表示由「本集播完自动连播」触发，新一集需要自动开始播放；
+  // 手动点下一集时沿用当前播放状态（正在播就续播，暂停着就保持暂停）
+  const handleNextEpisode = useCallback(
+    (auto?: boolean) => {
+      if (!selectedSeries) return
+      const eps = selectedSeries.episodes
+      let nextIdx: number
+      if (playMode === 'shuffle') {
+        const otherIdxs = eps.map((_, i) => i).filter((i) => i !== currentEpIndexRef.current)
+        if (otherIdxs.length === 0) {
+          nextIdx = currentEpIndexRef.current
         } else {
-          setView('episodes')
-          return
+          nextIdx = otherIdxs[Math.floor(Math.random() * otherIdxs.length)]
+        }
+      } else {
+        nextIdx = currentEpIndexRef.current + 1
+        if (nextIdx >= eps.length) {
+          if (playMode === 'loop-all') {
+            nextIdx = 0
+          } else {
+            setView('episodes')
+            return
+          }
         }
       }
-    }
-    switchToEpisode(eps, nextIdx, selectedSeries.folderPath)
-  }, [selectedSeries, playMode])
+      const shouldAutoPlay = auto ?? playbackRef.current.isPlaying
+      switchToEpisode(eps, nextIdx, selectedSeries.folderPath, shouldAutoPlay)
+    },
+    [selectedSeries, playMode],
+  )
 
   const handlePrevEpisode = useCallback(() => {
     if (!selectedSeries) return
     const eps = selectedSeries.episodes
     const prevIdx = currentEpIndexRef.current - 1
     if (prevIdx < 0) return
-    switchToEpisode(eps, prevIdx, selectedSeries.folderPath)
+    switchToEpisode(eps, prevIdx, selectedSeries.folderPath, playbackRef.current.isPlaying)
   }, [selectedSeries])
 
   const switchToEpisode = useCallback(
-    async (eps: EpisodeInfo[], idx: number, folder?: string) => {
+    async (eps: EpisodeInfo[], idx: number, folder?: string, autoPlay = false) => {
       const ep = eps[idx]
       currentEpIndexRef.current = idx
       setMpvBackend('libmpv')
@@ -280,6 +295,7 @@ export default function App() {
         filePath: ep.filePath,
         mediaUrl: window.electronAPI.getMediaUrl(ep.filePath),
         savedPosition,
+        autoPlay,
       })
     },
     [resolveAudioSupport],
@@ -572,6 +588,8 @@ export default function App() {
                       filePath={currentVideo.filePath}
                       folderPath={selectedSeries?.folderPath}
                       savedPosition={currentVideo.savedPosition}
+                      autoPlay={currentVideo.autoPlay}
+                      settingsVersion={settingsVersion}
                       subtitleTracks={curEp?.subtitleTracks}
                       playMode={playMode}
                       nextEpisodeTitle={next?.fileName}
@@ -585,7 +603,12 @@ export default function App() {
                       currentEpIndex={selectedSeries ? currentEpIndexRef.current : -1}
                       onSelectEpisode={(idx) => {
                         if (selectedSeries) {
-                          switchToEpisode(selectedSeries.episodes, idx, selectedSeries.folderPath)
+                          switchToEpisode(
+                            selectedSeries.episodes,
+                            idx,
+                            selectedSeries.folderPath,
+                            playbackRef.current.isPlaying,
+                          )
                         }
                       }}
                       onOpenSettings={() => setShowSettings(true)}
@@ -605,6 +628,7 @@ export default function App() {
                     key={currentVideo.filePath}
                     filePath={currentVideo.filePath}
                     playMode={playMode}
+                    settingsVersion={settingsVersion}
                     prevEpisodeTitle={prev?.fileName}
                     nextEpisodeTitle={next?.fileName}
                     onPrevEpisode={prev ? handlePrevEpisode : undefined}
@@ -637,7 +661,7 @@ export default function App() {
           : null}
       </main>
 
-      <SettingsModal visible={showSettings} onClose={() => setShowSettings(false)} />
+      <SettingsModal visible={showSettings} onClose={closeSettings} />
     </div>
   )
 }

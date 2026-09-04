@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Controls from './Controls'
+import VolumeIndicator from './VolumeIndicator'
+import { useVolumeIndicator } from '../hooks/useVolumeIndicator'
 
 interface MpvTrack {
   id: number
@@ -15,6 +17,8 @@ interface MpvCanvasProps {
   onClose: () => void
   /** 播放模式：sequential / loop-one / loop-all / shuffle */
   playMode?: string
+  /** 设置弹窗关闭时自增：触发重新拉取播放偏好（音量步进/跳过秒数等改动即时生效） */
+  settingsVersion?: number
   /** 上一话标题（用于上一话按钮提示） */
   prevEpisodeTitle?: string
   /** 下一话标题（用于连播提示） */
@@ -40,6 +44,7 @@ export default function MpvCanvas({
   filePath,
   onClose,
   playMode,
+  settingsVersion = 0,
   onPrevEpisode,
   onNextEpisode,
   onFallbackToLegacy,
@@ -91,6 +96,16 @@ export default function MpvCanvas({
   const [skipShortcutEnabled, setSkipShortcutEnabled] = useState(false)
   // 全局播放偏好（设置页「播放」tab；默认音量/自动下一集/进度保存间隔）
   const playbackSettingsRef = useRef<any>(null)
+  // OP/ED 三连按跳过的秒数（设置页「播放」tab，0-90，默认 90）
+  // state 用于 Controls 提示文案；ref 供空依赖的 keydown handler 读取最新值
+  const [skipSeconds, setSkipSeconds] = useState(90)
+  const skipSecondsRef = useRef(90)
+  // 单次音量调节幅度（设置页「播放」tab，1-10%，默认 5%）+ 中央圆形音量指示器
+  const [volumeStep, setVolumeStep] = useState(5)
+  const volumeStepRef = useRef(5)
+  const volIndicator = useVolumeIndicator()
+  // 控制栏按钮自定义（设置页「播放」tab）；undefined 时 Controls 用默认布局
+  const [controlsLayout, setControlsLayout] = useState<string[] | undefined>(undefined)
 
   // 容器尺寸变化 / 帧尺寸变化时重算 canvas 显示尺寸（contain 等比放大）
   useEffect(() => {
@@ -253,8 +268,9 @@ export default function MpvCanvas({
   togglePauseRef.current = togglePause
   const handleCommandRef = useRef(handleCommand)
   handleCommandRef.current = handleCommand
-  // 三连按右键时间戳（600ms 窗口，跳过 90 秒用）
+  // 三连按右键时间戳（600ms 窗口）+ 连按起点位置（用于按自定义秒数精确跳转）
   const rightPressesRef = useRef<number[]>([])
+  const rightAnchorRef = useRef<number | null>(null)
   useEffect(() => {
     durationRef.current = duration
   }, [duration])
@@ -283,7 +299,10 @@ export default function MpvCanvas({
     handleCommand(['set_property', 'mute', next ? 'yes' : 'no'])
   }, [handleCommand])
 
-  // 应用全局播放偏好：默认音量（mpv volume）+ 默认开启 OP/ED 跳过
+  // 应用全局播放偏好：默认音量（mpv volume）+ 默认开启 OP/ED 跳过。
+  // settingsVersion 变化（设置弹窗关闭）时重拉，让步进/秒数等改动即时生效；
+  // 但默认音量只在首次加载时应用，重拉不得覆盖用户播放中调过的音量
+  const settingsAppliedRef = useRef(false)
   useEffect(() => {
     let cancelled = false
     window.electronAPI
@@ -292,6 +311,24 @@ export default function MpvCanvas({
         if (cancelled || !s) return
         playbackSettingsRef.current = s
         if (s.skipShortcutDefault) setSkipShortcutEnabled(true)
+        // OP/ED 跳过秒数（0-90）
+        if (typeof s.skipSeconds === 'number' && Number.isFinite(s.skipSeconds)) {
+          const v = Math.max(0, Math.min(90, Math.round(s.skipSeconds)))
+          skipSecondsRef.current = v
+          setSkipSeconds(v)
+        }
+        // 单次音量调节幅度（1-10%）
+        if (typeof s.volumeStep === 'number' && Number.isFinite(s.volumeStep)) {
+          const vs = Math.max(1, Math.min(10, Math.round(s.volumeStep)))
+          volumeStepRef.current = vs
+          setVolumeStep(vs)
+        }
+        // 控制栏按钮自定义
+        if (Array.isArray(s.controlsLayout)) {
+          setControlsLayout(s.controlsLayout.filter((k: unknown) => typeof k === 'string'))
+        }
+        if (settingsAppliedRef.current) return
+        settingsAppliedRef.current = true
         if (typeof s.defaultVolume === 'number' && s.defaultVolume >= 0) {
           setVolumeAll(s.defaultVolume)
         }
@@ -300,7 +337,7 @@ export default function MpvCanvas({
     return () => {
       cancelled = true
     }
-  }, [setVolumeAll])
+  }, [setVolumeAll, settingsVersion])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -337,16 +374,27 @@ export default function MpvCanvas({
           handleCommandRef.current(['seek', String(step), 'relative'])
           return
         }
-        // 三连按右键（600ms 窗口）= 总共跳过 90 秒（受 ⏭ 开关控制）。前两次按下已各快进 5 秒，
-        // 第三次补 +80，总位移恰为 5+5+80=90 秒；未连按时普通快进
+        // 三连按右键（600ms 窗口）= 跳到「连按起点 + 自定义秒数」处（默认 90 秒，受 ⏭ 开关控制）。
+        // 前两次按下已各快进 5 秒，第三次直接按起点位置校准，保证总位移恰为 skipSeconds
         const now = Date.now()
         rightPressesRef.current = rightPressesRef.current.filter((t) => now - t < 600)
+        if (rightPressesRef.current.length === 0) rightAnchorRef.current = timePosRef.current
         rightPressesRef.current.push(now)
         if (rightPressesRef.current.length >= 3) {
           rightPressesRef.current = []
+          const anchor = rightAnchorRef.current ?? timePosRef.current
+          rightAnchorRef.current = null
           if (skipShortcutEnabledRef.current) {
-            handleCommandRef.current(['seek', '80', 'relative'])
-            showToastMsg('⏭ 已跳过 90 秒')
+            const secs = skipSecondsRef.current
+            if (secs > 0) {
+              const limit = Number.isFinite(durationRef.current) ? durationRef.current : Infinity
+              const target = Math.max(0, Math.min(anchor + secs, limit))
+              // 绝对定位 seek：不受前两次 +5s 影响，总位移精确等于设定秒数
+              handleCommandRef.current(['seek', String(target), 'absolute'])
+              showToastMsg(`⏭ 已跳过 ${secs} 秒`)
+            } else {
+              showToastMsg('⏭ 跳过秒数为 0，未跳转')
+            }
             return
           }
         }
@@ -354,10 +402,12 @@ export default function MpvCanvas({
         handleCommandRef.current(['seek', String(step), 'relative'])
       } else if (k === 'ArrowUp') {
         e.preventDefault()
-        setVolumeAll(volumeRef.current + 5)
+        setVolumeAll(volumeRef.current + volumeStepRef.current)
+        volIndicator.show()
       } else if (k === 'ArrowDown') {
         e.preventDefault()
-        setVolumeAll(volumeRef.current - 5)
+        setVolumeAll(volumeRef.current - volumeStepRef.current)
+        volIndicator.show()
       } else if (k === 'f' || k === 'F') {
         e.preventDefault()
         window.electronAPI.toggleFullscreen()
@@ -846,7 +896,11 @@ export default function MpvCanvas({
   // OP/ED 快捷键跳过开关
   const toggleSkipShortcut = useCallback(() => {
     setSkipShortcutEnabled((prev) => {
-      showToastMsg(prev ? 'OP/ED 跳过已关闭' : 'OP/ED 跳过已开启（连按 3 次 → 跳过 90 秒）')
+      showToastMsg(
+        prev
+          ? 'OP/ED 跳过已关闭'
+          : `OP/ED 跳过已开启（连按 3 次 → 跳过 ${skipSecondsRef.current} 秒）`,
+      )
       return !prev
     })
   }, [showToastMsg])
@@ -906,6 +960,9 @@ export default function MpvCanvas({
         </div>
       )}
 
+      {/* 音量调节中央指示器（上下键触发，1s 自动淡出） */}
+      <VolumeIndicator volume={volume} muted={muted} visible={volIndicator.visible} />
+
       {/* 顶部信息（与底部控制条一起随 showControls 显隐，全屏鼠标静止时一并隐藏） */}
       <div
         className={`absolute top-0 left-0 right-0 flex items-center justify-between px-4 py-2 bg-gradient-to-b from-black/60 to-transparent transition-opacity duration-200 ${
@@ -944,6 +1001,7 @@ export default function MpvCanvas({
         playbackRate={playbackRate}
         isFullscreen={isFullscreen}
         visible={showControls}
+        controlsLayout={controlsLayout}
         subtitleTracks={controlsSubtitleTracks}
         selectedSubtitleIdx={selectedSubtitleIdx}
         selectedSecondarySubIdx={-1}
@@ -975,6 +1033,7 @@ export default function MpvCanvas({
         audioDelay={audioDelay}
         onAudioDelayChange={handleAudioDelayChange}
         skipShortcutEnabled={skipShortcutEnabled}
+        skipSeconds={skipSeconds}
         onSkipShortcutToggle={toggleSkipShortcut}
         onScreenshot={handleScreenshot}
         {...unavailableProps}
@@ -1003,7 +1062,7 @@ export default function MpvCanvas({
               {[
                 ['Space', '播放 / 暂停'],
                 ['← / →', '快退 / 快进 5 秒'],
-                ['→ ×3', '连按 3 次 → 跳过 90 秒（OP/ED）'],
+                ['→ ×3', `连按 3 次 → 跳过 ${skipSeconds} 秒（OP/ED）`],
                 ['Ctrl + ←/→', '快退 / 快进 10 秒'],
                 ['↑ / ↓', '音量增减 5%'],
                 ['F', '全屏切换'],

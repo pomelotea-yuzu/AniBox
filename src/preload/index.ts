@@ -291,6 +291,9 @@ const electronAPI = {
     autoNextEp: boolean
     saveProgressInterval: number
     skipShortcutDefault: boolean
+    skipSeconds: number
+    volumeStep: number
+    controlsLayout: string[]
   }> => ipcRenderer.invoke('settings:getPlayback'),
 
   setPlaybackSettings: (settings: {
@@ -299,6 +302,9 @@ const electronAPI = {
     autoNextEp?: boolean
     saveProgressInterval?: number
     skipShortcutDefault?: boolean
+    skipSeconds?: number
+    volumeStep?: number
+    controlsLayout?: string[]
   }): Promise<void> => ipcRenderer.invoke('settings:setPlayback', settings),
 
   // 局域网串流

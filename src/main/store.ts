@@ -113,7 +113,10 @@ interface StoreData {
     defaultSpeed: number // 默认倍速
     autoNextEp: boolean // 播放结束时自动播下一集
     saveProgressInterval: number // 进度保存间隔（秒）
-    skipShortcutDefault: boolean // 默认开启 OP/ED 跳过（连按 3 次 → 跳过 90 秒）
+    skipShortcutDefault: boolean // 默认开启 OP/ED 跳过（连按 3 次 → 跳过 skipSeconds 秒）
+    skipSeconds: number // OP/ED 跳过秒数（0-90，默认 90；0 = 不跳转）
+    volumeStep: number // 单次音量调节百分比（1-10，默认 5）
+    controlsLayout: string[] // 控制栏按钮自定义：显示在栏内的按钮 key，其余收进「更多 ⋯」菜单
   }
   /** 局域网串流（设置页「串流」tab） */
   streamSettings: {
@@ -152,6 +155,20 @@ let data: StoreData = {
     autoNextEp: true,
     saveProgressInterval: 5,
     skipShortcutDefault: false,
+    skipSeconds: 90,
+    volumeStep: 5,
+    controlsLayout: [
+      'prevEp',
+      'nextEp',
+      'episodes',
+      'speed',
+      'subtitle',
+      'audioTrack',
+      'danmakuToggle',
+      'aspect',
+      'screenshot',
+      'playMode',
+    ],
   },
   streamSettings: {
     enabled: false,
@@ -200,7 +217,12 @@ function ensureReady(): void {
       data.playlists = raw.playlists || []
       data.scanRoots = raw.scanRoots || []
       if (raw.playbackSettings) {
+        const defLayout = data.playbackSettings.controlsLayout
         data.playbackSettings = { ...data.playbackSettings, ...raw.playbackSettings }
+        // 存档里的 controlsLayout 损坏（非数组）时回退默认布局
+        if (!Array.isArray(data.playbackSettings.controlsLayout)) {
+          data.playbackSettings.controlsLayout = defLayout
+        }
       }
       if (raw.streamSettings) {
         data.streamSettings = { ...data.streamSettings, ...raw.streamSettings }
@@ -244,6 +266,20 @@ function ensureReady(): void {
         autoNextEp: true,
         saveProgressInterval: 5,
         skipShortcutDefault: false,
+        skipSeconds: 90,
+        volumeStep: 5,
+        controlsLayout: [
+          'prevEp',
+          'nextEp',
+          'episodes',
+          'speed',
+          'subtitle',
+          'audioTrack',
+          'danmakuToggle',
+          'aspect',
+          'screenshot',
+          'playMode',
+        ],
       },
       streamSettings: {
         enabled: false,
@@ -708,6 +744,9 @@ export interface PlaybackSettingsData {
   autoNextEp: boolean
   saveProgressInterval: number
   skipShortcutDefault: boolean
+  skipSeconds: number
+  volumeStep: number
+  controlsLayout: string[]
 }
 
 export function getPlaybackSettings(): PlaybackSettingsData {
@@ -717,7 +756,26 @@ export function getPlaybackSettings(): PlaybackSettingsData {
 
 export function setPlaybackSettings(settings: Partial<PlaybackSettingsData>): void {
   ensureReady()
-  data.playbackSettings = { ...data.playbackSettings, ...settings }
+  const next = { ...data.playbackSettings, ...settings }
+  // OP/ED 跳过秒数：限定 0-90，非数字时回退默认值 90
+  if (typeof next.skipSeconds !== 'number' || !Number.isFinite(next.skipSeconds)) {
+    next.skipSeconds = 90
+  } else {
+    next.skipSeconds = Math.max(0, Math.min(90, Math.round(next.skipSeconds)))
+  }
+  // 单次音量调节步进：限定 1-10，非数字时回退默认值 5
+  if (typeof next.volumeStep !== 'number' || !Number.isFinite(next.volumeStep)) {
+    next.volumeStep = 5
+  } else {
+    next.volumeStep = Math.max(1, Math.min(10, Math.round(next.volumeStep)))
+  }
+  // 控制栏布局：必须是字符串数组，否则保留原值
+  if (settings.controlsLayout !== undefined) {
+    next.controlsLayout = Array.isArray(settings.controlsLayout)
+      ? settings.controlsLayout.filter((k) => typeof k === 'string')
+      : data.playbackSettings.controlsLayout
+  }
+  data.playbackSettings = next
   save()
 }
 
