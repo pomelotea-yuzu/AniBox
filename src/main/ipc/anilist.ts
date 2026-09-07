@@ -8,6 +8,11 @@ import {
   validateBatchTitles,
   searchBangumiMeta,
 } from '../metadata-fetcher'
+import {
+  getIndexStatus,
+  checkIndexUpdate,
+  updateIndexFromRemote,
+} from '../bangumi-index'
 import { translateWithAI, getAIKey } from '../ai-translate'
 import { translateLocal } from '../anime-dict'
 import * as store from '../store'
@@ -62,6 +67,11 @@ export function registerAnilistIpc(getWin: () => BrowserWindow | null): void {
   ipcMain.handle('metadata:getAll', () => {
     return store.getAllMetadata()
   })
+
+  // 本地索引（Bangumi dump）：状态 / 检查更新 / 更新
+  ipcMain.handle('index:status', () => getIndexStatus())
+  ipcMain.handle('index:checkUpdate', () => checkIndexUpdate())
+  ipcMain.handle('index:update', () => updateIndexFromRemote())
 
   // AniList 标题校验
   ipcMain.handle(

@@ -6,6 +6,7 @@ import { RequestOptions } from 'http'
 import { VIDEO_EXTS, extractTitleFromFilename, extractRomajiFromFolder, levenshtein } from './utils'
 import { translateLocal, translateSynopsisLocal, translateStaffRoles } from './anime-dict'
 import { translateWithAI } from './ai-translate'
+import { lookupLocalMetadata } from './bangumi-index'
 
 const UA = 'AniBox/0.1 (https://github.com/anibox; local anime manager)'
 const TIMEOUT = 15000
@@ -475,6 +476,15 @@ async function fetchFullMetadata(
   folderPath: string,
   season?: number,
 ): Promise<AnimeMetadata | null> {
+  // ==== 本地索引优先（Bangumi dump 裁剪数据，零在线请求）====
+  // 命中则跳过 AniList/Bangumi 在线链路；简介已是中文，无需翻译
+  try {
+    const local = await lookupLocalMetadata(title, season)
+    if (local) return local
+  } catch (err: any) {
+    console.warn('[AniBox] 本地索引查询失败，回退在线链路:', err?.message || err)
+  }
+
   const queries = searchQueries(title)
   const romajiTitles = extractRomajiFromFolder(folderPath)
   if (romajiTitles.length > 0) queries.unshift(...romajiTitles)
