@@ -83,6 +83,28 @@ d('本地索引真实查表', () => {
     const m = await lookupLocalMetadata('zzzqqqxxxyyy不存在的番名qwertyuiop')
     expect(m).toBeNull()
   })
+
+  it('当前季度时间表（TV 过滤 + 星期分组 + rank 排序）', async () => {
+    const { buildLocalSeasonTimeline } = await import('./bangumi-index')
+    const tl = await buildLocalSeasonTimeline()
+    expect(tl).not.toBeNull()
+    expect(tl!.anime.length).toBeGreaterThan(10)
+    // 全部是 TV、全有放送日期、日期落在当前季度
+    const now = new Date()
+    const y = now.getFullYear()
+    const q = Math.floor(now.getMonth() / 3) * 3 + 1
+    const start = `${y}-${String(q).padStart(2, '0')}-01`
+    for (const a of tl!.anime) {
+      expect(a.format).toBe('TV')
+      expect(a.startDate).not.toBeNull()
+      const iso = `${a.startDate!.year}-${String(a.startDate!.month).padStart(2, '0')}-${String(a.startDate!.day).padStart(2, '0')}`
+      expect(iso >= start).toBe(true)
+      expect(a.descriptionZh.length).toBeGreaterThan(0) // 简介已带出
+    }
+    // 有星期分组的占多数（dump 放送星期字段）
+    const withDay = tl!.anime.filter((a) => a.weekday >= 0)
+    expect(withDay.length).toBeGreaterThan(tl!.anime.length / 2)
+  })
 })
 
 describe('yuc.wiki 封面（真实网络，失败不阻塞其他环境）', () => {

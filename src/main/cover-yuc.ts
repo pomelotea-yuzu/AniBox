@@ -78,7 +78,7 @@ export function parseYucSeason(html: string): YucEntry[] {
   return entries
 }
 
-async function fetchYucSeason(page: string): Promise<YucEntry[] | null> {
+export async function fetchYucSeason(page: string): Promise<YucEntry[] | null> {
   if (pageCache.has(page)) return pageCache.get(page)!
   try {
     const res = await fetch(`${YUC_BASE}/${page}/`, {
@@ -98,7 +98,7 @@ async function fetchYucSeason(page: string): Promise<YucEntry[] | null> {
 }
 
 /** 在季度条目里匹配标题/别名（精确 → 包含） */
-function matchYucEntry(entries: YucEntry[], titles: string[]): YucEntry | null {
+export function matchYucEntry(entries: YucEntry[], titles: string[]): YucEntry | null {
   const qs = [...new Set(titles.map((t) => normTitle(t)).filter((t) => t.length >= 2))]
   for (const q of qs) {
     for (const e of entries) {

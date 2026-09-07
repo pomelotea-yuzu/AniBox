@@ -12,7 +12,14 @@ import {
   getIndexStatus,
   checkIndexUpdate,
   updateIndexFromRemote,
+  buildLocalSeasonTimeline,
 } from '../bangumi-index'
+import {
+  seasonPageCandidates,
+  fetchYucSeason,
+  matchYucEntry,
+  type YucEntry,
+} from '../cover-yuc'
 import { translateWithAI, getAIKey } from '../ai-translate'
 import { translateLocal } from '../anime-dict'
 import * as store from '../store'
@@ -253,6 +260,45 @@ export function registerAnilistIpc(getWin: () => BrowserWindow | null): void {
       } catch (e: any) {
         console.log('[AniBox] 缓存读取失败:', e.message)
       }
+    }
+
+    // ==== 本地索引时间表（首选：零在线、全中文免翻译，yuc.wiki 补封面）====
+    try {
+      const local = await buildLocalSeasonTimeline()
+      if (local && local.anime.length) {
+        try {
+          const today = new Date()
+          const qDate = `${today.getFullYear()}-${String(Math.floor(today.getMonth() / 3) * 3 + 1).padStart(2, '0')}-01`
+          const yucEntries: YucEntry[] = []
+          for (const p of seasonPageCandidates(qDate)) {
+            const es = await fetchYucSeason(p)
+            if (es) yucEntries.push(...es)
+          }
+          for (const a of local.anime) {
+            const hit = matchYucEntry(yucEntries, [a.titleZh, a.title])
+            if (hit) {
+              a.cover = hit.coverUrl
+              a.coverExtra = hit.coverUrl
+            }
+          }
+        } catch (err: any) {
+          console.warn('[AniBox] 本地时间表 yuc 封面补充失败:', err?.message || err)
+        }
+        const payload = { season: local.season, anime: local.anime }
+        try {
+          writeFileSync(
+            cachePath,
+            JSON.stringify({ timestamp: Date.now(), data: payload }, null, 2),
+            'utf-8',
+          )
+        } catch {
+          /* ok */
+        }
+        console.log(`[AniBox] 本地时间表: ${local.season} ${local.anime.length} 部`)
+        return { ok: true, fromCache: false, ...payload }
+      }
+    } catch (err: any) {
+      console.warn('[AniBox] 本地时间表构建失败，回退在线链路:', err?.message || err)
     }
 
     try {

@@ -329,7 +329,7 @@ async function entryToMetadata(entry: IndexEntry): Promise<AnimeMetadata> {
     year: parseInt(entry.d?.slice(0, 4), 10) || 0,
     season: seasonLabelOf(entry.d),
     episodes,
-    studio: entry.b?.['动画制作公司'] || '',
+    studio: entry.b?.['动画制作公司'] || entry.b?.['动画制作'] || '',
     staff,
     coverUrl: '', // dump 无封面 → 由调用方 ffmpeg 本地抽帧兜底
     anilistId: 0,
@@ -421,6 +421,128 @@ export async function lookupLocalEntryRaw(
     }
   }
   return null
+}
+
+// ============================================================
+//  对外：新番时间表（本地索引按季度筛选，零在线/零翻译）
+// ============================================================
+
+const WEEKDAY_MAP: Record<string, number> = {
+  星期日: 0, 星期天: 0, 星期一: 1, 星期二: 2, 星期三: 3, 星期四: 4, 星期五: 5, 星期六: 6,
+  周日: 0, 周天: 0, 周一: 1, 周二: 2, 周三: 3, 周四: 4, 周五: 5, 周六: 6,
+}
+
+/** 与渲染端 SeasonCalendar 的 AnimeItem 形状一致（附加 weekday） */
+export interface SeasonTimelineItem {
+  id: number
+  title: string
+  titleRomaji: string
+  titleEnglish: string
+  titleZh: string
+  cover: string
+  coverExtra: string
+  bannerImage: string
+  description: string
+  descriptionZh: string
+  episodes: number | null
+  duration: number | null
+  score: number | null
+  popularity: number | null
+  genres: string[]
+  studios: string[]
+  startDate: { year: number; month: number; day: number } | null
+  endDate: { year: number; month: number; day: number } | null
+  season: string
+  seasonYear: number
+  format: string
+  status: string
+  nextAiring: null
+  weekday: number
+}
+
+function parseCnDate(s?: string): { year: number; month: number; day: number } | null {
+  if (!s) return null
+  const iso = s.match(/(\d{4})-(\d{2})-(\d{2})/)
+  if (iso) return { year: +iso[1], month: +iso[2], day: +iso[3] }
+  const cn = s.match(/(\d{4})年(\d{1,2})月(\d{1,2})日/)
+  if (cn) return { year: +cn[1], month: +cn[2], day: +cn[3] }
+  return null
+}
+
+function weekdayOf(entry: IndexEntry): number {
+  const v = entry.b?.['放送星期'] || ''
+  for (const k of Object.keys(WEEKDAY_MAP)) {
+    if (v.includes(k)) return WEEKDAY_MAP[k]
+  }
+  return -1
+}
+
+/**
+ * 当前季度新番（按放送日期筛选本地索引，TV 类型，rank 排序）。
+ * 标题/简介全中文，无需 AI 翻译；封面由调用方经 yuc.wiki 补充。
+ */
+export async function buildLocalSeasonTimeline(now = new Date()): Promise<{
+  season: string
+  anime: SeasonTimelineItem[]
+} | null> {
+  try {
+    if (!(await ensureLoaded())) return null
+  } catch {
+    return null
+  }
+  const entries = cachedEntries!
+  const y = now.getFullYear()
+  const m = now.getMonth() + 1
+  const se = m >= 4 && m <= 6 ? 'SPRING' : m >= 7 && m <= 9 ? 'SUMMER' : m >= 10 && m <= 12 ? 'FALL' : 'WINTER'
+  const qStartMonth = se === 'WINTER' ? 1 : se === 'SPRING' ? 4 : se === 'SUMMER' ? 7 : 10
+  const start = `${y}-${String(qStartMonth).padStart(2, '0')}-01`
+  const nm = qStartMonth + 3
+  const nextStart = `${nm > 12 ? y + 1 : y}-${String(nm > 12 ? nm - 12 : nm).padStart(2, '0')}-01`
+
+  const pool = entries.filter((e) => {
+    if (!e.d || e.d < start || e.d >= nextStart) return false
+    if (!e.m?.length || !e.m.includes('TV')) return false
+    return true
+  })
+  pool.sort((a, b) => {
+    const ra = a.r > 0 ? a.r : Number.MAX_SAFE_INTEGER
+    const rb = b.r > 0 ? b.r : Number.MAX_SAFE_INTEGER
+    if (ra !== rb) return ra - rb
+    return (b.s || 0) - (a.s || 0)
+  })
+
+  const summaries = await ensureSummaries()
+  const anime: SeasonTimelineItem[] = pool.slice(0, 70).map((e) => {
+    const studio = e.b?.['动画制作公司'] || e.b?.['动画制作'] || ''
+    const desc = summaries[String(e.i)] || ''
+    return {
+      id: e.i,
+      title: e.n || e.c || '',
+      titleRomaji: '',
+      titleEnglish: '',
+      titleZh: e.c || e.n || '',
+      cover: '',
+      coverExtra: '',
+      bannerImage: '',
+      description: desc,
+      descriptionZh: desc,
+      episodes: parseInt(String(e.e ?? ''), 10) || null,
+      duration: null,
+      score: e.s ? Math.round(e.s * 10) : null, // UI 约定 0-100（显示时 /10）
+      popularity: null,
+      genres: (e.t || []).filter((t) => t && !META_TAG_SET.has(t)).slice(0, 6),
+      studios: studio ? [studio] : [],
+      startDate: parseCnDate(e.d),
+      endDate: parseCnDate(e.b?.['播放结束']),
+      season: se,
+      seasonYear: y,
+      format: 'TV',
+      status: 'RELEASING',
+      nextAiring: null,
+      weekday: weekdayOf(e),
+    }
+  })
+  return { season: `${se} ${y}`, anime }
 }
 
 /** 索引状态（设置页/调试用） */

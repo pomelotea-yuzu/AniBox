@@ -35,6 +35,7 @@ interface AnimeItem {
   format: string
   status: string
   nextAiring: NextAiring | null
+  weekday?: number // 本地索引源：放送星期（0=周日）；AniList 缓存无此字段
 }
 
 const DAY_LABELS = ['日', '一', '二', '三', '四', '五', '六']
@@ -106,7 +107,8 @@ export default function SeasonCalendar({ onBack, onOpenSettings }: { onBack: () 
     }))
     const unplaced: AnimeItem[] = []
     for (const a of anime) {
-      if (a.nextAiring) { groups[getDayOfWeek(a.nextAiring.airingAt)].items.push(a) }
+      if (typeof a.weekday === 'number' && a.weekday >= 0) { groups[a.weekday].items.push(a) }
+      else if (a.nextAiring) { groups[getDayOfWeek(a.nextAiring.airingAt)].items.push(a) }
       else { unplaced.push(a) }
     }
     return { groups, unplaced }
@@ -346,7 +348,10 @@ function AnimeCard({ a, onClick }: { a: AnimeItem; onClick: () => void }) {
               <span className="text-[10px] text-anibox-text-muted/60">{formatAiringTime(a.nextAiring.airingAt)}</span>
             </>
           ) : (
-            <span className="text-[10px] text-anibox-text-muted/50">{a.episodes ? `${a.episodes}话` : '未定'}</span>
+            <span className="text-[10px] text-anibox-text-muted/50">
+              {typeof a.weekday === 'number' && a.weekday >= 0 && `周${DAY_LABELS[a.weekday]} · `}
+              {a.episodes ? `${a.episodes}话` : '未定'}
+            </span>
           )}
         </div>
         {a.nextAiring && a.nextAiring.timeUntilAiring > 0 && (
