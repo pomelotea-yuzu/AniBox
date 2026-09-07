@@ -122,12 +122,15 @@ export function matchYucEntry(entries: YucEntry[], titles: string[]): YucEntry |
       if (t && t === q) return e
     }
   }
-  // 2) 宽松包含（短串需 >=3 防「 love 」类误配）
+  // 2) 宽松包含（>=3 字随意；二字别名/简称要求紧窗口 ≤ q+2，防深位置误配）
   for (const q of qs) {
-    if (q.length < 3) continue
+    if (q.length < 2) continue
     for (const { e, t } of normed) {
       if (!t) continue
-      if (t.includes(q) || q.includes(t)) return e
+      if (t.includes(q) || q.includes(t)) {
+        if (q.length === 2 && t.length > q.length + 2) continue
+        return e
+      }
     }
   }
   // 3) Levenshtein 模糊（长度差剪枝，阈值收紧防误配）
