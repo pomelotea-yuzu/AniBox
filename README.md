@@ -1,10 +1,10 @@
 # AniBox
 
-本地番剧库管理器 + 播放器。扫描番剧目录自动生成海报墙，新番时间表追更，还能**搜索想要的番剧并一键下载 BT 资源**，点击即播。**局域网串流**让手机 / iPad 打开浏览器就能看电脑里的番剧。
+本地番剧库管理器 + 播放器。扫描番剧目录自动生成海报墙，新番时间表追更，内置番剧检索与资源索引，点击即播。**局域网串流**让手机 / iPad 打开浏览器就能看电脑里的番剧。
 
 ## 项目地址
 
-- **Gitee（国内镜像）**: https://gitee.com/yuzu-tea-duck/ani-box
+- **Gitee（国内仓库）**: https://gitee.com/yuzu-tea-duck/ani-box
 - **GitHub**: https://github.com/pomelotea-yuzu/AniBox
 - **Releases 下载**: https://gitee.com/yuzu-tea-duck/ani-box/releases · https://github.com/pomelotea-yuzu/AniBox/releases
 
@@ -13,8 +13,8 @@
 **普通用户（便携版）**
 1. 下载 `AniBox-x.y.z-portable-x64.zip`（见上方 Releases 页），解压后双击 `AniBox.exe`
    - **便携版数据随软件走**：缓存/配置/进度都存放在软件目录的 `data/` 文件夹，随整个文件夹拷贝迁移，C 盘零占用
-2. 首次使用点 **手动添加** 选择番剧目录（或直接「搜索番剧」在线找资源）
-3. 可选：在 **设置 → 下载** 配置 qBittorrent WebUI，解锁「一键下载 / 追番」
+2. 首次使用点 **手动添加** 选择番剧目录（或直接在「搜索番剧」页在线检索）
+3. 可选：在 **设置 → 下载** 配置下载客户端的 WebUI，解锁「一键下载 / 追番」
 4. **手机/iPad 看番**：**设置 → 串流** 勾选「启用局域网串流」→ 手机连同一 WiFi → 浏览器打开显示的地址（形如 `http://192.168.x.x:17830`）→ 输入访问口令 → 选番剧开看，无需安装 App
 
 **开发者**
@@ -55,14 +55,14 @@ pnpm package      # 打包
 - **在线搜索** — 输入番剧名（中/日/英文）搜索 AniList 番剧库，中文关键词自动经 Bangumi 转换为日文原名兜底
 - **卡片展示** — 封面/评分/集数/类型/状态卡片网格，附热门番剧快捷搜索建议
 - **详情弹窗** — 评分/制作公司/类型/播出时间/简介一站式展示
-- **一键下载** — 详情页「🔗 获取资源」复用 AnimeGarden 资源面板，复制磁力 / qBittorrent 下载 / RSS 追番，体验与新番时间表完全一致
+- **获取资源** — 详情页「🔗 获取资源」接入第三方番剧索引服务，复制资源链接 / 推送到下载客户端 / 订阅更新，体验与新番时间表完全一致
 
-### 资源获取与自动追番
-- **🔗 获取资源** — 时间表/搜索详情弹窗一键搜索 AnimeGarden（动漫花园聚合站）的 BT 资源
+### 资源检索与自动追番
+- **🔗 获取资源** — 时间表/搜索详情弹窗一键检索第三方公开番剧索引服务（AnimeGarden）
 - **字幕组筛选** — 内置 800+ 字幕组列表（GET /teams，1h 缓存），按名称输入过滤，选中后搜索/RSS/追番自动限定该字幕组
-- **资源列表** — 标题/大小/字幕组/类型/时间，支持复制磁力链接、一键发送到 qBittorrent 下载
-- **RSS 订阅** — 由 AniBox 本地代理生成（`127.0.0.1:5860`），按「番剧 + 字幕组」精确过滤，可复制链接或直接添加到 qBittorrent
-- **➕ 一键追番** — 自动创建 qBittorrent 下载规则：匹配即下载，支持：
+- **资源列表** — 标题/大小/字幕组/类型/时间，支持复制资源链接、一键推送到下载客户端
+- **RSS 订阅** — 由 AniBox 本地生成（`127.0.0.1:5860`），按「番剧 + 字幕组」精确过滤，可复制链接或直接添加到下载客户端
+- **➕ 一键追番** — 自动创建下载客户端的订阅规则：匹配即下载，支持：
   - **翻译版本过滤**（正则）：简体 / 繁体 / 简繁内嵌 / 简日 / 繁日
   - **每番独立保存目录** — 追番时指定或直接文件夹选择器挑选
   - **封面简介自动写入** — 追番成功后自动把该番封面与简介写入保存目录（`.anibox/cover.jpg` + `metadata.json`），番剧库刷新即显示
@@ -74,7 +74,7 @@ pnpm package      # 打包
 - **播放器 UI 对齐桌面主播放器** — 缓冲进度 + 已播填充、倍速菜单（9 档+自定义）、字幕多轨切换、选集面板、截图、画中画、画面比例、播放模式（顺序/单集循环/列表循环/随机）；控制条 3 秒无操作自动隐藏
 - **10bit HEVC 番剧专项** — 8bit HEVC 免转码秒开（hvc1 标记，iPad Safari 原生支持）；10bit HEVC 自动硬件加速转 8bit HEVC（NVENC → QSV → AMF，体积小画质佳）；智能决策（探测设备解码能力 + ffprobe 位深），无法实现的功能统一提示「串流模式下无法使用」
 - **整集缓存完再播放** — 无片段割裂、无卡壳；播放中**后台预转下一集**，切集秒开
-- **转码引擎零配置** — 自动检测 ffmpeg（应用目录 / PATH / userData），缺失时自动下载（BtbN / gyan.dev 镜像），也可手动放置
+- **转码引擎零配置** — 自动检测 ffmpeg（应用目录 / PATH / userData），缺失时自动下载（BtbN / gyan.dev 构建），也可手动放置
 - **产物缓存** — 转封装/转码结果缓存于 `userData/stream-cache`，同一集再次播放秒开；设置页「存储」可查看大小并一键清理
 - **进度双向同步** — 手机看到一半，电脑接着看
 - **外挂字幕** — srt / ass 自动转 VTT 显示（与视频同目录、文件名含集号）
@@ -159,7 +159,7 @@ AniBox → **设置 → 下载**：
 - **立即触发**：RSS 阅读器顶部 **"Update all"** 强制抓取并执行规则
 - **删除订阅**：RSS 阅读器里右键订阅 → 删除
 
-> ⚠️ **注意**：AnimeGarden 镜像站的服务端 RSS 过滤不可用（feed.xml filter 不生效），AniBox 通过**本地 RSS 代理**（`127.0.0.1:5860`）实时生成按「番剧 + 字幕组」过滤的订阅，因此**追番期间需保持 AniBox 运行**（qBittorrent 抓取时由 AniBox 实时提供数据）。
+> ⚠️ **注意**：AnimeGarden 服务端的 RSS 过滤不可用（feed.xml filter 不生效），AniBox 通过**本地 RSS 服务**（`127.0.0.1:5860`）实时生成按「番剧 + 字幕组」过滤的订阅，因此**追番期间需保持 AniBox 运行**（qBittorrent 抓取时由 AniBox 实时提供数据）。
 
 ---
 
@@ -257,12 +257,10 @@ pnpm package
 |---|---|---|
 | [AniList](https://anilist.co) | 新番时间表、元数据刮削、标题校验（GraphQL API） | https://anilist.co |
 | [Bangumi 番组计划](https://bgm.tv) | 元数据刮削（REST API） | https://bgm.tv |
-| [AnimeGarden](https://animes.garden) | BT 资源搜索与 RSS 订阅（开放 API），聚合自动漫花园/蜜柑计划/bangumi.moe | https://animes.garden |
-| [动漫花园](https://share.dmhy.org) | BT 资源数据源（经 AnimeGarden 聚合） | https://share.dmhy.org |
-| [蜜柑计划](https://mikanani.me) | BT 资源数据源（经 AnimeGarden 聚合） | https://mikanani.me |
+| [AnimeGarden](https://animes.garden) | 番剧资源索引与 RSS 订阅（开放 API） | https://animes.garden |
 | [DeepSeek](https://platform.deepseek.com) | 新番标题/简介 AI 翻译（日→中） | https://platform.deepseek.com |
 | [OpenSubtitles](https://opensubtitles.com) | 在线字幕搜索下载 | https://opensubtitles.com |
-| [Hugging Face](https://huggingface.co) | opus-mt 离线翻译模型（国内走 hf-mirror.com 镜像） | https://huggingface.co |
+| [Hugging Face](https://huggingface.co) | opus-mt 离线翻译模型（国内走 hf-mirror.com） | https://huggingface.co |
 | [whisper.cpp](https://github.com/ggerganov/whisper.cpp) | Whisper 离线语音识别 | https://github.com/ggerganov/whisper.cpp |
 | [mpv](https://mpv.io) | 播放器兜底引擎（libmpv 内嵌软渲染 + mpv.exe 回退） | https://mpv.io |
 | [FFmpeg](https://ffmpeg.org) | 局域网串流转封装/转码（静态构建：BtbN / gyan.dev） | https://ffmpeg.org |
