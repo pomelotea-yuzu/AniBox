@@ -6,7 +6,8 @@ import { RequestOptions } from 'http'
 import { VIDEO_EXTS, extractTitleFromFilename, extractRomajiFromFolder, levenshtein } from './utils'
 import { translateLocal, translateSynopsisLocal, translateStaffRoles } from './anime-dict'
 import { translateWithAI } from './ai-translate'
-import { lookupLocalMetadata } from './bangumi-index'
+import { lookupLocalMetadata, lookupLocalEntryRaw } from './bangumi-index'
+import { fetchYucCover } from './cover-yuc'
 
 const UA = 'AniBox/0.1 (https://github.com/anibox; local anime manager)'
 const TIMEOUT = 15000
@@ -594,6 +595,19 @@ export async function fetchMetadataForSeries(
       if (ok) coverPath = coverFile
     } else {
       coverPath = coverFile
+    }
+  }
+
+  // 本地索引无封面 URL → yuc.wiki 季度页封面（按放送日期定位 + 中文标题匹配）
+  if (!coverPath && metadata) {
+    try {
+      const raw = await lookupLocalEntryRaw(title, season)
+      if (raw?.date) {
+        const ok = await fetchYucCover(raw, join(aniboxDir, 'cover.jpg'), (s) => onStatus?.(s))
+        if (ok) coverPath = ok
+      }
+    } catch (err: any) {
+      console.warn('[AniBox] yuc.wiki 封面获取失败:', err?.message || err)
     }
   }
 

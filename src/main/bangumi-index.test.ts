@@ -5,8 +5,8 @@
  * 数据不存在时自动跳过（CI/无数据环境不挂）。
  */
 import { describe, it, expect, beforeAll } from 'vitest'
-import { existsSync } from 'fs'
-import { join } from 'path'
+import { existsSync, rmSync } from 'fs'
+import { join, dirname } from 'path'
 import {
   setIndexDir,
   lookupLocalMetadata,
@@ -83,4 +83,37 @@ d('本地索引真实查表', () => {
     const m = await lookupLocalMetadata('zzzqqqxxxyyy不存在的番名qwertyuiop')
     expect(m).toBeNull()
   })
+})
+
+describe('yuc.wiki 封面（真实网络，失败不阻塞其他环境）', () => {
+  it('季度页候选推算', async () => {
+    const { seasonPageCandidates } = await import('./cover-yuc')
+    expect(seasonPageCandidates('2023-09-29')).toEqual(['202307', '202310'])
+    expect(seasonPageCandidates('2022-10-08')).toEqual(['202210'])
+    expect(seasonPageCandidates('')).toEqual([])
+  })
+
+  it.skipIf(!HAS_DATA)('芙莉莲封面真实抓取（yuc 202310 页）', async () => {
+    const { lookupLocalEntryRaw } = await import('./bangumi-index')
+    const { fetchYucCover } = await import('./cover-yuc')
+    const { tmpdir } = await import('os')
+    const { randomUUID } = await import('crypto')
+
+    const raw = await lookupLocalEntryRaw('葬送的芙莉莲')
+    expect(raw?.date).toBe('2023-09-29')
+    expect(raw?.titleCn).toContain('芙莉莲')
+
+    const dest = join(tmpdir(), `anibox-yuc-${randomUUID().slice(0, 8)}`, 'cover.jpg')
+    const result = await fetchYucCover(raw!, dest)
+    try {
+      expect(result).toBe(dest)
+      expect(existsSync(dest)).toBe(true)
+    } finally {
+      try {
+        rmSync(dirname(dest), { recursive: true, force: true })
+      } catch {
+        /* tmp 清理失败无所谓 */
+      }
+    }
+  }, 30000)
 })

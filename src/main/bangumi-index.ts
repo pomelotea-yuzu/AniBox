@@ -374,6 +374,55 @@ export async function lookupLocalMetadata(
   return null
 }
 
+/** 本地索引原始条目信息（封面匹配用：中文名/别名/放送日期） */
+export interface LocalIndexHit {
+  bangumiId: number
+  titleCn: string
+  title: string
+  date: string
+  aliases: string[]
+}
+
+export async function lookupLocalEntryRaw(
+  title: string,
+  _season?: number,
+): Promise<LocalIndexHit | null> {
+  if (!title) return null
+  try {
+    if (!(await ensureLoaded())) return null
+  } catch (err: any) {
+    return null
+  }
+
+  const seasonNum = parseSeasonNum(title)
+  const stripped = stripSeasonSuffix(title)
+  const queries = [...new Set([stripped, title].filter((q) => q && q.trim()))]
+
+  for (const q of queries) {
+    const entry = matchEntry(q, seasonNum)
+    if (entry) {
+      const aliases: string[] = []
+      for (const aliasKey of ['别名', '其他名称']) {
+        const v = entry.b?.[aliasKey]
+        if (v && !v.startsWith('{')) {
+          for (const piece of v.split(/[、;；,，]/)) {
+            const trimmed = piece.trim()
+            if (trimmed) aliases.push(trimmed)
+          }
+        }
+      }
+      return {
+        bangumiId: entry.i,
+        titleCn: entry.c || '',
+        title: entry.n || '',
+        date: entry.d || '',
+        aliases,
+      }
+    }
+  }
+  return null
+}
+
 /** 索引状态（设置页/调试用） */
 export async function getIndexStatus(): Promise<{
   available: boolean

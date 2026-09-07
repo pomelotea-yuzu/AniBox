@@ -4,6 +4,8 @@ import { get, request } from 'https'
 import type { IncomingMessage } from 'http'
 import { RequestOptions } from 'http'
 import { VIDEO_EXTS, extractTitleFromFilename, extractRomajiFromFolder, levenshtein } from './utils'
+import { lookupLocalEntryRaw } from './bangumi-index'
+import { fetchYucCover } from './cover-yuc'
 
 const UA = 'AniBox/0.1 (https://github.com/anibox; local anime manager)'
 const TIMEOUT = 15000
@@ -368,6 +370,17 @@ export async function fetchCoverForSeries(
   if (existsSync(coverPath)) {
     onStatus?.('已有封面，跳过')
     return coverPath
+  }
+
+  // yuc.wiki 季度页封面优先（本地索引日期定位，零 API）
+  try {
+    const raw = await lookupLocalEntryRaw(title)
+    if (raw?.date) {
+      const ok = await fetchYucCover(raw, coverPath, onStatus)
+      if (ok) return ok
+    }
+  } catch {
+    /* 失败则走在线 providers 兜底 */
   }
 
   const queries = searchQueries(title)
