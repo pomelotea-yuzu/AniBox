@@ -5,16 +5,40 @@
  * 将 userData 重定向到 <软件目录>/data，实现「数据随软件走、C 盘零占用」。
  * 已安装版（无标志）保持 Electron 默认 userData（系统用户目录）。
  *
+ * 旧数据迁移：便携模式首次启动（data 目录为空）时，把系统默认 userData 里的
+ * 用户数据（store/索引/缓存文件/翻译模型等）搬运过来，跳过各类 Chromium 缓存；
+ * 迁移一次性完成，之后 data 目录非空即跳过。
+ *
  * 注意：
  * - 必须在 index.ts 的第一个 import 引入，确保 setPath 先于其他模块执行；
  * - 各模块的 userData 路径均已改为函数懒加载（如 store.storePath()），
  *   不依赖 import 顺序兜底。
  */
 import { app } from 'electron'
-import { existsSync, mkdirSync } from 'fs'
+import { existsSync, mkdirSync, readdirSync, cpSync } from 'fs'
 import { join, dirname } from 'path'
 
 const PORTABLE_FLAG = '.portable'
+
+/** 迁移时跳过的缓存/易变目录（Chromium 运行时产物，无保留价值） */
+const MIGRATION_SKIP = new Set([
+  'Cache',
+  'Code Cache',
+  'GPUCache',
+  'DawnGraphiteCache',
+  'DawnWebGPUCache',
+  'Crashpad',
+  'Dictionaries',
+  'Network',
+  'Session Storage',
+  'Shared Dictionary',
+  'WebStorage',
+  'blob_storage',
+  'logs',
+  'SingletonLock',
+  'SingletonCookie',
+  'SingletonPipe',
+])
 
 function detectPortableDataDir(): string | null {
   try {
@@ -29,15 +53,45 @@ function detectPortableDataDir(): string | null {
   return null
 }
 
+/** 首次便携启动：从系统默认 userData 搬运用户数据（一次性，导出便于测试） */
+export function migrateLegacyUserData(oldDir: string, newDir: string): number {
+  try {
+    if (!oldDir || oldDir === newDir || !existsSync(oldDir)) return 0
+    if (readdirSync(newDir).length > 0) return 0 // 已有数据，不迁移
+    let migrated = 0
+    for (const ent of readdirSync(oldDir, { withFileTypes: true })) {
+      if (MIGRATION_SKIP.has(ent.name)) continue
+      try {
+        cpSync(join(oldDir, ent.name), join(newDir, ent.name), { recursive: true })
+        migrated++
+      } catch {
+        /* 单项失败不阻塞其余迁移 */
+      }
+    }
+    console.log(`[AniBox] 便携首启: 已迁移旧数据 ${migrated} 项 ← ${oldDir}`)
+    return migrated
+  } catch (err) {
+    console.warn('[AniBox] 旧数据迁移失败（不影响启动）:', err)
+    return 0
+  }
+}
+
 try {
   const dataDir = detectPortableDataDir()
   if (dataDir) {
+    let legacyDir: string | null = null
+    try {
+      legacyDir = app.getPath('userData') // setPath 前记录系统默认路径
+    } catch {
+      /* ignore */
+    }
     app.setPath('userData', dataDir)
     try {
       mkdirSync(dataDir, { recursive: true })
     } catch {
       /* 目录创建失败不影响启动 */
     }
+    if (legacyDir) migrateLegacyUserData(legacyDir, dataDir)
     console.log('[AniBox] 便携模式: 数据目录 =', dataDir)
   }
 } catch {
