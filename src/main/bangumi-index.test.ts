@@ -72,9 +72,11 @@ d('本地索引真实查表', () => {
     expect(m!.titleCn).toContain('鬼灭')
   })
 
-  it('英文标题通常未命中（dump 无英文字段），安全返回 null 走在线兜底', async () => {
-    const m = await lookupLocalMetadata('Bocchi the Rock!')
-    expect(m).toBeNull()
+  it('romaji/英文别名命中（infobox 嵌套别名 → 平铺）', async () => {
+    const m1 = await lookupLocalMetadata('Sousou no Frieren')
+    expect(m1?.bangumiId).toBe(400602)
+    const m2 = await lookupLocalMetadata('Bocchi the Rock!')
+    expect(m2?.bangumiId).toBe(328609)
   })
 
   it('乱码标题安全返回 null', async () => {
