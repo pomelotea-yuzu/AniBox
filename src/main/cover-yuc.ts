@@ -98,29 +98,45 @@ export async function fetchYucSeason(page: string): Promise<YucEntry[] | null> {
   }
 }
 
-/** 在季度条目里匹配标题/别名（精确 → 包含 → Levenshtein 模糊） */
+/**
+ * 宽松归一化：在 normTitle 基础上抹掉季号/期号/Part/#话数段等非本质差异。
+ * 例：「无职转生 第三季 ～到了异世界～」与「无职转生第3期#1~2」都能归到「无职转生」体系。
+ */
+function looseNorm(s: string): string {
+  let t = normTitle(s)
+  t = t.replace(/第[0-9一二三四五六七八九十百]+[季期部]/g, '')
+  t = t.replace(/(part|season|cour)\d*/gi, '')
+  t = t.replace(/#\d+[^#]*$/g, '')
+  t = t.replace(/#?\d+~?\d*/g, '')
+  return t.trim()
+}
+
+/** 在季度条目里匹配标题/别名（宽松精确 → 宽松包含 → Levenshtein 模糊） */
 export function matchYucEntry(entries: YucEntry[], titles: string[]): YucEntry | null {
-  const qs = [...new Set(titles.map((t) => normTitle(t)).filter((t) => t.length >= 2))]
+  const qs = [...new Set(titles.map((t) => looseNorm(t)).filter((t) => t.length >= 2))]
+  const normed = entries.map((e) => ({ e, t: looseNorm(e.title) }))
+
+  // 1) 宽松精确
   for (const q of qs) {
-    for (const e of entries) {
-      if (normTitle(e.title) === q) return e
+    for (const { e, t } of normed) {
+      if (t && t === q) return e
     }
   }
+  // 2) 宽松包含（短串需 >=3 防「 love 」类误配）
   for (const q of qs) {
-    if (q.length < 4) continue
-    for (const e of entries) {
-      const t = normTitle(e.title)
+    if (q.length < 3) continue
+    for (const { e, t } of normed) {
+      if (!t) continue
       if (t.includes(q) || q.includes(t)) return e
     }
   }
-  // 模糊：标题变体（副标题措辞差异/季号写法差异），阈值收紧防误配
+  // 3) Levenshtein 模糊（长度差剪枝，阈值收紧防误配）
   let best: YucEntry | null = null
   let bestScore = Infinity
   for (const q of qs) {
     if (q.length < 4) continue
-    for (const e of entries) {
-      const t = normTitle(e.title)
-      if (Math.abs(t.length - q.length) > Math.max(t.length, q.length) * 0.45) continue
+    for (const { e, t } of normed) {
+      if (!t || Math.abs(t.length - q.length) > Math.max(t.length, q.length) * 0.5) continue
       const score = levenshtein(q, t) / Math.max(t.length, q.length)
       if (score < bestScore) {
         bestScore = score
@@ -128,7 +144,7 @@ export function matchYucEntry(entries: YucEntry[], titles: string[]): YucEntry |
       }
     }
   }
-  return best && bestScore < 0.32 ? best : null
+  return best && bestScore < 0.35 ? best : null
 }
 
 /**
