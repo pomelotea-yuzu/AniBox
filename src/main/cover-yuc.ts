@@ -10,6 +10,7 @@
 import { writeFileSync, mkdirSync, existsSync } from 'fs'
 import { dirname } from 'path'
 import { normTitle } from './bangumi-index'
+import { levenshtein } from './utils'
 import type { LocalIndexHit } from './bangumi-index'
 
 const YUC_BASE = 'http://yuc.wiki'
@@ -97,7 +98,7 @@ export async function fetchYucSeason(page: string): Promise<YucEntry[] | null> {
   }
 }
 
-/** 在季度条目里匹配标题/别名（精确 → 包含） */
+/** 在季度条目里匹配标题/别名（精确 → 包含 → Levenshtein 模糊） */
 export function matchYucEntry(entries: YucEntry[], titles: string[]): YucEntry | null {
   const qs = [...new Set(titles.map((t) => normTitle(t)).filter((t) => t.length >= 2))]
   for (const q of qs) {
@@ -112,7 +113,22 @@ export function matchYucEntry(entries: YucEntry[], titles: string[]): YucEntry |
       if (t.includes(q) || q.includes(t)) return e
     }
   }
-  return null
+  // 模糊：标题变体（副标题措辞差异/季号写法差异），阈值收紧防误配
+  let best: YucEntry | null = null
+  let bestScore = Infinity
+  for (const q of qs) {
+    if (q.length < 4) continue
+    for (const e of entries) {
+      const t = normTitle(e.title)
+      if (Math.abs(t.length - q.length) > Math.max(t.length, q.length) * 0.45) continue
+      const score = levenshtein(q, t) / Math.max(t.length, q.length)
+      if (score < bestScore) {
+        bestScore = score
+        best = e
+      }
+    }
+  }
+  return best && bestScore < 0.32 ? best : null
 }
 
 /**

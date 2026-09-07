@@ -275,7 +275,11 @@ export function registerAnilistIpc(getWin: () => BrowserWindow | null): void {
             if (es) yucEntries.push(...es)
           }
           for (const a of local.anime) {
-            const hit = matchYucEntry(yucEntries, [a.titleZh, a.title])
+            const hit = matchYucEntry(yucEntries, [
+              a.titleZh,
+              a.title,
+              ...(a.aliases || []),
+            ])
             if (hit) {
               a.cover = hit.coverUrl
               a.coverExtra = hit.coverUrl

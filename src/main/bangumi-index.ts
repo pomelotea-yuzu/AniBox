@@ -458,6 +458,7 @@ export interface SeasonTimelineItem {
   status: string
   nextAiring: null
   weekday: number
+  aliases: string[] // 仅封面匹配用，渲染端忽略
 }
 
 function parseCnDate(s?: string): { year: number; month: number; day: number } | null {
@@ -515,6 +516,16 @@ export async function buildLocalSeasonTimeline(now = new Date()): Promise<{
   const anime: SeasonTimelineItem[] = pool.slice(0, 70).map((e) => {
     const studio = e.b?.['动画制作公司'] || e.b?.['动画制作'] || ''
     const desc = summaries[String(e.i)] || ''
+    const aliases: string[] = []
+    for (const aliasKey of ['别名', '其他名称']) {
+      const v = e.b?.[aliasKey]
+      if (v && !v.startsWith('{')) {
+        for (const piece of v.split(/[、;；,，]/)) {
+          const trimmed = piece.trim()
+          if (trimmed) aliases.push(trimmed)
+        }
+      }
+    }
     return {
       id: e.i,
       title: e.n || e.c || '',
@@ -540,6 +551,7 @@ export async function buildLocalSeasonTimeline(now = new Date()): Promise<{
       status: 'RELEASING',
       nextAiring: null,
       weekday: weekdayOf(e),
+      aliases,
     }
   })
   return { season: `${se} ${y}`, anime }

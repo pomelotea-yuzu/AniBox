@@ -6,7 +6,7 @@ delete (process.env as any).ELECTRON_RUN_AS_NODE
 // 便携版数据重定向：必须在任何 userData 访问前执行（首个 import）
 import './bootstrap'
 
-import { app, BrowserWindow, protocol, Menu } from 'electron'
+import { app, BrowserWindow, protocol, Menu, session } from 'electron'
 import { join } from 'path'
 import * as store from './store'
 import { flushStore } from './store'
@@ -151,6 +151,22 @@ process.on('unhandledRejection', (reason: unknown) => {
 
 app.whenReady().then(async () => {
   Menu.setApplicationMenu(null)
+
+  // B 站 CDN（i0.hdslb.com）Referer 防盗链：渲染端 <img> 带应用来源 Referer 会 403，
+  // 统一剥掉 Referer/Origin（B 站 CDN 对无 Referer 请求放行）
+  try {
+    session.defaultSession.webRequest.onBeforeSendHeaders(
+      { urls: ['*://*.hdslb.com/*', '*://hdslb.com/*'] },
+      (details, callback) => {
+        const headers = { ...details.requestHeaders }
+        delete headers['Referer']
+        delete headers['Origin']
+        callback({ requestHeaders: headers })
+      },
+    )
+  } catch (err) {
+    console.warn('[AniBox] webRequest hook failed:', err)
+  }
 
   // GPU 信息日志（调试硬件加速状态）
   try {
