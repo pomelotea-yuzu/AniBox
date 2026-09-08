@@ -8,6 +8,10 @@ SRC = r"D:\AniBox\anibox\dist\win-unpacked"
 SRC_PORTABLE = r"D:\AniBox\AniBox-1.2.3-portable-x64"
 OUT = r"D:\AniBox\AniBox-1.2.3-portable-x64.zip"
 
+# 便携模式运行后会在软件目录生成 data\（媒体库/进度/索引/缓存），属用户数据，不入发布包
+EXCLUDE_DIRS = {"data"}
+
+
 def main():
     src = SRC_PORTABLE if os.path.isdir(SRC_PORTABLE) else SRC
     flag = os.path.join(src, ".portable")
@@ -19,6 +23,11 @@ def main():
     total_bytes = 0
     with zipfile.ZipFile(OUT, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
         for root, dirs, files in os.walk(src):
+            if os.path.abspath(root) == os.path.abspath(src):
+                for ex in EXCLUDE_DIRS:
+                    if ex in dirs:
+                        dirs.remove(ex)
+                        print("  排除用户数据目录: %s\\" % ex, flush=True)
             for f in files:
                 full = os.path.join(root, f)
                 rel = os.path.relpath(full, src)
