@@ -1,7 +1,7 @@
 // === AniList / Bangumi 元数据 IPC：详情、搜索、新番时间表、标题校验 ===
 import { ipcMain, app, type BrowserWindow } from 'electron'
 import { join } from 'path'
-import { readFileSync, writeFileSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync } from 'fs'
 import {
   fetchMetadataForSeries,
   fetchMetadataBatch,
@@ -18,12 +18,36 @@ import {
   seasonPageCandidates,
   fetchYucSeason,
   matchYucEntry,
+  ensureLocalCover,
+  aniboxCoverUrl,
+  prefetchYucImages,
   type YucEntry,
 } from '../cover-yuc'
 import { translateWithAI, getAIKey } from '../ai-translate'
 import { translateLocal } from '../anime-dict'
 import * as store from '../store'
 import { hashPath } from '../utils'
+
+const LOCAL_COVER_PREFIX = 'anibox://cover?path='
+
+/** 缓存里的封面指向本地文件，若文件已被清理则置空，避免界面出现裂图 */
+function sanitizeLocalCovers(anime: any[]): any[] {
+  if (!Array.isArray(anime)) return anime
+  for (const a of anime) {
+    const c = a?.cover
+    if (typeof c !== 'string' || !c.startsWith(LOCAL_COVER_PREFIX)) continue
+    try {
+      const p = decodeURIComponent(c.slice(LOCAL_COVER_PREFIX.length))
+      if (!existsSync(p)) {
+        a.cover = ''
+        a.coverExtra = ''
+      }
+    } catch {
+      /* URL 异常时保留原值 */
+    }
+  }
+  return anime
+}
 
 export function registerAnilistIpc(getWin: () => BrowserWindow | null): void {
   // 元数据
@@ -251,7 +275,12 @@ export function registerAnilistIpc(getWin: () => BrowserWindow | null): void {
         if (cache.data?.season && cache.data?.anime?.length) {
           if (cache.data.season === currentSeason) {
             console.log('[AniBox] 缓存命中，季度匹配，直接复用')
-            return { ok: true, fromCache: true, season: cache.data.season, anime: cache.data.anime }
+            return {
+              ok: true,
+              fromCache: true,
+              season: cache.data.season,
+              anime: sanitizeLocalCovers(cache.data.anime),
+            }
           }
           console.log(
             `[AniBox] 缓存季度(${cache.data.season})与当前(${currentSeason})不匹配，重新抓取`,
@@ -274,17 +303,50 @@ export function registerAnilistIpc(getWin: () => BrowserWindow | null): void {
             const es = await fetchYucSeason(p)
             if (es) yucEntries.push(...es)
           }
+          const hits: Array<{ anime: any; entry: YucEntry; localPath?: string }> = []
           for (const a of local.anime) {
-            const hit = matchYucEntry(yucEntries, [
-              a.titleZh,
-              a.title,
-              ...(a.aliases || []),
-            ])
-            if (hit) {
-              a.cover = hit.coverUrl
-              a.coverExtra = hit.coverUrl
-            }
+            const hit = matchYucEntry(yucEntries, [a.titleZh, a.title, ...(a.aliases || [])])
+            if (hit) hits.push({ anime: a, entry: hit })
           }
+
+          // 落盘优先：已缓存的直接复用，未缓存的并发下载（8s 超时后交后台继续）
+          const pending = hits
+          const fill = async (): Promise<void> => {
+            const CONC = 6
+            let i = 0
+            await Promise.all(
+              Array.from({ length: Math.min(CONC, pending.length) }, async () => {
+                while (i < pending.length) {
+                  const h = pending[i++]
+                  try {
+                    const p = await ensureLocalCover(h.entry)
+                    if (p) h.localPath = p
+                  } catch {
+                    /* 单张失败忽略 */
+                  }
+                }
+              }),
+            )
+          }
+          try {
+            await Promise.race([fill(), new Promise((r) => setTimeout(r, 8000))])
+          } catch {
+            /* 超时不影响时间表返回 */
+          }
+
+          for (const h of hits) {
+            const url = h.localPath ? aniboxCoverUrl(h.localPath) : h.entry.coverUrl
+            h.anime.cover = url
+            h.anime.coverExtra = url
+          }
+
+          // 未下完的后台补下载（下次刷新即为本地图）
+          const rest = hits.filter((h) => !h.localPath).map((h) => h.entry)
+          if (rest.length) prefetchYucImages(rest, { concurrency: 4 })
+
+          console.log(
+            `[AniBox] 时间表 yuc 封面: ${hits.length}/${local.anime.length} 匹配，${hits.length - rest.length} 张已本地化`,
+          )
         } catch (err: any) {
           console.warn('[AniBox] 本地时间表 yuc 封面补充失败:', err?.message || err)
         }

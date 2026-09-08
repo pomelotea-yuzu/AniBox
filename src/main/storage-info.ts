@@ -7,6 +7,7 @@
 import { app } from 'electron'
 import { promises as fsp } from 'fs'
 import { join, dirname } from 'path'
+import { resetYucMemoryCache } from './cover-yuc'
 
 export interface StorageItem {
   key: string
@@ -72,6 +73,12 @@ export async function getStorageInfo(): Promise<StorageInfo> {
     ['models', '本地翻译模型', 'opus-mt 日→中翻译模型', false],
     ['subtitle-cache', '在线字幕缓存', 'OpenSubtitles 下载的字幕', true],
     ['danmaku-cache', '弹幕缓存', '各番剧弹幕数据', true],
+    [
+      'yuc-covers',
+      '番剧封面缓存',
+      'yuc.wiki 季度封面的本地副本（离线/防防盗链用，清理后自动重建）',
+      true,
+    ],
   ]
   for (const [key, label, desc, clearable] of defs) {
     const p = join(ud, key)
@@ -102,7 +109,13 @@ export async function getStorageInfo(): Promise<StorageInfo> {
 }
 
 /** 清空某缓存目录内容（保留目录本身）。仅限白名单 key，避免误删 */
-const CLEARABLE_KEYS = new Set(['stream-cache', 'ffmpeg', 'subtitle-cache', 'danmaku-cache'])
+const CLEARABLE_KEYS = new Set([
+  'stream-cache',
+  'ffmpeg',
+  'subtitle-cache',
+  'danmaku-cache',
+  'yuc-covers',
+])
 
 export async function clearCacheDir(key: string): Promise<{ ok: boolean; message: string }> {
   if (!CLEARABLE_KEYS.has(key)) return { ok: false, message: '该目录不允许一键清理' }
@@ -110,6 +123,8 @@ export async function clearCacheDir(key: string): Promise<{ ok: boolean; message
   try {
     await fsp.rm(dir, { recursive: true, force: true })
     await fsp.mkdir(dir, { recursive: true })
+    // 封面缓存目录被删后，内存里的季度页条目仍指向已消失的图片，需重置
+    if (key === 'yuc-covers') resetYucMemoryCache()
     return { ok: true, message: '' }
   } catch (e) {
     return { ok: false, message: (e as Error).message }
