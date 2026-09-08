@@ -76,6 +76,42 @@ export function migrateLegacyUserData(oldDir: string, newDir: string): number {
   }
 }
 
+const INDEX_DIR_NAME = 'anibox-index'
+const INDEX_FILES = ['core.json.gz', 'summary.json.gz', 'version.json']
+
+/**
+ * 安装内置索引：发布包在 resources/anibox-index/ 预置一份 Bangumi 裁剪索引，
+ * userData 里缺失时自动装上（已有则不覆盖，交由设置页的索引更新负责）。
+ * 没有它新番时间表与元数据刮削只能回退在线源（AniList 已 403），直接不可用。
+ * @returns 复制的文件数
+ */
+export function ensureBundledIndex(userDataDir: string, resourcesDir?: string): number {
+  try {
+    if (!userDataDir) return 0
+    const dest = join(userDataDir, INDEX_DIR_NAME)
+    if (existsSync(join(dest, 'core.json.gz'))) return 0
+    const base = resourcesDir ?? process.resourcesPath ?? ''
+    if (!base) return 0
+    const src = join(base, INDEX_DIR_NAME)
+    if (!existsSync(join(src, 'core.json.gz'))) return 0
+    mkdirSync(dest, { recursive: true })
+    let n = 0
+    for (const f of INDEX_FILES) {
+      try {
+        cpSync(join(src, f), join(dest, f))
+        n++
+      } catch {
+        /* 单个文件失败不阻塞 */
+      }
+    }
+    console.log(`[AniBox] 内置索引已安装 ${n} 个文件 → ${dest}`)
+    return n
+  } catch (err) {
+    console.warn('[AniBox] 内置索引安装失败（不影响启动）:', err)
+    return 0
+  }
+}
+
 try {
   const dataDir = detectPortableDataDir()
   if (dataDir) {
@@ -93,6 +129,12 @@ try {
     }
     if (legacyDir) migrateLegacyUserData(legacyDir, dataDir)
     console.log('[AniBox] 便携模式: 数据目录 =', dataDir)
+  }
+  // 索引预置（便携版与安装版都需要，保证开箱即可用新番时间表）
+  try {
+    ensureBundledIndex(app.getPath('userData'))
+  } catch {
+    /* ignore */
   }
 } catch {
   /* ignore */

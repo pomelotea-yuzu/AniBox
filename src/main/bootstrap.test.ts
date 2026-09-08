@@ -6,7 +6,7 @@ import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import { randomUUID } from 'crypto'
-import { migrateLegacyUserData } from './bootstrap'
+import { migrateLegacyUserData, ensureBundledIndex } from './bootstrap'
 
 describe('便携首启旧数据迁移', () => {
   it('搬运用户数据、跳过缓存目录、二次调用不重复', () => {
@@ -41,5 +41,36 @@ describe('便携首启旧数据迁移', () => {
     expect(migrateLegacyUserData(join(base, 'nope'), base)).toBe(0)
     expect(migrateLegacyUserData(base, base)).toBe(0)
     rmSync(base, { recursive: true, force: true })
+  })
+})
+
+describe('内置索引安装', () => {
+  const base = join(tmpdir(), `anibox-idx-${randomUUID().slice(0, 8)}`)
+  const res = join(base, 'resources')
+  const ud = join(base, 'userData')
+
+  it('userData 无索引时从 resources 装上，已有则不覆盖', () => {
+    mkdirSync(join(res, 'anibox-index'), { recursive: true })
+    mkdirSync(ud, { recursive: true })
+    writeFileSync(join(res, 'anibox-index', 'core.json.gz'), 'core')
+    writeFileSync(join(res, 'anibox-index', 'summary.json.gz'), 'sum')
+    writeFileSync(join(res, 'anibox-index', 'version.json'), '{}')
+
+    expect(ensureBundledIndex(ud, res)).toBe(3)
+    expect(existsSync(join(ud, 'anibox-index', 'core.json.gz'))).toBe(true)
+
+    // 已存在 → 不覆盖（返回 0）
+    expect(ensureBundledIndex(ud, res)).toBe(0)
+
+    rmSync(base, { recursive: true, force: true })
+  })
+
+  it('resources 无内置索引 / 目录异常 → 返回 0 且不报错', () => {
+    const b2 = join(tmpdir(), `anibox-idx-${randomUUID().slice(0, 8)}`)
+    mkdirSync(join(b2, 'userData'), { recursive: true })
+    mkdirSync(join(b2, 'resources'), { recursive: true })
+    expect(ensureBundledIndex(join(b2, 'userData'), join(b2, 'resources'))).toBe(0)
+    expect(ensureBundledIndex('', join(b2, 'resources'))).toBe(0)
+    rmSync(b2, { recursive: true, force: true })
   })
 })
