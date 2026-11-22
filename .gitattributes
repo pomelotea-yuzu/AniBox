@@ -1,0 +1,57 @@
+# AniBox · 行尾与二进制属性
+#
+# 为什么强制 LF：Windows 上 core.autocrlf=true 会把工作区检出成 CRLF，
+# 于是 ESLint/Prettier 检查在别人机器上满屏误报，而仓库 blob 其实是好的
+# （本仓重整时就一直在刷 "LF will be replaced by CRLF" 警告）。
+#
+# 例外：Windows 脚本必须 CRLF —— cmd 与 cscript 对纯 LF 的 .bat/.vbs 支持不可靠，
+# 而这两个文件是用户双击启动的入口，出问题表现成"一闪而过"，最难查。
+
+* text=auto eol=lf
+
+# ── 源码与配置 ──
+*.ts    text eol=lf
+*.tsx   text eol=lf
+*.mts   text eol=lf
+*.js    text eol=lf
+*.cjs   text eol=lf
+*.mjs   text eol=lf
+*.json  text eol=lf
+*.css   text eol=lf
+*.html  text eol=lf
+*.md    text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.py    text eol=lf
+*.sh    text eol=lf
+.gitignore     text eol=lf
+.gitattributes text eol=lf
+.githooks/*    text eol=lf
+
+# ── Windows 脚本：CRLF ──
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+*.vbs   text eol=crlf
+*.ps1   text eol=crlf
+
+# ── 二进制：禁一切转换 ──
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.webp  binary
+*.ico   binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.zip   binary
+*.gz    binary
+*.tar   binary
+*.msi   binary
+*.exe   binary
+*.dll   binary
+*.node  binary
+
+# GitHub 语言统计里排除文档与生成物
+docs/**            linguist-documentation
+docs/reviews/**    linguist-documentation
