@@ -1,8 +1,16 @@
 # openspec/changes/ · 活动变更
 
 > 归属说明。这里放**正在进行**的 change，一个目录一个 change，动词开头的 kebab-case 命名。
-> 当前为空：下一个应立 `rebuild-repo-foundation`（仓库骨架与门禁的验收），
-> 产品向的电视模式 / RIFE / 采集串流按 [`docs/engineering/plans/2026-11-22-anibox-rebuild-proposal.md`](../../docs/engineering/plans/2026-11-22-anibox-rebuild-proposal.md) 的放行顺序逐条立。
+
+## 当前
+
+| change | 做什么 | 状态 |
+|---|---|---|
+| [`rebuild-repo-foundation/`](rebuild-repo-foundation/tasks.md) | 把 2026-11-22 的结构重整与门禁做成可验收的 tasks，补 `repo-foundation` 规格 | 任务清单已开，实机验收待做 |
+
+产品向的电视模式 / RIFE / 采集串流按
+[`docs/engineering/plans/2026-11-22-anibox-rebuild-proposal.md`](../../docs/engineering/plans/2026-11-22-anibox-rebuild-proposal.md)
+的放行顺序逐条立，不要跳到那三条之前。
 
 ## 结构
 
@@ -23,7 +31,7 @@ changes/
   （与 `check-i18n` 的 `--selftest` 同一思路——永不命中的规则表现为全绿，实际什么都没检查）。
 - 未执行项在 `tasks.md` 里如实写"未执行 + 原因（环境阻塞/需要人工/未排期）"，**不许勾完成**（I9）。
 - 实机截图默认留本地：`.gitignore` 已排除 `docs/reviews/**/*.png`；证据索引只留相对路径与判据描述。
-- 触碰播放引擎、渲染或打包路径的 change，必须在 design.md 里复述相关不变量（I1–I4、I8）。
+- 触碰播放引擎、渲染、数据根或打包路径的 change，必须在 design.md 里复述相关不变量（I1–I4、I7、I8）。
 
 ## 归档
 
