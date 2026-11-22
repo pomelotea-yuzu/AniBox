@@ -185,9 +185,11 @@ function getApi(dllPath: string): LibmpvApi {
 /**
  * 查找 libmpv-2.dll（与 getMpvPath 的布局策略一致）
  * 打包：resources/libmpv-2.dll（标准布局）→ 应用根目录（便携版布局）
- * 开发：项目根 libmpv-2.dll → libmpv 开发包目录
+ * 开发：package 根 libmpv-2.dll → 环境变量 ANIBOX_LIBMPV_DLL 指定的开发包位置
  */
-const DEV_DLL = 'D:/AniBox/mpv-dev-x86_64-20260811-git-f4d13e1c2c/libmpv-2.dll'
+const DEV_DLL =
+  process.env.ANIBOX_LIBMPV_DLL ??
+  'D:/AniBox-Archive/mpv-dev-x86_64-20260811-git-f4d13e1c2c/libmpv-2.dll'
 
 export function findLibmpvDll(): string | null {
   const candidates: string[] = []

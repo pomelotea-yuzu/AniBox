@@ -19,12 +19,18 @@
 
 **开发者**
 ```bash
-cd anibox
-pnpm install      # 原生依赖（electron/esbuild/koffi 等）构建已由 pnpm-workspace.yaml 放行
+cd apps/desktop
+pnpm install      # 原生依赖（electron/esbuild/koffi 等）构建已由同目录 pnpm-workspace.yaml 放行
 pnpm dev          # 开发模式
-pnpm typecheck    # 类型检查
-pnpm test         # 单元测试
-pnpm package      # 打包
+
+# 也可以在仓库根用同名委托脚本：pnpm dev / pnpm typecheck / pnpm build / pnpm package
+```
+
+仓库门禁（纯 node，不需要装依赖）：
+
+```bash
+node scripts/check-repo.mjs --all      # 洁净度 / 链接 / 双语登记 / 自测
+git config core.hooksPath .githooks    # 每个克隆做一次，之后 pre-commit 自动跑同一条链
 ```
 
 > 环境要求：Windows 10/11，Node.js ≥ 20（pnpm 11 要求）与 pnpm ≥ 11。
@@ -207,25 +213,41 @@ F:/收藏/
 ## 项目结构
 
 ```
-anibox/
-├─ src/main/       Electron 主进程：扫描、元数据/字幕/弹幕抓取、libmpv bridge、qBittorrent 联动、局域网串流（stream-server / video-probe / transcode）
-├─ src/preload/    预加载脚本（IPC 桥，contextBridge 暴露 window.electronAPI）
-├─ src/renderer/   React 渲染进程：海报墙、播放器（Player/MpvCanvas）、时间表、搜索、设置
-├─ resources/      应用图标等静态资源
-├─ scripts/        开发/打包辅助脚本（模型下载、便携版打包等）
-└─ pnpm-workspace.yaml   pnpm 11 构建白名单（原生依赖 allowBuilds）
+仓库根/
+├─ AGENTS.md       唯一接手入口：状态卡、必读顺序、洁净度红线
+├─ apps/desktop/   AniBox 应用本体
+│  ├─ src/main/       Electron 主进程：扫描、元数据/字幕/弹幕抓取、libmpv bridge、qBittorrent 联动、局域网串流（stream-server / video-probe / transcode）
+│  ├─ src/preload/    预加载脚本（IPC 桥，contextBridge 暴露 window.electronAPI）
+│  ├─ src/renderer/   React 渲染进程：海报墙、播放器（Player/MpvCanvas）、时间表、搜索、设置
+│  ├─ resources/      应用图标等静态资源
+│  └─ scripts/        模型下载、索引预置、便携版打包（子目录 archive/ 为历史发布脚本）
+├─ docs/          文档地图：指南 / 架构 / 开发流程 / 经验库 / 方案与调研
+├─ openspec/      规格与变更（config.yaml + specs/ + changes/）
+├─ scripts/       仓库门禁：check-repo / check-hygiene / check-i18n
+├─ packages/      可复用模块（当前为空，不预拆空包）
+└─ apps/desktop/pnpm-workspace.yaml   pnpm 11 构建白名单（allowBuilds），随 package 存放
 ```
+
+一次性产物只放 `artifacts/`（不入库）；`apps/desktop` 下的 `node_modules`、`out`、`dist`、
+`models`、`yuc-covers` 与 `*.exe`、`*.dll` 均不入库。
 
 ---
 
 ## 开发
 
+接手先读 [`AGENTS.md`](AGENTS.md)：状态卡、必读顺序与洁净度红线都在那里，本文不复述。
+应用本体在 [`apps/desktop/`](apps/desktop/README.md)；仓库根只放治理与门禁，不放应用依赖。
+Windows 是当前主平台。UI 放在 `apps/desktop/src/renderer/`，文件系统、媒体处理与原生依赖留在 `apps/desktop/src/main/`，跨进程接口由 `apps/desktop/src/preload/` 暴露。
+
+小改动直接实现并检查；涉及播放器、串流、打包或跨平台的改动，先写清方案、验收条件和回退方式，再分步实施。
+自动检查与 Windows 实机验收分别记录，未执行的步骤不计为通过。
+
 ```bash
 # 依赖：Node.js >= 20（pnpm 11 要求）、pnpm >= 11
 # 原生依赖（electron/esbuild/koffi/onnxruntime-node/sharp）的构建脚本已通过
-# pnpm-workspace.yaml 的 allowBuilds 放行，首次 pnpm install 会自动下载/编译（需联网）
+# apps/desktop/pnpm-workspace.yaml 的 allowBuilds 放行，首次 pnpm install 会自动下载/编译（需联网）
 
-cd anibox
+cd apps/desktop
 pnpm install
 
 # 预下载翻译模型（可选，否则首次获取番剧信息时自动下载）
@@ -234,17 +256,18 @@ node scripts/download-model.mjs
 # 开发
 pnpm dev
 
-# 类型检查
-pnpm typecheck
+# 按序运行类型检查、lint 与单元测试，第一项失败时停止
+npm run check
 
-# 单元测试
-pnpm test
+# 单项排查：npm run typecheck / npm run lint / npm test
 
-# 打包
+# Windows NSIS 安装包（与便携 ZIP 是两条路径）
 pnpm package
 ```
 
-> 提示：`AniBox.bat`（开发模式）与 `AniBox-prod.bat`（生产模式）可直接双击启动。
+> 聚合检查与发布验收是两回事。若现有 lint 问题阻断了聚合命令，仍可单独运行 `npm test`，分别记录结果；不要跳过 lint 并将其记为通过。
+>
+> 提示：`apps/desktop/AniBox.bat`（开发模式）与 `AniBox-prod.bat`（生产模式）可直接双击启动。
 > qBittorrent 联动需在「设置 → 下载」中配置 WebUI（默认端口 8080）；RSS 追番时 AniBox 需保持运行。
 
 ---
@@ -269,4 +292,4 @@ pnpm package
 
 ---
 
-*最后更新: 2026-08-24（v1.2.1）*
+*最后更新: 2026-11-22（仓库重整：Layress 治理骨架 + `apps/desktop`）*

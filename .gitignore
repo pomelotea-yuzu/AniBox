@@ -1,41 +1,91 @@
-﻿node_modules/
+﻿# AniBox · 入库排除清单
+#
+# 口径（与 AGENTS.md §五 一致，改这里必须同步改那里）：
+#   1. 本文件是**兜底**，不是唯一防线。真正的强制门禁是 `scripts/check-hygiene.mjs`
+#      （pre-commit + CI 双跑）：体积、后缀、路径、密钥形态、忽略泄露五项全查。
+#   2. 每一段都写明「这是什么」和「有价值的东西该去哪」。
+#      凡是"随手一放"的目录最后都会变成垃圾场，本仓只认 `artifacts/` 一个一次性产物垃圾场。
+#   3. 确需入库的二进制/大文件：先放进正确位置，再在 `.git-hygiene-allowlist` 登记
+#      「glob + 一句话理由」，最后 `git add -f`。没有理由行的豁免 = 门禁失败。
+
+# ── 依赖与构建产物 ──────────────────────────────────────────────
+# 桌面端的构建产物跟着 package 走（apps/desktop/out、dist），不入库。
+node_modules/
 out/
-out.bak/
 dist/
-models/
+build/
+release/
+release-*/
+*.tsbuildinfo
+.pnpm-store/
+stage*/
+
+# ── 运行时依赖的二进制与大模型 ──────────────────────────────────
+# mpv.exe / libmpv-2.dll / ffmpeg.exe / d3dcompiler 等随包分发，仓库只留下载与打包脚本。
+# 模型文件（models/）由 scripts/download-model.mjs 拉取，体积远超仓库上限。
 *.exe
 *.dll
+*.node
+*.pdb
+*.lib
+*.msi
 *.7z
-*.zip
-.DS_Store
-Thumbs.db
-*.log
-electron-stdout.txt
-test-output.txt
-test-store.json
-scan-test-result.txt
-ok.txt
-electron.vite.config.*.mjs
-scripts/ffmpeg-temp.zip
-mpv-*/
-test-gpu.js
-F*
-# ASAR 打包/验证临时文件
-_asar_stage/
-_stage_v2/
-stage*/
-_check_asar.js
-_verify_asar.js
-_test_mpv_tracks.js
-test-out.asar
-anibox-dev.log
-_app*.asar
+*.rar
+*.iso
+models/
+whisper/
+anibox-index/
 
-# 封面缓存（非 Electron 环境下回落到 cwd 的本地副本）
+# ── 运行时缓存（dev 回退路径写在 process.cwd() 下）──────────────
+# 封面缓存在打包版走 userData；dev 下回落到 apps/desktop 的本地副本。
 yuc-covers/
 
-# 旧便携包目录与构建产物（不入库；正式归档在 ../AniBox-Archive）
-AniBox-*-portable-x64/
+# ── 一次性产物垃圾场（可重跑生成，默认不入库）──────────────────
+# 规矩：这里只放**脚本重新生成即可复原**的东西（stage 目录、探针输出、录屏、截图）。
+# 手写结论、方案、审阅记录一律直接写进 docs/，不要先落 artifacts/ 再说。
+artifacts/
+output/
+.tmp/
+.tmp-*/
+*.log
+*.bak
+test-*.json
+test-*.txt
+ok.txt
+scan-test-result.txt
+electron-stdout.txt
+_asar_stage/
+_stage_v2/
+_app*.asar
 
-# WorkBuddy 项目数据（工作区记忆等），不随仓库分发
+# ── 编辑器 / 智能体的本机配置与本机记忆 ────────────────────────
+# 各工具自行生成、可随时重建，且含机器特定绝对路径 ⇒ 不入库。
+# 本仓的**跨工具共享记忆**不在这里，在 AGENTS.md + docs/knowledge/（入库）。
+# 若你用的智能体只认 CLAUDE.md / .cursorrules，让它指向 AGENTS.md，不要另起一份内容。
 .workbuddy/
+.trae/
+.cursor/
+.claude/
+.vscode/
+.idea/
+.qoder/
+CLAUDE.md
+
+# ── 本机接入配置（含绝对路径与可能的凭据，永不入库）────────────
+.env
+.env.*
+!.env.example
+/.mcp.json
+hosts
+
+# ── 操作系统噪声 ───────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── 文档过程资产（有价值的必须先归档再排除）────────────────────
+# 草稿 = 个人工作过程，不外露。有效结论写进 docs/product、docs/engineering 或 docs/knowledge。
+docs/drafts/
+# 实机截图默认留本地；验收证据确需对外展示时按第 3 条口径 add -f。
+docs/reviews/**/*.png
+artifacts/**/*.png

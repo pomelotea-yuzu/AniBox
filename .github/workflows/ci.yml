@@ -1,0 +1,37 @@
+name: CI
+
+# 校验逻辑的唯一事实源是仓库脚本，本流水线只做"装 Node + 调用脚本"，不另写一套判据。
+# 与 pre-commit、.workflow/ci.yml 共用 scripts/check-repo.mjs 的门禁链。
+#
+# 产品检查（typecheck / lint / test）暂未进门禁：lint 有存量错误、测试在本机沙箱未跑通，
+# 见 docs/knowledge/debt.md。真实绿灯之后再在这里加 job，不要先加一个必红或永远跳过的步骤。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gates:
+    name: Repository gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Repository gates (hygiene / links / bilingual / selftests)
+        run: node scripts/check-repo.mjs --all

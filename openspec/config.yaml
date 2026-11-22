@@ -1,0 +1,53 @@
+schema: spec-driven
+
+context: |
+  项目：AniBox — 本地番剧库浏览器与播放器（Windows 优先、开箱即用、便携分发）
+
+  定位句：把本地视频目录扫成番剧库，用 libmpv 内嵌播放，元数据离线可查，不依赖在线服务也能用。
+  已知边界：扫库 ≠ 刮削 ≠ 播放 ≠ 转码，四条链路各自验收，不许用一条的现象给另一条顶包。
+
+  目标用户：把自己的番剧存在本地硬盘、想要"打开就能看、封面和信息都有"的 Windows 用户，中文用户为主。
+  分发：Gitee `yuzu-tea-duck/ani-box`（origin）+ GitHub `pomelotea-yuzu/AniBox`（github）；
+  便携 zip 手动打包；建仓、tag、Release 与 push 归用户，判 push 状态只认 git ls-remote。
+
+  仓库与远程：本地 D:\AniBox；分支 main；仓库根就是本目录，应用本体在 apps/desktop。
+
+  技术栈（以源码与依赖清单为准）：
+  - Electron 33 + React 19 + TypeScript strict（electron-vite 构建）
+  - 播放三引擎：HTML5 video → libmpv 内嵌（默认，koffi FFI + Render API + WebGL 纹理）→ mpv.exe 管道窗口；自动回退
+  - 元数据：本地 Bangumi 官方 dump 索引（apps/desktop/src/main/bangumi-index.ts）+ 在线回退
+  - 封面：yuc.wiki 季度页抓取 + 本地缓存（anibox://cover 本地协议）
+  - 数据：纯 JSON store（不用 better-sqlite3）
+  - 质量：TypeScript + ESLint + Vitest + OpenSpec；当前 ESLint 有存量错误、Vitest 未进 CI
+
+  关键不变量（所有 spec 必须遵守；细节与后果见 docs/knowledge/invariants.md）：
+  - I1 播放引擎回退链必须完整且可见：libmpv 起不来时自动降级 HTML5 或 mpv.exe 窗口，不静默黑屏
+  - I2 SW 渲染下禁止 mpv_command(cycle/stop)，一切播放控制走 setProperty 适配层（会原生崩溃）
+  - I3 EOF 只认 keep-open=yes + 轮询 eof-reached；END_FILE 事件在 SW 下不触发
+  - I4 帧像素必须经 WebGL 纹理上屏（2D canvas 恒黑），shader 强制 alpha=1
+  - I5 元数据以本地 dump 索引优先，在线链路仅作回退；网络全灭不得阻塞播放与扫库
+  - I6 封面只走本地缓存 + anibox://cover；禁止让渲染层直连 i0.hdslb.com（Referer 防盗链）
+  - I7 便携优先：业务数据跟随产品目录；当前 JSON store 走 userData 属未偿债，见 debt.md
+  - I8 打包路径必须显式：stage 目录、dist 与旧产物不得互相误取
+  - I9 机器 PASS ≠ 人工通过：画面、字幕、音轨、seek 类判定必须实机复核，未验证项单列
+  - I10 索引、模型与二进制不入库，仓库只留生成脚本与豁免登记
+  - I11 单一数据源：IPC 按域拆在 src/main/ipc/，控件与默认布局只在 controls/controlsData.ts 定义
+
+  存储与产物边界：
+  - 一次性产物只去 artifacts/（stage 目录、探针输出、录屏、截图），不入库
+  - 便携包业务数据落产品目录下 data/；拷走即迁移，删掉即无残留
+  - 仓库内一律相对路径 + posix 分隔符；绝对路径只出现在打包脚本的默认值与文档示例里
+
+  已跳过/不在本轮范围：24→60 插帧；Mac 正式发行；独立电视端 App；超分与插帧同时开。
+
+conventions:
+  language: 文档默认中文；对外门面按 i18n/docs-manifest.json 逐篇登记同轮维护 *.en.md；内部文档与经验库不翻译
+  naming:
+    specs: openspec/specs/<capability>/spec.md
+    changes: openspec/changes/<verb-led-kebab-name>/
+    archive: openspec/changes/archive/<YYYY-MM-DD>-<change-name>/
+    docs: docs/ 中作为当前依据的已批准方案用 english-kebab-case.md；探讨、调研、待批提案与当次记录用 YYYY-MM-DD-english-kebab-case.md；细则见 docs/README.md
+  evidence:
+    live-probes: 实机判据记在 change 的 evidence-index.md；截图默认留本地（docs/reviews/**/*.png 不入库）
+    honesty: 未执行项单列"未执行"，禁止把机器判据通过写成人工验收通过
+  authority: 源码 > changes/archive/ > specs/ > docs/ > AGENTS.md

@@ -1,3 +1,7 @@
+# 本文件放在 package 内（apps/desktop），pnpm 会把它所在目录当作单项目 workspace 根。
+# 注意：仓库根**没有** pnpm-workspace.yaml —— 现在是"单包 + 根委托脚本"，不是真正的 monorepo。
+# 等真要从 packages/ 拆出可复用模块时，再在仓库根建 workspace 声明并把 packages/* 列进来。
+
 # pnpm 11 构建脚本白名单（allowBuilds）。
 # electron/esbuild/koffi/onnxruntime-node/sharp 等 native 依赖的 postinstall 需要下载/编译二进制，
 # 置 true 允许其构建（pnpm dev / pnpm build / 打包必需）。

@@ -3,10 +3,14 @@
 import os
 import numpy as np
 from collections import deque
+from pathlib import Path
 from PIL import Image, ImageDraw
 
-SRC = r"D:\AniBox\161336d042150d97023018eaadfc0dc8.png"
-OUT_DIR = r"D:\AniBox\resources"
+PKG = Path(__file__).resolve().parents[1]
+ROOT = PKG.parents[1]
+
+SRC = str(ROOT / "161336d042150d97023018eaadfc0dc8.png")
+OUT_DIR = str(PKG / "resources")
 PNG_OUT = os.path.join(OUT_DIR, "icon.png")
 ICO_OUT = os.path.join(OUT_DIR, "icon.ico")
 

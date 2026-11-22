@@ -6,9 +6,13 @@ import os
 import sys
 import zipfile
 import time
+from pathlib import Path
 
-SRC = r"D:\AniBox\dist\win-unpacked"
-OUT = sys.argv[1] if len(sys.argv) > 1 else r"D:\AniBox\AniBox-1.0.1-portable-x64.zip"
+PKG = Path(__file__).resolve().parents[1]
+ARTIFACTS = PKG.parents[1] / "artifacts"
+
+SRC = str(PKG / "dist" / "win-unpacked")
+OUT = sys.argv[1] if len(sys.argv) > 1 else str(ARTIFACTS / "AniBox-portable-x64.zip")
 
 def main():
     t0 = time.time()

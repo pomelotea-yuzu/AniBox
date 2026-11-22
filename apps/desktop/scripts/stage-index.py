@@ -11,9 +11,12 @@ import json
 import os
 import shutil
 import sys
+from pathlib import Path
 
-SRC = r"D:\AniBoxData"
-DEFAULT_DST = r"D:\AniBox\AniBox-1.2.3-portable-x64\resources"
+# 索引数据源：默认 D:\AniBoxData，可用环境变量 ANIBOX_INDEX_SRC 覆盖（换机器/换盘时不必改代码）
+SRC = os.environ.get("ANIBOX_INDEX_SRC", r"D:\AniBoxData")
+# 目标默认取本 package 的 resources/（随包分发的那份）
+DEFAULT_DST = str(Path(__file__).resolve().parents[1] / "resources")
 FILES = ["core.json.gz", "summary.json.gz", "version.json"]
 
 

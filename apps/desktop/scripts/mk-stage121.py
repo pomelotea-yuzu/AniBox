@@ -6,12 +6,17 @@ import os
 import shutil
 import sys
 import time
+from pathlib import Path
 
-SRC_STAGE = sys.argv[1] if len(sys.argv) > 1 else r"D:\AniBox\stage121"
-DST_STAGE = sys.argv[2] if len(sys.argv) > 2 else r"D:\AniBox\stage121"
-SRC_OUT = r"D:\AniBox\out"
-SRC_PKG = r"D:\AniBox\package.json"
+# 路径一律从脚本位置推导：apps/desktop 是 package 根，一次性产物（stage）放仓库根 artifacts/
+PKG = Path(__file__).resolve().parents[1]
+ROOT = PKG.parents[1]
+ARTIFACTS = ROOT / "artifacts"
 
+SRC_STAGE = sys.argv[1] if len(sys.argv) > 1 else str(ARTIFACTS / "stage121")
+DST_STAGE = sys.argv[2] if len(sys.argv) > 2 else str(ARTIFACTS / "stage121")
+SRC_OUT = str(PKG / "out")
+SRC_PKG = str(PKG / "package.json")
 t0 = time.time()
 if os.path.exists(DST_STAGE):
     shutil.rmtree(DST_STAGE, ignore_errors=True)

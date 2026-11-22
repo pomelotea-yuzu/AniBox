@@ -1,0 +1,49 @@
+# Gitee Go 流水线（权威版本）
+#
+# 与 .github/workflows/ci.yml、.githooks/pre-commit 跑同一条门禁链：scripts/check-repo.mjs
+# 本文件不写第二套判据；产品检查（typecheck/lint/test）在真实绿灯前不进流水线，见 docs/knowledge/debt.md
+#
+# 注：仓库根的 .gitee-ci.yml 是旧的 Gitee 流水线格式，保留仅为兼容；
+# 一旦本文件在 Gitee 上验证通过，应删除旧文件，避免两处口径分叉。
+
+version: '1.0'
+name: ci
+
+displayName: 仓库门禁
+
+triggers:
+  trigger: auto
+  push:
+    branches:
+      exact:
+        - main
+  pr:
+    branches:
+      exact:
+        - main
+
+stages:
+  - stage:
+      name: gates
+      displayName: 仓库门禁
+      steps:
+        - step: npmbuild@1
+          name: run-gates
+          displayName: 洁净度 / 链接 / 双语 / 自测
+          inputs:
+            nodeVersion: 20
+            goals: node scripts/check-repo.mjs --all
+
+  - stage:
+      name: desktop-typecheck
+      displayName: 桌面端类型检查
+      steps:
+        - step: npmbuild@1
+          name: typecheck
+          displayName: npm ci + typecheck
+          inputs:
+            nodeVersion: 20
+            goals: |
+              cd apps/desktop
+              npm ci --ignore-scripts
+              npm run typecheck

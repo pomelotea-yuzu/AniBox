@@ -3,10 +3,14 @@
 打包前校验 .portable 标志存在（便携数据目录重定向依赖此文件）。
 """
 import os, sys, zipfile, time
+from pathlib import Path
 
-SRC = r"D:\AniBox\dist\win-unpacked"
-SRC_PORTABLE = r"D:\AniBox\AniBox-1.2.3-portable-x64"
-OUT = r"D:\AniBox\AniBox-1.2.3-portable-x64.zip"
+PKG = Path(__file__).resolve().parents[1]
+ARTIFACTS = PKG.parents[1] / "artifacts"
+
+SRC = str(PKG / "dist" / "win-unpacked")
+SRC_PORTABLE = str(ARTIFACTS / "AniBox-1.2.3-portable-x64")
+OUT = str(ARTIFACTS / "AniBox-1.2.3-portable-x64.zip")
 
 # 便携模式运行后会在软件目录生成 data\（媒体库/进度/索引/缓存），属用户数据，不入发布包
 EXCLUDE_DIRS = {"data"}

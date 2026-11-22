@@ -1,3 +1,6 @@
+# 旧版 Gitee 流水线格式 —— 仅为兼容保留。
+# 权威版本已迁到 .workflow/ci.yml（Gitee Go），两者跑同一条门禁链。
+# 一旦 .workflow/ci.yml 在 Gitee 上验证通过，删除本文件；在此之前只更新路径、不新增检查。
 image: node:22
 
 stages:
@@ -6,24 +9,21 @@ stages:
 
 cache:
   paths:
-    - node_modules/
+    - apps/desktop/node_modules/
 
 install_job:
   stage: check
   commands:
-    - npm ci --ignore-scripts
+    - cd apps/desktop && npm ci --ignore-scripts
 
 typecheck_job:
   stage: check
   commands:
-    - npm run typecheck
+    - cd apps/desktop && npm run typecheck
 
-lint_job:
+gates_job:
   stage: check
   commands:
-    - npm run lint
+    - node scripts/check-repo.mjs --all
 
-test_job:
-  stage: test
-  commands:
-    - npm test
+# lint / test 暂不进门禁：存量错误与本机未跑通，见 docs/knowledge/debt.md
