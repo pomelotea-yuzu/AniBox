@@ -38,6 +38,15 @@ apps/desktop/src/
 | 封面 | yuc.wiki 季度页 → `userData/yuc-covers` | `anibox://cover?path=` 本地协议 |
 | 新番时间表 | 本地索引按放送星期分组 + 封面缓存 | 渲染层 SeasonCalendar |
 
+**数据根**（`main/bootstrap.ts`，`ready` 之前解析）：
+
+```
+ANIBOX_DATA_DIR  →  便携包 <软件目录>/data  →  开发态 <仓库根>/.anibox  →  安装版系统 userData
+```
+
+全仓所有持久化路径都写成 `app.getPath('userData')/…` 的函数懒加载（如 `store.storePath()`），
+所以换根只需要改这一处；Chromium 的 `sessionData` 跟随 userData，不单独设。
+
 ## 关键文件
 
 | 文件 | 职责 |

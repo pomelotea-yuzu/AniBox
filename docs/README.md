@@ -75,6 +75,11 @@
 
 ## 路径变更记录
 
+- **2026-11-22 数据根迁到产品目录**：新增 `openspec/changes/add-portable-data-root/`；
+  `main/bootstrap.ts` 的数据根解析扩为四档（`ANIBOX_DATA_DIR` → 便携 `data/` → 开发 `.anibox/` →
+  安装版默认），旧数据首次启动自动迁移（跳过 Chromium 缓存与 `stream-cache`）；
+  `.gitignore` 排除 `.anibox/`；`invariants.md` I7 由"方向"改为"开发/便携已实现"，安装版边界写进
+  `debt.md`。
 - **2026-11-22 仓库重整（Layress 治理 + `apps/desktop`）**：仓库根从 `D:\AniBox\anibox` 上移到
   `D:\AniBox`；应用本体迁入 `apps/desktop/`（`src`、`resources`、打包脚本、Electron/TS 配置、
   运行时二进制与 `models/` 随之移动，包内相对路径不变）；`stage121-123` 迁入 `artifacts/`；

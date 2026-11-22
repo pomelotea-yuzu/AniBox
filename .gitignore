@@ -36,6 +36,13 @@ models/
 whisper/
 anibox-index/
 
+# ── 运行时数据（便携优先：数据跟着产品走，不落系统用户目录）────
+# 开发态数据根：仓库根的 .anibox/（userData 已被重定向到这里，见 src/main/bootstrap.ts）。
+# 库、进度、索引缓存、翻译模型都在里面；要留证据先迁进 docs/ 或 artifacts/，别整个提交。
+.anibox/
+# 便携包的 data/ 与安装版的系统 userData 同样不入库
+data/
+
 # ── 运行时缓存（dev 回退路径写在 process.cwd() 下）──────────────
 # 封面缓存在打包版走 userData；dev 下回落到 apps/desktop 的本地副本。
 yuc-covers/

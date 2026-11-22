@@ -33,7 +33,7 @@
 | 字段 | 当前值 |
 |---|---|
 | 阶段 | v1.2.3 已发布；2026-11-22 完成仓库重整（根目录上移 + Layress 治理骨架 + `apps/desktop` 成形），方向见 [`docs/engineering/plans/2026-11-22-anibox-rebuild-proposal.md`](docs/engineering/plans/2026-11-22-anibox-rebuild-proposal.md)。已知门禁缺口：ESLint 存量错误未清、Vitest 在本机沙箱未能启动，二者都还没进 CI。 |
-| 活动 change | 无。下一个应立 `rebuild-repo-foundation`（把骨架、门禁、迁移验收写成 tasks），再谈电视模式 / RIFE / 采集串流三条产品 change。 |
+| 活动 change | `add-portable-data-root`（数据根迁到产品目录，实施完成、**实机验证未做**，见 [`openspec/changes/add-portable-data-root/`](openspec/changes/add-portable-data-root/tasks.md)）。下一个应立 `rebuild-repo-foundation`（骨架与门禁的验收），产品向的电视模式 / RIFE / 采集串流排在后面。 |
 | 代码 | `apps/desktop`（Electron main/preload/renderer）+ `packages/`（尚未拆包，不预建空包）+ 根 `scripts/`（门禁） |
 | 发行 | Gitee `yuzu-tea-duck/ani-box`（origin）+ GitHub `pomelotea-yuzu/AniBox`（`github`）；便携 zip 手动打包，**push 与 tag 归用户** |
 
@@ -125,9 +125,10 @@ git config core.hooksPath .githooks
 ## 七、口径与纪律
 
 - **语言**：代码注释、文档、commit message 默认中文；产品名 `AniBox` 保持英文。
-- **便携优先**：便携包的业务数据跟随产品目录（`data/`），拷贝整个目录即完成迁移。
-  当前实现里 JSON store 走 Electron `userData`（在 C 盘），与"便携优先"仍有差距，
-  差距与修法记在 [`docs/knowledge/debt.md`](docs/knowledge/debt.md)——**不要假装已经做到**。
+- **便携优先**：业务数据跟随产品目录。解析顺序固定为
+  `ANIBOX_DATA_DIR` → 便携包 `<软件目录>/data` → 开发态仓库根 `.anibox/` → 安装版系统 `userData`，
+  实现在 `apps/desktop/src/main/bootstrap.ts`，启动日志会打印解析结果。
+  安装版仍用系统目录属有意设计（没有可携带的产品目录），别再当成"待修"。
 - **离线优先**：索引、封面、元数据都以本地缓存为准；在线链路失败必须回退而不是阻塞。
 - **文档默认中文**；对外门面需要时才补 `*.en.md` 并登记进 [`i18n/docs-manifest.json`](i18n/docs-manifest.json)
   （当前登记表为空，根 `README.md` 只写中文），成对关系由 `node scripts/check-i18n.mjs` 检查。内部文档不翻译。
@@ -151,9 +152,12 @@ git config core.hooksPath .githooks
               docs/research product engineering/* reviews  过程资产
               openspec/  config.yaml + specs/ + changes/{,archive/}
         接入   .github/workflows · .gitee · .workflow · .githooks
-不入库 .gitignore .git-hygiene-allowlist artifacts/ docs/drafts/ .workbuddy/ .vscode/
+不入库 .gitignore .git-hygiene-allowlist artifacts/ docs/drafts/ .workbuddy/ .vscode/ .anibox/
        apps/desktop/{node_modules,out,dist,models,yuc-covers} 与 *.exe/*.dll
 ```
+
+`.anibox/` 是开发态数据根（库、进度、索引缓存、翻译模型），等同便携包的 `data/`；
+它不入库，但**删掉等于重置库与进度**，清理前先确认。
 
 ## 九、本文件的维护规则
 

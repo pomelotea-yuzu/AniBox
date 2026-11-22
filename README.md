@@ -33,6 +33,10 @@ node scripts/check-repo.mjs --all      # 洁净度 / 链接 / 双语登记 / 自
 git config core.hooksPath .githooks    # 每个克隆做一次，之后 pre-commit 自动跑同一条链
 ```
 
+**数据落在哪**：开发态是仓库根的 `.anibox/`（启动日志会打印 `[AniBox] 数据目录（开发模式）= …`，
+旧数据首次启动自动从系统 userData 搬一次）；便携版是 `<软件目录>/data`；
+需要临时换一个干净数据根时设 `ANIBOX_DATA_DIR=<路径>`。
+
 > 环境要求：Windows 10/11，Node.js ≥ 20（pnpm 11 要求）与 pnpm ≥ 11。
 > 运行期需要 `libmpv-2.dll` 与 `mpv.exe` 与应用一同分发（内嵌播放与兜底播放引擎）。
 > 局域网串流的 mkv/HEVC 转码依赖 `ffmpeg.exe`：应用会自动检测（应用目录 / PATH / userData），缺失时自动下载，也可手动放置到应用目录。
@@ -225,6 +229,7 @@ F:/收藏/
 ├─ openspec/      规格与变更（config.yaml + specs/ + changes/）
 ├─ scripts/       仓库门禁：check-repo / check-hygiene / check-i18n
 ├─ packages/      可复用模块（当前为空，不预拆空包）
+├─ .anibox/       开发态数据根（库/进度/索引缓存/模型；不入库，等同便携包的 data/）
 └─ apps/desktop/pnpm-workspace.yaml   pnpm 11 构建白名单（allowBuilds），随 package 存放
 ```
 
