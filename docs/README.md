@@ -56,8 +56,8 @@
 ## 双语范围
 
 成对规则与门禁检查项写在 [`/i18n/README.md`](../i18n/README.md)。
-一句话版本：**文档默认中文，只有逐篇登记的文件才维护中英双版本**；当前登记 1 篇——根
-`README.md` ↔ [`README.en.md`](../README.en.md)。
+一句话版本：**文档默认中文，只有逐篇登记的文件才维护中英双版本**；当前登记 5 篇——
+`README`、`CHANGELOG`、`CONTRIBUTING`、`SECURITY`、`CODE_OF_CONDUCT`（均在仓库根，各带 `*.en.md`）。
 全库文件链接由 `node scripts/check-i18n.mjs --links` 独立检查；
 统一门禁入口是 [`scripts/check-repo.mjs`](../scripts/check-repo.mjs)，本地提交与两侧 CI 共用。
 
@@ -75,6 +75,10 @@
 
 ## 路径变更记录
 
+- **2026-11-22 OpenSpec 起账**：`add-portable-data-root` 归档进
+  `openspec/changes/archive/2026-11-22-add-portable-data-root/`，delta 合入 [`../openspec/specs/data-root/spec.md`](../openspec/specs/data-root/spec.md)；
+  同时立活动 change `rebuild-repo-foundation`（仓库地基的验收清单 + `repo-foundation` 规格）。
+  归档件的实机验证项仍未执行，如实保留未勾。
 - **2026-11-22 数据根迁到产品目录**：新增 `openspec/changes/add-portable-data-root/`；
   `main/bootstrap.ts` 的数据根解析扩为四档（`ANIBOX_DATA_DIR` → 便携 `data/` → 开发 `.anibox/` →
   安装版默认），旧数据首次启动自动迁移（跳过 Chromium 缓存与 `stream-cache`）；

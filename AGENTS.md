@@ -33,7 +33,7 @@
 | 字段 | 当前值 |
 |---|---|
 | 阶段 | v1.2.3 已发布；2026-11-22 完成仓库重整（根目录上移 + Layress 治理骨架 + `apps/desktop` 成形），方向见 [`docs/engineering/plans/2026-11-22-anibox-rebuild-proposal.md`](docs/engineering/plans/2026-11-22-anibox-rebuild-proposal.md)。已知门禁缺口：ESLint 存量错误未清、Vitest 在本机沙箱未能启动，二者都还没进 CI。 |
-| 活动 change | `add-portable-data-root`（数据根迁到产品目录，实施完成、**实机验证未做**，见 [`openspec/changes/add-portable-data-root/`](openspec/changes/add-portable-data-root/tasks.md)）。下一个应立 `rebuild-repo-foundation`（骨架与门禁的验收），产品向的电视模式 / RIFE / 采集串流排在后面。 |
+| 活动 change | `rebuild-repo-foundation`（把结构重整与门禁做成可验收的 tasks，**实机验收未做**，见 [`openspec/changes/rebuild-repo-foundation/tasks.md`](openspec/changes/rebuild-repo-foundation/tasks.md)）。产品向的电视模式 / RIFE / 采集串流排在它之后。 |
 | 代码 | `apps/desktop`（Electron main/preload/renderer）+ `packages/`（尚未拆包，不预建空包）+ 根 `scripts/`（门禁） |
 | 发行 | Gitee `yuzu-tea-duck/ani-box`（origin）+ GitHub `pomelotea-yuzu/AniBox`（`github`）；便携 zip 手动打包，**push 与 tag 归用户** |
 
@@ -131,7 +131,8 @@ git config core.hooksPath .githooks
   安装版仍用系统目录属有意设计（没有可携带的产品目录），别再当成"待修"。
 - **离线优先**：索引、封面、元数据都以本地缓存为准；在线链路失败必须回退而不是阻塞。
 - **文档默认中文**；对外门面按 [`i18n/docs-manifest.json`](i18n/docs-manifest.json) 逐篇登记同轮维护 `*.en.md`
-  （当前仅根 `README.md` ↔ `README.en.md`），成对关系由 `node scripts/check-i18n.mjs` 检查。内部文档不翻译。
+  （当前 5 篇：README / CHANGELOG / CONTRIBUTING / SECURITY / CODE_OF_CONDUCT），成对关系由
+  `node scripts/check-i18n.mjs` 检查。内部文档不翻译。
 - **命名**：`docs/` 内已批准并作为当前依据的方案用 `<english-kebab-case>.md`；
   探讨、调研、待批提案与当次记录用 `YYYY-MM-DD-<english-kebab-case>.md`。细则见 [`docs/README.md`](docs/README.md)。
 - **单一数据源**：`main` 进程 IPC 按域拆在 `src/main/ipc/`，播放控制项定义在
