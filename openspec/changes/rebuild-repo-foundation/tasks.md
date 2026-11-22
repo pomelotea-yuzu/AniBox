@@ -41,11 +41,19 @@
 
 ## D 实机验收（本 change 的通过条件）
 
+- [x] 已验证（2026-11-22 日志）：`npm run dev` 能起 —— main/preload 构建通过、renderer dev server 起在 5350
+- [x] 已验证：数据根落 `D:\AniBox\.anibox`（`[AniBox] 数据目录（开发模式）= D:\AniBox\.anibox`，封面从 `.anibox\yuc-covers` 读出）
+- [x] 已验证：本地索引加载 28229 条（dump 2026-08-31）、时间表 FALL 2026 生成 33 部、封面匹配 23/33
+- [x] 已验证：海报墙渲染正常（12 张封面经 `anibox://cover` 成功出图）
+- [ ] **未执行**：播放 / 字幕 / 音轨 / seek（本次只验到库与时间表）
 - [ ] **未执行**：`cd apps/desktop && npm run typecheck`
-- [ ] **未执行**：`npm run dev` 能起、扫库/海报墙/续播/切音轨切字幕可用
 - [ ] **未执行**：`npm run build` 产出 `out/`，`AniBox-prod.bat` 能起
 - [ ] **未执行**：便携打包全流程（`mk-stage121.py` → asar → `pack-zip-123.py`）产出可运行 zip
-- [ ] **未执行**：数据根落 `.anibox/`（依赖 `add-portable-data-root` 的实机验证）
+- [ ] **发现（阻塞"拷走即迁移"）**：迁移后封面仍从旧 `%APPDATA%\anibox` 读了一次 —— 说明 store 的 `coverPath`
+      与季节缓存里存了**绝对路径**。C 盘副本还在所以没坏，删了就坏。见 `docs/knowledge/debt.md`
+- [ ] **发现（影响 I4）**：本次开发态 GPU 全量软件回退（`webgl` / `gpu_compositing` / `2d_canvas` 均
+      `disabled_software`，`gl=none,angle=none`）。libmpv 内嵌上屏依赖 WebGL，此状态下会黑屏并回退引擎。
+      成因未定，见 `docs/knowledge/engineering.md`
 
 ## E 收尾
 
