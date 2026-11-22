@@ -6,7 +6,7 @@ import numpy as np
 from collections import deque
 import sys
 
-src_path = r'D:\AniBox\anibox\resources\icon.png'
+src_path = r'D:\AniBox\resources\icon.png'
 src = Image.open(src_path)
 img = src.convert('RGBA')
 arr = np.array(img).copy()
@@ -73,6 +73,6 @@ mask = result.split()[3]
 white_bg.paste(ico_src, mask=mask)
 sizes = [16, 24, 32, 48, 64, 128, 256]
 icons = [white_bg.resize((s, s), Image.LANCZOS) for s in sizes]
-icons[0].save(r'D:\AniBox\anibox\resources\icon.ico', format='ICO',
+icons[0].save(r'D:\AniBox\resources\icon.ico', format='ICO',
               sizes=[(s, s) for s in sizes], append_images=icons[1:])
 print('icon.ico 重新生成')

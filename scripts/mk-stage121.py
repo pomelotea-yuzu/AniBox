@@ -7,10 +7,10 @@ import shutil
 import sys
 import time
 
-SRC_STAGE = sys.argv[1] if len(sys.argv) > 1 else r"D:\AniBox\anibox\stage121"
-DST_STAGE = sys.argv[2] if len(sys.argv) > 2 else r"D:\AniBox\anibox\stage121"
-SRC_OUT = r"D:\AniBox\anibox\out"
-SRC_PKG = r"D:\AniBox\anibox\package.json"
+SRC_STAGE = sys.argv[1] if len(sys.argv) > 1 else r"D:\AniBox\stage121"
+DST_STAGE = sys.argv[2] if len(sys.argv) > 2 else r"D:\AniBox\stage121"
+SRC_OUT = r"D:\AniBox\out"
+SRC_PKG = r"D:\AniBox\package.json"
 
 t0 = time.time()
 if os.path.exists(DST_STAGE):

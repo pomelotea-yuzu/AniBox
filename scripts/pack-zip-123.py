@@ -4,7 +4,7 @@
 """
 import os, sys, zipfile, time
 
-SRC = r"D:\AniBox\anibox\dist\win-unpacked"
+SRC = r"D:\AniBox\dist\win-unpacked"
 SRC_PORTABLE = r"D:\AniBox\AniBox-1.2.3-portable-x64"
 OUT = r"D:\AniBox\AniBox-1.2.3-portable-x64.zip"
 

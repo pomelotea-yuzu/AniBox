@@ -33,3 +33,9 @@ _app*.asar
 
 # 封面缓存（非 Electron 环境下回落到 cwd 的本地副本）
 yuc-covers/
+
+# 旧便携包目录与构建产物（不入库；正式归档在 ../AniBox-Archive）
+AniBox-*-portable-x64/
+
+# WorkBuddy 项目数据（工作区记忆等），不随仓库分发
+.workbuddy/

@@ -6,7 +6,7 @@ from collections import deque
 from PIL import Image, ImageDraw
 
 SRC = r"D:\AniBox\161336d042150d97023018eaadfc0dc8.png"
-OUT_DIR = r"D:\AniBox\anibox\resources"
+OUT_DIR = r"D:\AniBox\resources"
 PNG_OUT = os.path.join(OUT_DIR, "icon.png")
 ICO_OUT = os.path.join(OUT_DIR, "icon.ico")
 

@@ -7,7 +7,7 @@ import sys
 import zipfile
 import time
 
-SRC = r"D:\AniBox\anibox\dist\win-unpacked"
+SRC = r"D:\AniBox\dist\win-unpacked"
 OUT = sys.argv[1] if len(sys.argv) > 1 else r"D:\AniBox\AniBox-1.0.1-portable-x64.zip"
 
 def main():
