@@ -130,8 +130,8 @@ git config core.hooksPath .githooks
   实现在 `apps/desktop/src/main/bootstrap.ts`，启动日志会打印解析结果。
   安装版仍用系统目录属有意设计（没有可携带的产品目录），别再当成"待修"。
 - **离线优先**：索引、封面、元数据都以本地缓存为准；在线链路失败必须回退而不是阻塞。
-- **文档默认中文**；对外门面需要时才补 `*.en.md` 并登记进 [`i18n/docs-manifest.json`](i18n/docs-manifest.json)
-  （当前登记表为空，根 `README.md` 只写中文），成对关系由 `node scripts/check-i18n.mjs` 检查。内部文档不翻译。
+- **文档默认中文**；对外门面按 [`i18n/docs-manifest.json`](i18n/docs-manifest.json) 逐篇登记同轮维护 `*.en.md`
+  （当前仅根 `README.md` ↔ `README.en.md`），成对关系由 `node scripts/check-i18n.mjs` 检查。内部文档不翻译。
 - **命名**：`docs/` 内已批准并作为当前依据的方案用 `<english-kebab-case>.md`；
   探讨、调研、待批提案与当次记录用 `YYYY-MM-DD-<english-kebab-case>.md`。细则见 [`docs/README.md`](docs/README.md)。
 - **单一数据源**：`main` 进程 IPC 按域拆在 `src/main/ipc/`，播放控制项定义在

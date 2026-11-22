@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 使用问题与已知限制 / Usage and known limitations
+    url: https://gitee.com/yuzu-tea-duck/ani-box/blob/main/docs/guide/README.md
+    about: 安装、扫库、快捷键与常见问题的答案在这里；已知未修的坑见 docs/knowledge/debt.md
+  - name: 下载最新版本 / Latest release
+    url: https://gitee.com/yuzu-tea-duck/ani-box/releases
+    about: 便携版 zip 从这里下载；GitHub 镜像见 README 顶部
+  - name: 接手与开发约定 / Contributing and repo rules
+    url: https://gitee.com/yuzu-tea-duck/ani-box/blob/main/AGENTS.md
+    about: 改代码前先读 AGENTS.md（状态卡、必读顺序、洁净度红线）

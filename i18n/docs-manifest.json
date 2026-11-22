@@ -1,9 +1,6 @@
 {
   "version": 1,
   "convention": "文档默认中文；本表只登记当前**确实维护中英双版本**的对外文档。未登记的文档一律只写中文，不参与配对检查。",
-  "pendingEn": [
-    "README.md"
-  ],
   "notRequired": [
     "AGENTS.md",
     "docs/**",
@@ -15,5 +12,7 @@
     ".gitee/**",
     ".workflow/**"
   ],
-  "docs": []
+  "docs": [
+    "README.md"
+  ]
 }

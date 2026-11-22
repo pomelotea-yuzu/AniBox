@@ -1,0 +1,83 @@
+name: Bug report / 缺陷报告
+description: 播放、扫库、元数据、串流等出现问题时报这里 / Report a playback, scan, metadata or streaming problem
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        先看一眼 [`docs/knowledge/debt.md`](https://gitee.com/yuzu-tea-duck/ani-box/blob/main/docs/knowledge/debt.md)
+        与 [`docs/guide/README.md`](https://gitee.com/yuzu-tea-duck/ani-box/blob/main/docs/guide/README.md)，
+        已知限制里可能已经写了你遇到的问题。
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 问题描述 / What happened
+      description: 一句话说清现象；有截图或录屏更好（贴链接，不要粘大文件）
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤 / Steps to reproduce
+      placeholder: |
+        1. 打开设置 → 库 → 添加根目录 D:\Anime
+        2. 刷新海报墙
+        3. 点第 3 集播放 → 黑屏 2 秒后回退
+      render: markdown
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望 vs 实际 / Expected vs actual
+    validations:
+      required: true
+  - type: dropdown
+    id: engine
+    attributes:
+      label: 播放引擎 / Playback engine
+      description: 播放类问题必填；控制台或启动日志里能看到当前引擎
+      options:
+        - HTML5 video
+        - libmpv 内嵌 / embedded
+        - mpv.exe 独立窗口 / fallback window
+        - 不确定 / not sure
+        - 与播放无关 / not playback related
+  - type: input
+    id: version
+    attributes:
+      label: AniBox 版本 / Version
+      placeholder: 1.2.3（设置 → 关于）
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: 系统与硬件 / OS and hardware
+      placeholder: Windows 11 23H2 · RTX 3060 6GB · 便携版
+    validations:
+      required: true
+  - type: input
+    id: source
+    attributes:
+      label: 片源信息 / Media info
+      description: 容器 / 编码 / 位深 / 音轨数 / 字幕类型，例如 mkv · HEVC 10bit · 2 音轨 · 外挂 ass
+      placeholder: mkv · HEVC 10bit · 2 audio tracks · external ass
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志 / Logs
+      description: |
+        日志在数据目录里：便携版 `<软件目录>/data/`，开发态 `<仓库根>/.anibox/`，安装版 `%APPDATA%\anibox`。
+        请贴**相关片段**，不要整份上传。
+      render: text
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: 提交前确认 / Before submitting
+      options:
+        - label: 我已在最新版本上复现 / Reproduced on the latest release
+          required: true
+        - label: 这不是"已知限制"里已经写明的行为 / This is not a documented limitation
+          required: true

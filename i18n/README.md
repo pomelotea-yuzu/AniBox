@@ -9,9 +9,11 @@
 
 ## 当前登记范围
 
-见 [`docs-manifest.json`](docs-manifest.json)。**当前 `docs` 为空**：根 `README.md` 只维护中文，
-英文版列在 `pendingEn` 里待补（要做海外发布时再补 `README.en.md` 并移进 `docs` 登记）。
+见 [`docs-manifest.json`](docs-manifest.json)。当前登记 **1 篇**：根 `README.md` ↔ `README.en.md`。
 `AGENTS.md`、`docs/`、`i18n/`、`openspec/` 全部默认中文，**不翻译**。
+
+暂未登记（没有对应内容，不凭空造）：`CONTRIBUTING`、`SECURITY`、`CODE_OF_CONDUCT`、`CHANGELOG`。
+等真有这些文件时，再逐篇补 `*.en.md` 并登记。
 
 新增一篇对外文档时：
 

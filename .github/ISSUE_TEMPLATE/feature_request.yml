@@ -1,0 +1,48 @@
+name: Feature request / 功能建议
+description: 想要的能力、想改的体验 / A capability or UX change you want
+title: "[feat] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        先看 [`docs/product/roadmap.md`](https://gitee.com/yuzu-tea-duck/ani-box/blob/main/docs/product/roadmap.md)
+        与 [`docs/engineering/plans/2026-11-22-anibox-rebuild-proposal.md`](https://gitee.com/yuzu-tea-duck/ani-box/blob/main/docs/engineering/plans/2026-11-22-anibox-rebuild-proposal.md)：
+        已明确"不做"的方向（Mac 正式发行、独立电视端 App、24→60 插帧等）不会因为重复提而被重新考虑。
+  - type: textarea
+    id: problem
+    attributes:
+      label: 你现在的困难 / The problem you face
+      description: 描述场景与痛点，不要直接写"加一个 XX 功能"
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 你设想的做法 / What you have in mind
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 你试过的替代方案 / Alternatives tried
+      description: 别的播放器/工具怎么解决、为什么不够用
+  - type: dropdown
+    id: area
+    attributes:
+      label: 相关区域 / Area
+      options:
+        - 扫库与海报墙 / library and posters
+        - 播放与字幕 / playback and subtitles
+        - 元数据与新番时间表 / metadata and season calendar
+        - 局域网串流 / LAN streaming
+        - 下载与追番 / download and RSS
+        - 打包与分发 / packaging
+        - 其他 / other
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: 确认 / Confirm
+      options:
+        - label: 这不是"已明确不做"的方向 / Not in the documented out-of-scope list
+          required: true

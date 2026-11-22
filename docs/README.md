@@ -56,8 +56,8 @@
 ## 双语范围
 
 成对规则与门禁检查项写在 [`/i18n/README.md`](../i18n/README.md)。
-一句话版本：**文档默认中文，只有逐篇登记的文件才维护中英双版本**；当前登记表为空
-（根 `README.md` 暂时只写中文，英文版待补）。
+一句话版本：**文档默认中文，只有逐篇登记的文件才维护中英双版本**；当前登记 1 篇——根
+`README.md` ↔ [`README.en.md`](../README.en.md)。
 全库文件链接由 `node scripts/check-i18n.mjs --links` 独立检查；
 统一门禁入口是 [`scripts/check-repo.mjs`](../scripts/check-repo.mjs)，本地提交与两侧 CI 共用。
 
